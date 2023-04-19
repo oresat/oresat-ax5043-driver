@@ -1,0 +1,5 @@
+[workspace]
+members = [
+    "ax5043",
+    "ax5043_derive",
+]
