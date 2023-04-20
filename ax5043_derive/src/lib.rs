@@ -1,6 +1,6 @@
 use proc_macro::TokenStream;
 use quote::quote;
-use syn;
+//use syn;
 
 #[proc_macro_derive(Deserialize)]
 pub fn deserialize_derive(input: TokenStream) -> TokenStream {

@@ -105,7 +105,7 @@ impl FIFO<'_, '_> {
         let cmd = TXData {
             command: FIFOChunkTX::DATA,
             length:  (tx.len() + 1) as u8, // Includes flag byte (PM p.10)
-            flags:   flags,
+            flags,
         };
         let addr = (Self::ADDR | 0xF000).to_be_bytes(); // FIXME: addr from radio
         let mut stat = [0; 2];
@@ -118,7 +118,7 @@ impl FIFO<'_, '_> {
         self.radio.FIFODATA.spi.transfer_multiple(&mut [
                 SpidevTransfer::read_write(&addr, &mut stat),
                 SpidevTransfer::read_write(&header, &mut reader),
-                SpidevTransfer::read_write(&tx, rx.as_mut_slice()),
+                SpidevTransfer::read_write(tx, rx.as_mut_slice()),
         ])?;
 
         Ok(())

@@ -278,7 +278,7 @@ pub struct Board {
 
 fn set_load_cap(radio: &mut Registers, load_cap: f64) -> io::Result<()> {
     // FIXME: move to new() on load_cap?
-    assert!(load_cap >= 3.0 && load_cap <= 40.0);
+    assert!((3.0..=40.0).contains(&load_cap));
     let cap = (load_cap * 2.0).round() as u8;
     let mut val = 0;
     if cap >= 17 {
@@ -776,7 +776,7 @@ pub fn autorange(radio: &mut Registers) -> io::Result<()>  {
         mode: PwrModes::XOEN,
         flags: PwrFlags::XOEN | PwrFlags::REFEN
     })?; // TODO what does refen do
-    while !(radio.XTALSTATUS.read()? == XtalStatus::XTAL_RUN) {}; // TODO: IRQXTALREADY
+    while radio.XTALSTATUS.read()? != XtalStatus::XTAL_RUN {}; // TODO: IRQXTALREADY
     println!("XTAL Running, RNG_START");
     radio.PLLRANGINGA.write(PLLRanging {
         vcor: 0x08,
