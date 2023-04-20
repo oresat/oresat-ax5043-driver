@@ -1,7 +1,6 @@
 extern crate ax5043;
 use std::{cell::Cell, io};
 
-
 fn main() -> io::Result<()> {
     let spi = ax5043::open("/dev/spidev0.0")?;
     let status = Cell::new(ax5043::Status::empty());

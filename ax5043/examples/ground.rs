@@ -1,20 +1,48 @@
-use std::{cell::Cell, io, net::{SocketAddr, IpAddr, Ipv6Addr}};
 use clap::Parser;
 use mio::net::UdpSocket;
 use mio::{Events, Interest, Poll, Token};
+use std::{
+    cell::Cell,
+    io,
+    net::{IpAddr, Ipv6Addr, SocketAddr},
+};
 
-use ax5043::{Status, Registers, Encoding, PwrMode, PwrModes, PwrFlags, config::*, fifo};
+use ax5043::{config::*, fifo, Encoding, PwrFlags, PwrMode, PwrModes, Registers, Status};
 
 // Try it out: `socat STDIO UDP:localhost:10015`
 
 fn configure_radio(radio: &mut Registers) -> io::Result<()> {
     let board = Board {
-        sysclk: Pin { mode: SysClk::Z,    pullup: false, invert: false, },
-        dclk:   Pin { mode: DClk::Z,      pullup: false, invert: false, },
-        data:   Pin { mode: Data::Z,      pullup: false, invert: false, },
-        pwramp: Pin { mode: PwrAmp::TCXO, pullup: false, invert: false, },
-        irq:    Pin { mode: IRQ::IRQ,     pullup: false, invert: false, },
-        antsel: Pin { mode: AntSel::Z,    pullup: false, invert: false, },
+        sysclk: Pin {
+            mode: SysClk::Z,
+            pullup: false,
+            invert: false,
+        },
+        dclk: Pin {
+            mode: DClk::Z,
+            pullup: false,
+            invert: false,
+        },
+        data: Pin {
+            mode: Data::Z,
+            pullup: false,
+            invert: false,
+        },
+        pwramp: Pin {
+            mode: PwrAmp::TCXO,
+            pullup: false,
+            invert: false,
+        },
+        irq: Pin {
+            mode: IRQ::IRQ,
+            pullup: false,
+            invert: false,
+        },
+        antsel: Pin {
+            mode: AntSel::Z,
+            pullup: false,
+            invert: false,
+        },
         xtal: Xtal {
             kind: XtalKind::TCXO,
             freq: 48_000_000,
@@ -36,33 +64,39 @@ fn configure_radio(radio: &mut Registers) -> io::Result<()> {
         freq_b: 0,
         active: FreqReg::A,
         pll: PLL {
-            charge_pump_current: 0x02,     // From spreadsheet
+            charge_pump_current: 0x02, // From spreadsheet
             filter_bandwidth: LoopFilter::Internalx1,
         },
         boost: PLL {
-            charge_pump_current: 0xC8,                 // Default value
-            filter_bandwidth: LoopFilter::Internalx5,  // Default value
+            charge_pump_current: 0xC8,                // Default value
+            filter_bandwidth: LoopFilter::Internalx5, // Default value
         },
-        vco_current: Some(0x13),   // depends on VCO, auto or manual, readback VCOIR, see AND9858/D for manual cal
+        vco_current: Some(0x13), // depends on VCO, auto or manual, readback VCOIR, see AND9858/D for manual cal
         lock_detector_delay: None, // auto or manual, readback PLLLOCKDET::LOCKDETDLYR
         ranging_clock: RangingClock::XtalDiv1024, // less than one tenth the loop filter bandwidth. Derive?
     };
 
     configure_synth(radio, &board, &synth)?;
 
-    let parameters = TXParameters{
+    let parameters = TXParameters {
         modulation: Modulation::GFSK {
             deviation: 20_000,
             ramp: SlowRamp::Bits1,
-            bt: BT(0.3)
+            bt: BT(0.3),
         },
-        amp: AmplitudeShaping::RaisedCosine { a: 0, b: 0x700, c: 0, d: 0, e: 0},
+        amp: AmplitudeShaping::RaisedCosine {
+            a: 0,
+            b: 0x700,
+            c: 0,
+            d: 0,
+            e: 0,
+        },
         txrate: 60_000,
         plllock_gate: true,
         brownout_gate: true,
         encoding: Encoding::NRZI | Encoding::SCRAM,
-        framing: Framing::HDLC { fec: FEC{}},
-        crc: CRC::CCITT {initial: 0xFFFF},
+        framing: Framing::HDLC { fec: FEC {} },
+        crc: CRC::CCITT { initial: 0xFFFF },
     };
 
     configure_tx(radio, &board, &parameters)?;
@@ -70,12 +104,10 @@ fn configure_radio(radio: &mut Registers) -> io::Result<()> {
     autorange(radio)
 }
 
-
 #[derive(Parser, Debug)]
 struct Args {
-    #[arg(short, long, default_value="10015")]
+    #[arg(short, long, default_value = "10015")]
     beacon: u16,
-
     // #[arg(short, long, default_value="10016")]
     // edl: u16,
     // #[arg(short, long, default_value="::")]
@@ -93,7 +125,8 @@ fn main() -> io::Result<()> {
 
     let mut poll = Poll::new()?;
 
-    poll.registry().register(&mut beacon, BEACON, Interest::READABLE)?;
+    poll.registry()
+        .register(&mut beacon, BEACON, Interest::READABLE)?;
     let mut events = Events::with_capacity(128);
 
     let spi0 = ax5043::open("/dev/spidev0.0")?;
@@ -108,7 +141,10 @@ fn main() -> io::Result<()> {
     radio.reset()?;
     configure_radio(&mut radio)?;
 
-    radio.PWRMODE.write(PwrMode { flags: PwrFlags::XOEN | PwrFlags::REFEN, mode: PwrModes::TX })?;
+    radio.PWRMODE.write(PwrMode {
+        flags: PwrFlags::XOEN | PwrFlags::REFEN,
+        mode: PwrModes::TX,
+    })?;
     let mut fifo = fifo::FIFO {
         threshold: 0,
         autocommit: false,
@@ -123,10 +159,13 @@ fn main() -> io::Result<()> {
                     let mut buf = [0; 512];
                     let (amt, src) = beacon.recv_from(&mut buf)?;
                     println!("Recv {} from {}: {:?}", amt, src, &buf[..amt]);
-                    fifo.write(&buf[..amt], fifo::TXDataFlags::PKTSTART | fifo::TXDataFlags::PKTEND)?;
+                    fifo.write(
+                        &buf[..amt],
+                        fifo::TXDataFlags::PKTSTART | fifo::TXDataFlags::PKTEND,
+                    )?;
                     fifo.commit()?;
                 }
-                _ => unreachable!()
+                _ => unreachable!(),
             }
         }
     }

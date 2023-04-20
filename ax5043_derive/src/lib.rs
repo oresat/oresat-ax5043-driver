@@ -38,4 +38,3 @@ fn impl_serialize(ast: &syn::DeriveInput) -> TokenStream {
     };
     gen.into()
 }
-
