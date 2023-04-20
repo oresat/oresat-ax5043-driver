@@ -8,11 +8,11 @@ Minimum Supported Rust Version (MSRV): 1.51? later? Check deps
 The expected use case is to be run on an ARM based machine like a Raspberry Pi or Beaglebone so a Rust
 crosscompiler setup will make development more convenient.
 
-Install the cross toolchain: `rustup target add armv7-unknown-linux-gnueabihf`
-!! warning: The build libc must be <= target libc. Example error message:
-/lib/arm-linux-gnueabihf/libc.so.6: version `GLIBC_2.33' not found
+Install the cross toolchain: `rustup target add armv7-unknown-linux-gnueabihf`. !! Warning: The build libc must be <= target libc. Example error message:
 
-On my setup my dev OS has a newer libc than Raspbian on the Pi and I'm unwilling to downgrade my libc.
+``lib/arm-linux-gnueabihf/libc.so.6: version `GLIBC_2.33' not found``
+
+On my setup my dev OS has a newer libc than Raspbian on the Pi and I'm unwilling to downgrade it.
 Two options:
 - Upgrade RPI to Bookworm (might be viable now but wasn't at the time)
 - Install older version of LLVM crosscompiler package
@@ -21,12 +21,12 @@ I went with the latter - toolchain: https://github.com/abhiTronix/raspberry-pi-c
 
 Modify .cargo/config, runner.sh
 
-cargo run --example off --target armv7-unknown-linux-gnueabihf
 Handy commands:
-cargo r
-cargo b
-cargo c
---examples (plural) flag
+- `cargo run --example off --target armv7-unknown-linux-gnueabihf`
+- `cargo r`
+- `cargo b`
+- `cargo c`
+- Combine the above with `--examples` (plural) flag to apply the action to all the examples
 
 Fresh Raspbian install
 - https://www.raspberrypi.com/software/
@@ -42,10 +42,11 @@ On the SD card mounted on my laptop
 See:https://www.raspberrypi.com/documentation/computers/raspberry-pi.html#spi-overview
 
 Laptop wired connection config: IPv4 -> Shared to other computers
-ssh pi@raspberrypi.local, pw:raspberry
+
+Default ssh login: pi@raspberrypi.local, pw:raspberry
 
 Pinnout for Raspberry Pi 4B:
-
+```
                      Pinnout:                       Colors:
                         J8                       VDD    -> Red
                        ----                      GND    -> Black
@@ -71,24 +72,24 @@ Pinnout for Raspberry Pi 4B:
           RX GND  39 - |oo| - 40 RX SCLK (SPI1.0)
                        ----
                   GPIO EXPANSION
-
+```
 See https://datasheets.raspberrypi.com/rpi4/raspberry-pi-4-reduced-schematics.pdf
 
 Libraries:
-https://www.kernel.org/doc/html/latest/spi/spidev.html
-https://www.kernel.org/doc/html/latest/driver-api/gpio/using-gpio.html
+- https://www.kernel.org/doc/html/latest/spi/spidev.html
+- https://www.kernel.org/doc/html/latest/driver-api/gpio/using-gpio.html
 
 Other implemenations:
-https://notblackmagic.com/bitsnpieces/ax5043/
-https://gitlab.com/librespacefoundation/ax5043-driver
-https://github.com/oresat/oresat-firmware
-https://github.com/BrandenburgTech/DigitalTxRxRPi
+- https://notblackmagic.com/bitsnpieces/ax5043/
+- https://gitlab.com/librespacefoundation/ax5043-driver
+- https://github.com/oresat/oresat-firmware
+- https://github.com/BrandenburgTech/DigitalTxRxRPi
 
 List of docs (not committed for copywrite reasons):
-Datasheet
-Programming Manual
-ANs
-Demo board schematics
+- Datasheet
+- Programming Manual
+- ANs
+- Demo board schematics
 
 Examples
 - `off`: Turns both radios off. Useful in case more complicated programs crash.
