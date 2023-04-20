@@ -72,7 +72,7 @@ fn ax5043_transmit(radio: &mut Registers, data: &[u8]) -> io::Result<()> {
     let mut fifo = fifo::FIFO {
         threshold: 0,
         autocommit: false,
-        radio: radio,
+        radio,
     };
     // FIXME: FIFOSTAT CLEAR?
     fifo.write(data, fifo::TXDataFlags::UNENC | fifo::TXDataFlags::RESIDUE)?;
@@ -80,7 +80,7 @@ fn ax5043_transmit(radio: &mut Registers, data: &[u8]) -> io::Result<()> {
 
     print_state(radio, "commit")?;
 
-    while !(radio.RADIOSTATE.read()? as u8 == RadioState::IDLE as u8) {} // TODO: Interrupt of some sort
+    while radio.RADIOSTATE.read()? as u8 != RadioState::IDLE as u8 {} // TODO: Interrupt of some sort
     print_state(radio, "tx complete")?;
     radio.PWRMODE.write(PwrMode {
         flags: PwrFlags::XOEN | PwrFlags::REFEN,
