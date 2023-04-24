@@ -13,36 +13,12 @@ use ax5043::{config::*, fifo, Encoding, PwrFlags, PwrMode, PwrModes, Registers, 
 
 fn configure_radio(radio: &mut Registers) -> io::Result<()> {
     let board = Board {
-        sysclk: Pin {
-            mode: SysClk::Z,
-            pullup: false,
-            invert: false,
-        },
-        dclk: Pin {
-            mode: DClk::Z,
-            pullup: false,
-            invert: false,
-        },
-        data: Pin {
-            mode: Data::Z,
-            pullup: false,
-            invert: false,
-        },
-        pwramp: Pin {
-            mode: PwrAmp::TCXO,
-            pullup: false,
-            invert: false,
-        },
-        irq: Pin {
-            mode: IRQ::IRQ,
-            pullup: false,
-            invert: false,
-        },
-        antsel: Pin {
-            mode: AntSel::Z,
-            pullup: false,
-            invert: false,
-        },
+        sysclk: Pin { mode: SysClk::Z,    pullup: false, invert: false, },
+        dclk:   Pin { mode: DClk::Z,      pullup: false, invert: false, },
+        data:   Pin { mode: Data::Z,      pullup: false, invert: false, },
+        pwramp: Pin { mode: PwrAmp::TCXO, pullup: false, invert: false, },
+        irq:    Pin { mode: IRQ::IRQ,     pullup: false, invert: false, },
+        antsel: Pin { mode: AntSel::Z,    pullup: false, invert: false, },
         xtal: Xtal {
             kind: XtalKind::TCXO,
             freq: 48_000_000,
@@ -78,12 +54,20 @@ fn configure_radio(radio: &mut Registers) -> io::Result<()> {
 
     configure_synth(radio, &board, &synth)?;
 
-    let parameters = TXParameters {
+    let channel = ChannelParameters {
         modulation: Modulation::GFSK {
             deviation: 20_000,
             ramp: SlowRamp::Bits1,
             bt: BT(0.3),
         },
+        encoding: Encoding::NRZI | Encoding::SCRAM,
+        framing: Framing::HDLC { fec: FEC {} },
+        crc: CRC::CCITT { initial: 0xFFFF },
+    };
+
+    configure_channel(radio, &board, &channel)?;
+
+    let parameters = TXParameters {
         amp: AmplitudeShaping::RaisedCosine {
             a: 0,
             b: 0x700,
@@ -94,12 +78,9 @@ fn configure_radio(radio: &mut Registers) -> io::Result<()> {
         txrate: 60_000,
         plllock_gate: true,
         brownout_gate: true,
-        encoding: Encoding::NRZI | Encoding::SCRAM,
-        framing: Framing::HDLC { fec: FEC {} },
-        crc: CRC::CCITT { initial: 0xFFFF },
     };
 
-    configure_tx(radio, &board, &parameters)?;
+    configure_tx(radio, &board, &channel, &parameters)?;
 
     autorange(radio)
 }
@@ -114,6 +95,8 @@ struct Args {
     // source: String,
     // #[arg(short, long, default_value="::1")]
     // destination: String,
+    // #[arg(short, long, default_value="spidev0.0")]
+    // spi: String
 }
 
 fn main() -> io::Result<()> {

@@ -174,7 +174,11 @@ impl From<AntSel> for PFAntSelMode {
         }
     }
 }
-
+// TODO:
+// - None/default = Z?
+// - 0, 1, test are special (no inv/pull)?
+// - configure pullup/invert in a different way?
+// enum{ zero, one, z, test, func(T) }
 #[derive(Copy, Clone)]
 pub struct Pin<T> {
     pub mode: T,
@@ -637,23 +641,6 @@ pub enum Framing {
     MBus4t6,
 }
 
-
-/*
-pub struct Channel {
-    modulation,
-    encoding,
-    framing,
-    crc,
-    fec,
-    pktaddrcfg
-}
-*/
-
-pub enum AmplitudeShaping {
-    None {b: u16}, // Datasheet says shaping should always be used? even in AM modes?
-    RaisedCosine {a: u16, b: u16, c: u16, d: u16, e: u16},
-}
-
 pub enum CRC {
     None,
     CCITT {initial: u16},
@@ -662,12 +649,8 @@ pub enum CRC {
     CRC32 {initial: u32},
 }
 
-pub struct TXParameters {
+pub struct ChannelParameters {
     pub modulation: Modulation,
-    pub txrate: u64,
-    pub amp: AmplitudeShaping,
-    pub plllock_gate: bool,
-    pub brownout_gate: bool,
     // If BROWN GATE is set, the transmitter is disabled
     // whenever one (or more) of the SSVIO, SSBEVMODEM or
     // SSBEVANA bits of the POWSTICKYSTAT register is zero.
@@ -677,21 +660,56 @@ pub struct TXParameters {
     pub encoding: Encoding,
     pub framing: Framing,
     pub crc: CRC,
+
+    // TODO:pktaddrcfg
 }
 
 
-pub fn configure_tx(radio: &mut Registers, board: &Board, parameters: &TXParameters) -> io::Result<()> {
-    // MODULATION,
-    // FSKDEV,
-    // MODCFGA,
-    // MODCFGF,
+pub fn configure_channel(radio: &mut Registers, board: &Board, parameters: &ChannelParameters) -> io::Result<()> {
     match parameters.modulation {
-        Modulation::GFSK{deviation, ramp, bt} => {
+        Modulation::GFSK{ deviation, .. } => {
             radio.MODULATION.write(crate::Modulation {
                 mode: ModulationMode::FSK,
                 flags: ModulationFlags::empty(),
             })?;
             radio.FSKDEV.write((deviation * 2_u64.pow(24) / board.xtal.freq).try_into().unwrap())?;
+        }
+        Modulation::GMSK{ .. } => {
+            radio.MODULATION.write(crate::Modulation {
+                mode: ModulationMode::FSK,
+                flags: ModulationFlags::empty(),
+            })?;
+        }
+        _ => unimplemented!()
+    }
+
+    radio.ENCODING.write(parameters.encoding)?;
+    radio.FRAMING.write(crate::Framing { frmmode: FrameMode::HDLC, crcmode: CRCMode::CCITT, flags: FramingFlags::empty() })?;
+    radio.CRCINIT.write(0xFFFF_FFFF)?;
+    Ok(())
+}
+
+pub enum AmplitudeShaping {
+    None {b: u16}, // Datasheet says shaping should always be used? even in AM modes?
+    RaisedCosine {a: u16, b: u16, c: u16, d: u16, e: u16},
+}
+
+
+pub struct TXParameters {
+    pub txrate: u64,
+    pub amp: AmplitudeShaping,
+    pub plllock_gate: bool,
+    pub brownout_gate: bool,
+}
+
+
+pub fn configure_tx(radio: &mut Registers, board: &Board, channel: &ChannelParameters, parameters: &TXParameters) -> io::Result<()> {
+    // MODULATION,
+    // FSKDEV,
+    // MODCFGA,
+    // MODCFGF,
+    match channel.modulation {
+        Modulation::GFSK{ ramp, bt, .. } | Modulation::GMSK{ ramp, bt, } => {
             radio.MODCFGF.write(bt.try_into().unwrap())?;
             let cfga = ModCfgA {
                 slowramp: ramp.into(),
@@ -710,6 +728,12 @@ pub fn configure_tx(radio: &mut Registers, board: &Board, parameters: &TXParamet
                 }
             };
             radio.MODCFGA.write(cfga)?;
+
+            if let Modulation::GMSK { .. } = channel.modulation {
+                // m = 0.5, fskdev = 0.5 * f_dev, 1/(0.5*0.5) = 4
+                // FIXME copy of gfsk channel_config. Here because this depends on TXParameters::txrate
+                radio.FSKDEV.write(((parameters.txrate / 4)  * 2_u64.pow(24) / board.xtal.freq).try_into().unwrap())?;
+            }
         }
         _ => unimplemented!()
     }
@@ -732,11 +756,12 @@ pub fn configure_tx(radio: &mut Registers, board: &Board, parameters: &TXParamet
         },
     }
 
-    radio.ENCODING.write(parameters.encoding)?;
-    radio.FRAMING.write(crate::Framing { frmmode: FrameMode::HDLC, crcmode: CRCMode::CCITT, flags: FramingFlags::empty() })?;
-    radio.CRCINIT.write(0xFFFF_FFFF)?;
-
     Ok(())
+}
+
+
+pub struct RXParameters {
+
 }
 
 pub fn autorange(radio: &mut Registers) -> io::Result<()>  {
