@@ -104,12 +104,12 @@ fn ax5043_transmit(radio: &mut Registers, data: &[u8]) -> io::Result<()> {
 
 fn configure_radio(radio: &mut Registers) -> io::Result<()> {
     let board = Board {
-        sysclk: Pin { mode: config::SysClk::Z,    pullup: false, invert: false, },
-        dclk:   Pin { mode: config::DClk::Z,      pullup: false, invert: false, },
-        data:   Pin { mode: config::Data::Z,      pullup: false, invert: false, },
+        sysclk: Pin { mode: config::SysClk::Z,    pullup: true,  invert: false, },
+        dclk:   Pin { mode: config::DClk::Z,      pullup: true,  invert: false, },
+        data:   Pin { mode: config::Data::Z,      pullup: true,  invert: false, },
         pwramp: Pin { mode: config::PwrAmp::TCXO, pullup: false, invert: false, },
         irq:    Pin { mode: config::IRQ::IRQ,     pullup: false, invert: false, },
-        antsel: Pin { mode: config::AntSel::Z,    pullup: false, invert: false, },
+        antsel: Pin { mode: config::AntSel::Z,    pullup: true,  invert: false, },
         xtal: Xtal {
             kind: XtalKind::TCXO,
             freq: 48_000_000,

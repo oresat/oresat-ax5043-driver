@@ -13,12 +13,12 @@ use ax5043::{config::*, fifo, Encoding, PwrFlags, PwrMode, PwrModes, Registers, 
 
 fn configure_radio(radio: &mut Registers) -> io::Result<()> {
     let board = Board {
-        sysclk: Pin { mode: SysClk::Zero, pullup: false, invert: false, },
-        dclk:   Pin { mode: DClk::Z,      pullup: false, invert: false, },
-        data:   Pin { mode: Data::Z,      pullup: false, invert: false, },
-        pwramp: Pin { mode: PwrAmp::Z,    pullup: false, invert: false, },
-        irq:    Pin { mode: IRQ::Z,       pullup: false, invert: false, },
-        antsel: Pin { mode: AntSel::Z,    pullup: false, invert: false, },
+        sysclk: Pin { mode: SysClk::Z,      pullup: true,  invert: false, },
+        dclk:   Pin { mode: DClk::Z,        pullup: true,  invert: false, },
+        data:   Pin { mode: Data::Z,        pullup: true,  invert: false, },
+        pwramp: Pin { mode: PwrAmp::PwrAmp, pullup: false, invert: false, },
+        irq:    Pin { mode: IRQ::IRQ,       pullup: false, invert: false, },
+        antsel: Pin { mode: AntSel::Z,      pullup: true,  invert: false, },
         xtal: Xtal {
             kind: XtalKind::TCXO,
             freq: 16_000_000,
