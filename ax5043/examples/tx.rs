@@ -8,7 +8,7 @@ use std::{
     },
     thread, time,
 };
-//use gpiod::{Chip, Options, Masked, AsValuesMut};
+use gpiod::{Chip, Options, EdgeDetect};
 use ax5043::{config::Framing, config::Modulation, config::SlowRamp, config::*, *};
 
 fn print_state(radio: &mut Registers, step: &str) -> io::Result<()> {
@@ -57,12 +57,12 @@ fn ax5043_transmit(radio: &mut Registers, data: &[u8]) -> io::Result<()> {
     //print_state(radio, "post-synthtx")?;
     // I'm getting Radio event frame clock - should I see pll settled here instead?
     //pll locked
-    while !radio
-        .PLLRANGINGA
-        .read()?
-        .flags
-        .contains(PLLRangingFlags::PLL_LOCK)
-    {} // TODO: IRQRQPLLUNLOCK?
+    //while !radio
+    //    .PLLRANGINGA
+    //    .read()?
+    //    .flags
+    //    .contains(PLLRangingFlags::PLL_LOCK)
+    //{} // TODO: IRQRQPLLUNLOCK?
     print_state(radio, "pre-fulltx")?;
     radio.PWRMODE.write(PwrMode {
         flags: PwrFlags::XOEN | PwrFlags::REFEN,
@@ -104,36 +104,12 @@ fn ax5043_transmit(radio: &mut Registers, data: &[u8]) -> io::Result<()> {
 
 fn configure_radio(radio: &mut Registers) -> io::Result<()> {
     let board = Board {
-        sysclk: Pin {
-            mode: config::SysClk::Z,
-            pullup: false,
-            invert: false,
-        },
-        dclk: Pin {
-            mode: config::DClk::Z,
-            pullup: false,
-            invert: false,
-        },
-        data: Pin {
-            mode: config::Data::Z,
-            pullup: false,
-            invert: false,
-        },
-        pwramp: Pin {
-            mode: config::PwrAmp::TCXO,
-            pullup: false,
-            invert: false,
-        },
-        irq: Pin {
-            mode: config::IRQ::IRQ,
-            pullup: false,
-            invert: false,
-        },
-        antsel: Pin {
-            mode: config::AntSel::Z,
-            pullup: false,
-            invert: false,
-        },
+        sysclk: Pin { mode: config::SysClk::Z,    pullup: false, invert: false, },
+        dclk:   Pin { mode: config::DClk::Z,      pullup: false, invert: false, },
+        data:   Pin { mode: config::Data::Z,      pullup: false, invert: false, },
+        pwramp: Pin { mode: config::PwrAmp::TCXO, pullup: false, invert: false, },
+        irq:    Pin { mode: config::IRQ::IRQ,     pullup: false, invert: false, },
+        antsel: Pin { mode: config::AntSel::Z,    pullup: false, invert: false, },
         xtal: Xtal {
             kind: XtalKind::TCXO,
             freq: 48_000_000,
@@ -147,6 +123,8 @@ fn configure_radio(radio: &mut Registers) -> io::Result<()> {
         },
         adc: ADC::ADC1,
     };
+
+    radio.IRQMASK.write(ax5043::IRQ::XTALREADY)?;
 
     configure(radio, &board)?;
 
@@ -201,11 +179,6 @@ fn configure_radio(radio: &mut Registers) -> io::Result<()> {
 }
 
 fn main() -> io::Result<()> {
-    //    thread::spawn(|| {
-    //
-    //
-    //    });
-
     let spi0 = ax5043::open("/dev/spidev0.0")?;
     let status = Cell::new(Status::empty());
     let callback = |s| {
@@ -225,6 +198,18 @@ fn main() -> io::Result<()> {
         println!("received Ctrl+C!");
     })
     .expect("Error setting Ctrl-C handler");
+
+    thread::spawn(|| -> io::Result<()> {
+        let chip = Chip::new("gpiochip0")?;
+        let opts = Options::input([17])
+            .edge(EdgeDetect::Both)
+            .consumer("ax5043");
+        let mut inputs = chip.request_lines(opts)?;
+        loop {
+            let event = inputs.read_event()?;
+            println!("GPIO event: {:?}", event);
+        }
+    });
 
     configure_radio(&mut radio_tx)?;
 
