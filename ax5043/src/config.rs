@@ -1,10 +1,11 @@
 use std::io;
 use crate::*;
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Default)]
 pub enum SysClk {
     Zero,
     One,
+    #[default]
     Z,
     XtalInvert,
     XtalDiv1,
@@ -46,10 +47,11 @@ impl From<SysClk> for PFSysClkMode {
     }
 }
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Default)]
 pub enum DClk {
     Zero,
     One,
+    #[default]
     Z,
     In,
     Out,
@@ -71,10 +73,11 @@ impl From<DClk> for PFDClkMode {
     }
 }
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Default)]
 pub enum Data {
     Zero,
     One,
+    #[default]
     Z,
     FrameIO,
     ModemIO,
@@ -98,10 +101,11 @@ impl From<Data> for PFDataMode {
     }
 }
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Default)]
 pub enum PwrAmp {
     Zero,
     One,
+    #[default]
     Z,
     DibitSyncIO,
     DibitSyncObs,
@@ -127,10 +131,11 @@ impl From<PwrAmp> for PFPwrAmpMode {
     }
 }
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Default)]
 pub enum IRQ {
     Zero,
     One,
+    #[default]
     Z,
     IRQ,
     Test,
@@ -148,10 +153,11 @@ impl From<IRQ> for PFIRQMode {
     }
 }
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Default)]
 pub enum AntSel {
     Zero,
     One,
+    #[default]
     Z,
     BBTuneClk,
     TCXO,
@@ -179,7 +185,7 @@ impl From<AntSel> for PFAntSelMode {
 // - 0, 1, test are special (no inv/pull)?
 // - configure pullup/invert in a different way?
 // enum{ zero, one, z, test, func(T) }
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Default)]
 pub struct Pin<T> {
     pub mode: T,
     pub pullup: bool,
@@ -209,7 +215,9 @@ impl<T> From<Pin<T>> for PFFlags {
     }
 }
 
+#[derive(Default, Copy, Clone)]
 pub enum XtalPin {
+    #[default]
     None,
     PwrAmp,
     AntSel,
@@ -219,51 +227,72 @@ pub type Hz = u64;
 #[allow(non_camel_case_types)]
 pub type pF = f64; // TODO: newtype and XtalLoadCap::new(), TryFrom/From, make internal type u8
 
+#[derive(Default, Copy, Clone)]
 pub enum XtalKind{ // FIXME rename to Oscillator? ExtOsc?
     XO { load_cap: pF }, // limited to 3pF or 8.5pF - 40pF in 0.5pF steps // TODO LoadCap not needed for TCXO?
+    #[default]
     TCXO,
 }
 
+#[derive(Default, Copy, Clone)]
 pub struct Xtal {
     pub kind: XtalKind,
     pub freq: Hz,
     pub enable: XtalPin,
 }
 
+impl Xtal {
+    pub fn div(&self) -> u64 {
+        if self.freq < 24_800_000 { 1 } else { 2 }
+    }
+}
+
+#[derive(Default, Copy, Clone)]
 pub enum VCO {
+    #[default]
     Internal, // VCO1
     Inductor, // VCO2
     External, // Bypassed
 }
 
+#[derive(Default, Copy, Clone)]
 pub enum Filter { // TODO: values?
+    #[default]
     Internal,
     External,
 }
 
+#[derive(Default, Copy, Clone)]
 pub enum Antenna {
+    #[default]
     SingleEnded,
     Differential,
 }
 
+#[derive(Default, Copy, Clone)]
 pub enum DACPin {
+    #[default]
     None,
     PwrAmp,
     AntSel,
 }
 
+#[derive(Default, Copy, Clone)]
 pub struct DAC {
     pub pin: DACPin,
     // TODO: initial output?
 }
 
+#[derive(Default, Copy, Clone)]
 pub enum ADC {
+    #[default]
     None,
     ADC1,
     ADC2,
     Both,
 }
 
+#[derive(Default, Copy, Clone)]
 pub struct Board {
     pub sysclk: Pin<SysClk>, // FIXME: sysclk doesn't have invert
     pub dclk:   Pin<DClk>,
@@ -761,7 +790,7 @@ pub fn configure_tx(radio: &mut Registers, board: &Board, channel: &ChannelParam
 
 
 pub struct RXParameters {
-
+    // MODULATION::RX_HALFSPEED
 }
 
 pub fn autorange(radio: &mut Registers) -> io::Result<()>  {
@@ -796,26 +825,26 @@ pub fn autorange(radio: &mut Registers) -> io::Result<()>  {
      */
 
     // TODO: check PLL lock/Sticky lock
-    println!("Setting Mode: XOEN");
+    //println!("Setting Mode: XOEN");
     radio.PWRMODE.write(PwrMode {
         mode: PwrModes::XOEN,
         flags: PwrFlags::XOEN | PwrFlags::REFEN
     })?; // TODO what does refen do
     while radio.XTALSTATUS.read()? != XtalStatus::XTAL_RUN {}; // TODO: IRQXTALREADY
-    println!("XTAL Running, RNG_START");
+    //println!("XTAL Running, RNG_START");
     radio.PLLRANGINGA.write(PLLRanging {
         vcor: 0x08,
         flags: PLLRangingFlags::RNG_START })?; // TODO: cache or pre-calc VCORA/B?
     while radio.PLLRANGINGA.read()?.flags.contains(PLLRangingFlags::RNG_START) {}; // TODO: IRQRNGDONE
-    println!("RNG_START done");
+    //println!("RNG_START done");
     if radio.PLLRANGINGA.read()?.flags.contains(PLLRangingFlags::RNGERR) {
         return Err(io::Error::new(io::ErrorKind::Other, "PLL RANGING A ERROR"));
     }
 
 
-    println!("\n{:?}", radio.PLLRANGINGA.read()?);
-    println!("PLLVCOIR: 0x{:x?}", radio.PLLVCOIR.read()?);
-    println!("PLLOCKDET: 0x{:x?}", radio.PLLLOCKDET.read()?);
+    //println!("\n{:?}", radio.PLLRANGINGA.read()?);
+    //println!("PLLVCOIR: 0x{:x?}", radio.PLLVCOIR.read()?);
+    //println!("PLLOCKDET: 0x{:x?}", radio.PLLLOCKDET.read()?);
     radio.PWRMODE.write(PwrMode{ mode: PwrModes::POWEROFF, flags: PwrFlags::empty()})?;
     Ok(())
 }
