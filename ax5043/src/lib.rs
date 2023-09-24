@@ -10,6 +10,7 @@ pub mod config;
 pub mod fifo;
 
 bitflags! {
+    #[derive(Debug, Copy, Clone, Default, PartialEq)]
     pub struct Status: u16 {
         const READY            = 0x8000;
         const PLL_LOCK         = 0x4000;
@@ -61,6 +62,19 @@ impl Deserialize<2> for u16 {
         *self = u16::from_be_bytes(data);
     }
 }
+
+impl Serialize<2> for i16 {
+    fn serialize(&self) -> [u8; 2] {
+        self.to_be_bytes()
+    }
+}
+
+impl Deserialize<2> for i16 {
+    fn deserialize(&mut self, data: [u8; 2]) {
+        *self = i16::from_be_bytes(data);
+    }
+}
+
 
 impl Serialize<3> for [u8; 3] {
     fn serialize(&self) -> [u8; 3] {
@@ -172,7 +186,7 @@ impl<const ADDR: u16, const S: usize, RW: Deserialize<S> + Serialize<S> + Copy> 
         let tx = self.value.serialize();
         let mut rx: [u8; S] = [0; S];
 
-        println!("Write 0x{:03X}: {:X?}", ADDR, tx);
+        //println!("{:?} Write 0x{:03X}: {:X?}", self.spi.inner(), ADDR, tx);
 
         self.spi.transfer_multiple(&mut [
             SpidevTransfer::read_write(&addr, &mut stat),
@@ -213,7 +227,7 @@ impl<const ADDR: u16, const S: usize, W: Serialize<S> + Copy> WriteOnly<'_, ADDR
         let tx = self.value.serialize();
         let mut rx: [u8; S] = [0; S];
 
-        println!("Write 0x{:03X}: {:X?}", ADDR, tx);
+        //println!("{:?} Write 0x{:03X}: {:X?}", self.spi.inner(), ADDR, tx);
 
         self.spi.transfer_multiple(&mut [
             SpidevTransfer::read_write(&addr, &mut stat),
@@ -264,6 +278,7 @@ impl TryFrom<u8> for PwrModes {
 }
 
 bitflags! {
+    #[derive(Debug, Clone, Copy)]
     pub struct PwrFlags: u8 {
         const WDS = 0x10; // RO
         const REFEN = 0x20;
@@ -301,7 +316,7 @@ impl Deserialize<1> for PwrMode {
 }
 
 bitflags! {
-    #[derive(Default)]
+    #[derive(Debug, Default, Clone, Copy, PartialEq)]
     pub struct PowStat: u8 {
         const SUM      = 1 << 7;
         const REF      = 1 << 6;
@@ -321,7 +336,7 @@ impl Deserialize<1> for PowStat {
 }
 
 bitflags! {
-    #[derive(Default)]
+    #[derive(Debug, Default, Clone, Copy)]
     pub struct PowIRQMask: u8 {
         const PWRGOOD  = 1 << 7;
         const REF      = 1 << 6;
@@ -347,7 +362,7 @@ impl Deserialize<1> for PowIRQMask {
 }
 
 bitflags! {
-    #[derive(Default)]
+    #[derive(Debug, Default, Clone, Copy, PartialEq)]
     pub struct IRQ: u16 {
         const FIFONOTEMPTY = 1 << 0;
         const FIFONOTFULL  = 1 << 1;
@@ -378,7 +393,7 @@ impl Serialize<2> for IRQ {
 }
 
 bitflags! {
-    #[derive(Default)]
+    #[derive(Debug, Default, Clone, Copy, PartialEq)]
     pub struct RadioEvent: u16 {
         const DONE          = 1 << 0;
         const SETTLED       = 1 << 1;
@@ -400,7 +415,7 @@ impl Serialize<2> for RadioEvent {
     }
 }
 
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, Debug, PartialEq)]
 #[allow(non_camel_case_types)]
 pub enum RadioState {
     IDLE                 = 0b0000,
@@ -450,7 +465,7 @@ impl Default for RadioState {
 
 
 bitflags! {
-    #[derive(Default)]
+    #[derive(Debug, Default, Clone, Copy, PartialEq)]
     pub struct XtalStatus: u8 {
         const XTAL_RUN = 1 << 0;
     }
@@ -463,7 +478,7 @@ impl Deserialize<1> for XtalStatus {
 }
 
 bitflags! {
-    #[derive(Default)]
+    #[derive(Debug, Default, Clone, Copy)]
     pub struct PinState: u8 {
         const SYSCLK = 1 << 0;
         const DCLK   = 1 << 1;
@@ -529,7 +544,7 @@ impl TryFrom<u8> for PFSysClkMode {
 }
 
 bitflags! {
-    #[derive(Default)]
+    #[derive(Debug, Default, Clone, Copy)]
     pub struct PFSysClkFlags: u8 {
         const PULLUP = 1 << 7;
     }
@@ -564,7 +579,7 @@ impl Serialize<1> for PFSysClk {
 }
 
 bitflags! {
-    #[derive(Default)]
+    #[derive(Debug, Default, Clone, Copy)]
     pub struct PFFlags: u8 {
         const INVERT = 1 << 6;
         const PULLUP = 1 << 7;
@@ -878,6 +893,7 @@ impl TryFrom<u8> for PLLVCORefDiv {
 }
 
 bitflags! {
+    #[derive(Debug, Clone, Copy)]
     pub struct PLLVCODivFlags: u8 {
         const RFDIV = 1 << 2;
         const VCOSEL = 1 << 4;
@@ -914,6 +930,7 @@ impl Serialize<1> for PLLVCODiv {
 }
 
 bitflags! {
+    #[derive(Debug, Clone, Copy)]
     pub struct PLLRangingFlags: u8 {
         const RNG_START = 1 << 4;
         const RNGERR = 1 << 5;
@@ -973,6 +990,7 @@ impl TryFrom<u8> for LockDetDly {
 }
 
 bitflags! {
+    #[derive(Debug, Clone, Copy)]
     pub struct LockDetFlags: u8 {
         const DLY_AUTOMATIC = 0;
         const DLY_MANUAL = 1 << 2;
@@ -1044,6 +1062,7 @@ impl TryFrom<u8> for ModulationMode {
 }
 
 bitflags! {
+    #[derive(Debug, Clone, Copy)]
     pub struct ModulationFlags: u8 {
         const RX_HALFSPEED = 1 << 4;
     }
@@ -1079,6 +1098,7 @@ impl Serialize<1> for Modulation {
 }
 
 bitflags! {
+    #[derive(Debug, Clone, Copy)]
     pub struct Encoding: u8 {
         const INV    = 1 << 0;
         const DIFF   = 1 << 1;
@@ -1086,9 +1106,9 @@ bitflags! {
         const MANCH  = 1 << 3;
         const NOSYNC = 1 << 4;
         const NRZ    = 0;
-        const NRZI   = Self::INV.bits | Self::DIFF.bits;
-        const FM1    = Self::INV.bits | Self::DIFF.bits | Self::MANCH.bits;
-        const FM0    = Self::DIFF.bits | Self::MANCH.bits;
+        const NRZI   = Self::INV.bits() | Self::DIFF.bits();
+        const FM1    = Self::INV.bits() | Self::DIFF.bits() | Self::MANCH.bits();
+        const FM0    = Self::DIFF.bits() | Self::MANCH.bits();
     }
 }
 
@@ -1163,7 +1183,7 @@ impl TryFrom<u8> for CRCMode {
 }
 
 bitflags! {
-    #[derive(Default)]
+    #[derive(Debug, Default, Clone, Copy)]
     pub struct FramingFlags: u8 {
         const ABORT = 1 << 0;
         const FRMRX = 1 << 7;
@@ -1248,6 +1268,7 @@ impl TryFrom<u8> for SlowRamp {
 }
 
 bitflags! {
+    #[derive(Debug, Clone, Copy)]
     pub struct ModCfgAFlags: u8 {
         const TXDIFF      = 1 << 0;
         const TXSE        = 1 << 1;
@@ -1286,6 +1307,7 @@ impl Serialize<1> for ModCfgA {
 }
 
 bitflags! {
+    #[derive(Debug, Clone, Copy)]
     pub struct FIFOStat: u8 {
         const EMPTY       = 1 << 0;
         const FULL        = 1 << 1;
@@ -1337,6 +1359,7 @@ impl TryFrom<u8> for FIFOCmds {
 }
 
 bitflags! {
+    #[derive(Debug, Clone, Copy)]
     pub struct FIFOCmdFlags: u8 {
         const AUTO_COMMIT = 1 << 7;
     }
@@ -1530,6 +1553,7 @@ impl TryFrom<u8> for FreqSel {
 }
 
 bitflags! {
+    #[derive(Debug, Clone, Copy)]
     pub struct PLLLoopFlags: u8 {
         const FILTEN = 1 << 2;
         const DIRECT = 1 << 3;
@@ -1612,6 +1636,7 @@ impl Serialize<1> for PLLRngClk {
 
 
 bitflags! {
+    #[derive(Debug, Clone, Copy)]
     pub struct PLLVCOIFlags: u8 {
         const AUTOMATIC = 0;
         const MANUAL = 1 << 7;
@@ -1795,6 +1820,7 @@ impl Serialize<1> for PhaseGain {
 }
 
 bitflags! {
+    #[derive(Debug, Clone, Copy)]
     pub struct FreqGainAFlags: u8 {
         const AMPLGATE = 1 << 4;
         const HALFMOD  = 1 << 5;
@@ -1832,6 +1858,7 @@ impl Serialize<1> for FreqGainA {
 }
 
 bitflags! {
+    #[derive(Debug, Clone, Copy)]
     pub struct FreqGainBFlags: u8 {
         const AVG    = 1 << 6;
         const FREEZE = 1 << 7;
@@ -1892,6 +1919,7 @@ impl Serialize<1> for FreqGainC {
 }
 
 bitflags! {
+    #[derive(Debug, Clone, Copy)]
     pub struct FreqGainDFlags: u8 {
         const FREEZE = 1 << 7;
     }
@@ -1926,6 +1954,7 @@ impl Serialize<1> for FreqGainD {
 }
 
 bitflags! {
+    #[derive(Debug, Clone, Copy)]
     pub struct AmplGainFlags: u8 {
         const AGC = 1 << 6;
         const AVG = 1 << 7;
@@ -1961,6 +1990,7 @@ impl Serialize<1> for AmplGain {
 }
 
 bitflags! {
+    #[derive(Debug, Clone, Copy)]
     pub struct FourFSKFlags: u8 {
         const UPDATE = 1 << 4;
     }
@@ -2024,7 +2054,7 @@ impl Serialize<1> for BBOffsRes {
 
 
 bitflags! {
-    #[derive(Default)]
+    #[derive(Default, Debug, Clone, Copy)]
     pub struct Diversity: u8 {
         const DIVENA = 1 << 0;
         const ANTSEL = 1 << 1;
@@ -2073,6 +2103,92 @@ impl Serialize<3> for MaxRFOffset {
     }
 }
 
+#[derive(Copy, Clone, Debug, PartialEq)]
+pub enum RxParamSet {
+    Set0 = 0b00,
+    Set1 = 0b01,
+    Set2 = 0b10,
+    Set3 = 0b11,
+}
+
+impl TryFrom<u8> for RxParamSet {
+    type Error = ();
+    fn try_from(v: u8) -> Result<Self, Self::Error> {
+        match v {
+            x if x == Self::Set0 as u8 => Ok(Self::Set0),
+            x if x == Self::Set1 as u8 => Ok(Self::Set1),
+            x if x == Self::Set2 as u8 => Ok(Self::Set2),
+            x if x == Self::Set3 as u8 => Ok(Self::Set3),
+            _ => Err(()),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct RxParamSets {
+    pub ps0: RxParamSet,
+    pub ps1: RxParamSet,
+    pub ps2: RxParamSet,
+    pub ps3: RxParamSet,
+}
+
+impl Default for RxParamSets {
+    fn default() -> Self {
+        Self {
+            ps0: RxParamSet::Set0,
+            ps1: RxParamSet::Set0,
+            ps2: RxParamSet::Set0,
+            ps3: RxParamSet::Set0,
+        }
+    }
+}
+
+impl Deserialize<1> for RxParamSets {
+    fn deserialize(&mut self, data: [u8; 1]) {
+        self.ps0 = RxParamSet::try_from(data[0] & ((0x3 << 0) >> 0)).unwrap();
+        self.ps1 = RxParamSet::try_from(data[0] & ((0x3 << 2) >> 2)).unwrap();
+        self.ps2 = RxParamSet::try_from(data[0] & ((0x3 << 4) >> 4)).unwrap();
+        self.ps3 = RxParamSet::try_from(data[0] & ((0x3 << 6) >> 6)).unwrap();
+    }
+}
+
+impl Serialize<1> for RxParamSets {
+   fn serialize(&self) -> [u8; 1] {
+        [ (self.ps0 as u8) << 0 | (self.ps1 as u8) << 2 | (self.ps2 as u8) << 4 | (self.ps3 as u8) << 6 ]
+    }
+}
+
+//#[derive(Copy, Clone, Debug)]
+//pub enum RxParamSpecial {
+//    Normal,
+//    CoarseAGC,
+//    BBOffsetAcq,
+//}
+
+#[derive(Debug, Clone, Copy)]
+pub struct RxParamCurSet {
+    pub index: u8,
+    pub number: RxParamSet,
+    pub special: u8,
+}
+
+impl Default for RxParamCurSet {
+    fn default() -> Self {
+        Self {
+            index: 0,
+            number: RxParamSet::Set0,
+            special: 0,
+        }
+    }
+}
+
+impl Deserialize<1> for RxParamCurSet {
+    fn deserialize(&mut self, data: [u8; 1]) {
+        self.index = data[0] & ((0x3 << 0) >> 0);
+        self.number = RxParamSet::try_from(data[0] & ((0x3 << 2) >> 2)).unwrap();
+        self.special = data[0] & ((0xF << 4) >> 4);
+    }
+}
 
 
 /* Adapted from AX5043 Programming Manual, Table 22 */
@@ -2159,14 +2275,14 @@ pub struct Registers<'a> {
     pub MAXDROFFSET:    ReadWrite<'a, 0x106, 3, u32>,         // Maximum Receiver Datarate Offset
     pub MAXRFOFFSET:    ReadWrite<'a, 0x109, 3, MaxRFOffset>, // Maximum Receiver RF Offset
     pub FSKDMAX:        ReadWrite<'a, 0x10C, 2, u16>,         // Four FSK Rx Deviation
-    pub FSKDMIN:        ReadWrite<'a, 0x10E, 2, u16>,         // Four FSK Rx Deviation
+    pub FSKDMIN:        ReadWrite<'a, 0x10E, 2, i16>,         // Four FSK Rx Deviation
     pub AFSKSPACE:      ReadWrite<'a, 0x110, 2, u16>,         // AFSK Space (0) Frequency
     pub AFSKMARK:       ReadWrite<'a, 0x112, 2, u16>,         // AFSK Mark (1) Frequency
     pub AFSKCTRL:       ReadWrite<'a, 0x114, 1, u8>,          // AFSK Control
     pub AMPLFILTER:     ReadWrite<'a, 0x115, 1, u8>,          // Amplitude Filter
     pub FREQUENCYLEAK:  ReadWrite<'a, 0x116, 1, u8>,          // Baseband Frequency Recovery Loop Leakiness
-    pub RXPARAMSETS:    ReadWrite<'a, 0x117, 1, u8>,          // Receiver Parameter Set Indirection
-    pub RXPARAMCURSET:  ReadOnly <'a, 0x118, 1, u8>,          // Receiver Parameter Current Set
+    pub RXPARAMSETS:    ReadWrite<'a, 0x117, 1, RxParamSets>,  // Receiver Parameter Set Indirection
+    pub RXPARAMCURSET:  ReadOnly <'a, 0x118, 1, RxParamCurSet>, // Receiver Parameter Current Set
     /* Receiver Parameter Set 0 */
     pub AGCGAIN0:       ReadWrite<'a, 0x120, 1, AGCGain>,   // AGC Speed
     pub AGCTARGET0:     ReadWrite<'a, 0x121, 1, u8>,        // AGC Target
@@ -2228,7 +2344,7 @@ pub struct Registers<'a> {
     pub FREQGAINC3:     ReadWrite<'a, 0x159, 1, FreqGainC>, // Frequency Gain C
     pub FREQGAIND3:     ReadWrite<'a, 0x15A, 1, FreqGainD>, // Frequency Gain D
     pub AMPLGAIN3:      ReadWrite<'a, 0x15B, 1, AmplGain>,  // Amplitude Gain
-    pub FREQDEV13:      ReadWrite<'a, 0x15C, 2, u16>,       // Receiver Frequency Deviation
+    pub FREQDEV3:       ReadWrite<'a, 0x15C, 2, u16>,       // Receiver Frequency Deviation
     pub FOURFSK3:       ReadWrite<'a, 0x15E, 1, FourFSK>,   // Four FSK Control
     pub BBOFFSRES3:     ReadWrite<'a, 0x15F, 1, BBOffsRes>, // Baseband Offset Compensation Resistors
     /* Transmitter Parameters */
@@ -2331,7 +2447,7 @@ pub fn open<P: AsRef<Path>>(path: P) -> io::Result<Spidev> {
 }
 
 pub fn registers<'a>(spi: &'a Spidev, on_status: &'a dyn Fn(Status)) -> Registers<'a> { // FIXME: new()?
-   Registers {
+    Registers {
         REVISION:       ReadOnly { spi, on_status, value: Default::default() },
         SCRATCH:        ReadWrite{ spi, on_status, value: Default::default() },
         PWRMODE:        ReadWrite{ spi, on_status, value: Default::default() },
@@ -2464,7 +2580,7 @@ pub fn registers<'a>(spi: &'a Spidev, on_status: &'a dyn Fn(Status)) -> Register
         FREQGAINC3:     ReadWrite{ spi, on_status, value: Default::default() },
         FREQGAIND3:     ReadWrite{ spi, on_status, value: Default::default() },
         AMPLGAIN3:      ReadWrite{ spi, on_status, value: Default::default() },
-        FREQDEV13:      ReadWrite{ spi, on_status, value: Default::default() },
+        FREQDEV3:       ReadWrite{ spi, on_status, value: Default::default() },
         FOURFSK3:       ReadWrite{ spi, on_status, value: Default::default() },
         BBOFFSRES3:     ReadWrite{ spi, on_status, value: Default::default() },
         MODCFGF:        ReadWrite{ spi, on_status, value: Default::default() },
