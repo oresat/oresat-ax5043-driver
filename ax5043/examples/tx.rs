@@ -2,24 +2,67 @@ extern crate ax5043;
 use std::{
     cell::Cell,
     io,
-    sync::{
-        atomic::{AtomicBool, Ordering},
-        Arc,
-    },
-    thread, time,
+    sync::Arc,
+    thread,
+    time::Duration,
+    os::fd::AsRawFd,
+    fmt::{Debug, Display},
 };
+use bitflags::Flags;
 use gpiod::{Chip, Options, EdgeDetect};
-use ax5043::{config::Framing, config::Modulation, config::SlowRamp, config::*, *};
+use timerfd::{TimerFd, TimerState, SetTimeFlags};
+use mio::{Events, Poll, Waker, unix::SourceFd, Token, Interest};
+use mio_signals::{Signal, Signals};
+use ax5043::*;
 
-fn print_state(radio: &mut Registers, step: &str) -> io::Result<()> {
+mod config_rpi;
+use crate::config_rpi::configure_radio;
+
+fn print_diff<S: AsRef<str> + Display, T: Flags + PartialEq + Debug + Copy>(name: S, new: T, old: T) -> T {
+    if new != old {
+        print!("{:14}: ", name);
+        let added = new.difference(old);
+        if !added.is_empty() {
+            print!("+{:?} ", added);
+        }
+        let removed = old.difference(new);
+        if !removed.is_empty() {
+            print!("-{:?} ", removed);
+        }
+        if !old.intersection(new).is_empty() {
+            print!("={:?}", old.intersection(new));
+        }
+        println!();
+    }
+    new
+}
+
+#[derive(Default)]
+struct AXState {
+    irq: ax5043::IRQ,
+    xtal: XtalStatus,
+    //pllranging: PLLRanging,
+    radioevent: RadioEvent,
+    radiostate: RadioState,
+    powstat: PowStat,
+    powsstat: PowStat,
+}
+
+fn print_state(radio: &mut Registers, step: &str, state: &mut AXState) -> io::Result<()> {
     println!("\nstep: {}", step);
-    println!("IRQREQ     {:?}", radio.IRQREQUEST.read()?);
-    println!("XTALST     {:?}", radio.XTALSTATUS.read()?);
-    println!("PLLRANGING {:?}", radio.PLLRANGINGA.read()?); // sticky lock bit ~ IRQPLLUNLIOCK, gate
-    println!("RADIOEVENT {:?}", radio.RADIOEVENTREQ.read()?);
-    println!("POWSTAT    {:?}", radio.POWSTAT.read()?);
-    println!("POWSTAT    {:?}", radio.POWSTICKYSTAT.read()?); // affects irq/spi status, gate
-    println!("RADIOSTATE {:?}", radio.RADIOSTATE.read()?);
+    state.irq        = print_diff("IRQREQ    ", radio.IRQREQUEST.read()?, state.irq);
+    state.xtal       = print_diff("XTALST    ", radio.XTALSTATUS.read()?, state.xtal);
+
+    println!("{:14}: {:?}", "PLLRANGING", radio.PLLRANGINGA.read()?); // sticky lock bit ~ IRQPLLUNLIOCK, gate
+    //state.pllranging = print_diff("PLLRANGING", radio.PLLRANGINGA.read()?, state.pllranging); // sticky lock bit ~ IRQPLLUNLIOCK, gate
+    state.radioevent = print_diff("RADIOEVENT", radio.RADIOEVENTREQ.read()?, state.radioevent);
+    state.powstat    = print_diff("POWSTAT   ", radio.POWSTAT.read()?, state.powstat);
+    state.powsstat   = print_diff("POWSSTAT  ", radio.POWSTICKYSTAT.read()?, state.powsstat); // affects irq/spi status, gate
+    let new = radio.RADIOSTATE.read()?;
+    if state.radiostate != new {
+        println!("{:14}: {:?}", "RADIOSTATE", new);
+        state.radiostate = new;
+    }
     println!("FIFO | count | free | thresh | stat");
     println!(
         "     | {:5} | {:4} | {:6} | {:?}",
@@ -31,14 +74,14 @@ fn print_state(radio: &mut Registers, step: &str) -> io::Result<()> {
     Ok(())
 }
 
-fn ax5043_transmit(radio: &mut Registers, data: &[u8]) -> io::Result<()> {
+fn ax5043_transmit(radio: &mut Registers, data: &[u8], state: &mut AXState) -> io::Result<()> {
     // DS Table 25
     // FULLTX:
     // Synthesizer and transmitter are running. Do not switch into this mode before the synthesiz-
     // er has completely settled on the transmit frequency (in SYNTHTX mode), otherwise spuri-
     // ous spectral transmissions will occur.
 
-    // this conflicts with how the radio woks and the PM figure describes the process.
+    // this conflicts with how the radio works and the PM figure describes the process.
 
     // PM Figure 9
     // pwrmode = FULLTX
@@ -62,32 +105,40 @@ fn ax5043_transmit(radio: &mut Registers, data: &[u8]) -> io::Result<()> {
     //    .read()?
     //    .flags
     //    .contains(PLLRangingFlags::PLL_LOCK)
-    //{} // TODO: IRQRQPLLUNLOCK?
-    print_state(radio, "pre-fulltx")?;
+    //{}
+
+    // IMPORTANT: PLL_STICKY_LOCK needs to be set to coutner PLLLOCK_GATE
+    //            Sticky SSBEVMODEM and SSBEVANA needs to be clear to counter BROWNOUT_GATE
+
+    print_state(radio, "pre-fulltx", state)?;
     radio.PWRMODE.write(PwrMode {
         flags: PwrFlags::XOEN | PwrFlags::REFEN,
         mode: PwrModes::TX,
     })?;
-    print_state(radio, "fulltx")?;
+    print_state(radio, "fulltx", state)?;
     let mut fifo = fifo::FIFO {
         threshold: 0,
         autocommit: false,
         radio,
     };
     // FIXME: FIFOSTAT CLEAR?
-    fifo.write(data, fifo::TXDataFlags::UNENC | fifo::TXDataFlags::RESIDUE)?;
+    //fifo.write(data, fifo::TXDataFlags::UNENC | fifo::TXDataFlags::RESIDUE)?;
+    // Preamble - see PM p16
+    fifo.write(&[0x11], fifo::TXDataFlags::RAW)?;
+    fifo.write(data, fifo::TXDataFlags::PKTSTART | fifo::TXDataFlags::PKTEND)?;
     fifo.commit()?;
 
-    print_state(radio, "commit")?;
+    print_state(radio, "commit", state)?;
 
     while radio.RADIOSTATE.read()? as u8 != RadioState::IDLE as u8 {} // TODO: Interrupt of some sort
-    print_state(radio, "tx complete")?;
+    print_state(radio, "tx complete", state)?;
+    /*
     radio.PWRMODE.write(PwrMode {
         flags: PwrFlags::XOEN | PwrFlags::REFEN,
         mode: PwrModes::XOEN,
     })?;
-    print_state(radio, "idle mode")?;
-
+    print_state(radio, "idle mode", state)?;
+*/
     Ok(())
 }
 
@@ -102,127 +153,77 @@ fn ax5043_transmit(radio: &mut Registers, data: &[u8]) -> io::Result<()> {
 // TODO: Action
 // - FRAMING::FABORT
 
-fn configure_radio(radio: &mut Registers) -> io::Result<()> {
-    let board = Board {
-        sysclk: Pin { mode: config::SysClk::Z,    pullup: true,  invert: false, },
-        dclk:   Pin { mode: config::DClk::Z,      pullup: true,  invert: false, },
-        data:   Pin { mode: config::Data::Z,      pullup: true,  invert: false, },
-        pwramp: Pin { mode: config::PwrAmp::TCXO, pullup: false, invert: false, },
-        irq:    Pin { mode: config::IRQ::IRQ,     pullup: false, invert: false, },
-        antsel: Pin { mode: config::AntSel::Z,    pullup: true,  invert: false, },
-        xtal: Xtal {
-            kind: XtalKind::TCXO,
-            freq: 48_000_000,
-            enable: XtalPin::AntSel,
-        },
-        vco: VCO::Internal,
-        filter: Filter::Internal,
-        antenna: Antenna::SingleEnded,
-        dac: DAC {
-            pin: DACPin::PwrAmp,
-        },
-        adc: ADC::ADC1,
-    };
 
-    radio.IRQMASK.write(ax5043::IRQ::XTALREADY)?;
+#[derive(Debug, Default)]
+struct IRQState {
+    irq: ax5043::IRQ
+}
 
-    configure(radio, &board)?;
-
-    let synth = Synthesizer {
-        freq_a: 436_500_000,
-        freq_b: 0,
-        active: FreqReg::A,
-        pll: PLL {
-            charge_pump_current: 0x02, // From spreadsheet
-            filter_bandwidth: LoopFilter::Internalx1,
-        },
-        boost: PLL {
-            charge_pump_current: 0xC8,                // Default value
-            filter_bandwidth: LoopFilter::Internalx5, // Default value
-        },
-        vco_current: Some(0x13), // depends on VCO, auto or manual, readback VCOIR, see AND9858/D for manual cal
-        lock_detector_delay: None, // auto or manual, readback PLLLOCKDET::LOCKDETDLYR
-        ranging_clock: RangingClock::XtalDiv1024, // less than one tenth the loop filter bandwidth. Derive?
-    };
-
-    configure_synth(radio, &board, &synth)?;
-
-    let channel = ChannelParameters {
-        modulation: Modulation::GFSK {
-            deviation: 20_000,
-            ramp: SlowRamp::Bits1,
-            bt: BT(0.3),
-        },
-
-        encoding: Encoding::NRZI | Encoding::SCRAM,
-        framing: Framing::HDLC { fec: FEC {} },
-        crc: CRC::CCITT { initial: 0xFFFF },
-
-    };
-
-    configure_channel(radio, &board, &channel)?;
-
-    let parameters = TXParameters {
-        amp: AmplitudeShaping::RaisedCosine {
-            a: 0,
-            b: 0x700,
-            c: 0,
-            d: 0,
-            e: 0,
-        },
-        txrate: 60_000,
-        plllock_gate: true,
-        brownout_gate: true,
-    };
-
-    configure_tx(radio, &board, &channel, &parameters)?;
-    // TMGTX{BOOST,SETTLE} in Packet controller
-
-    autorange(radio)?;
+fn service_irq(radio: &mut Registers, state: &mut IRQState) -> io::Result<()> {
+    state.irq = print_diff("GPIO IRQ: ", radio.IRQREQUEST.read()?, state.irq);
     Ok(())
 }
 
 fn main() -> io::Result<()> {
+    let mut poll = Poll::new()?;
+    let registry = poll.registry();
+
+    const CTRLC: Token = Token(0);
+    let mut signals = Signals::new(Signal::Interrupt.into())?;
+    registry.register(&mut signals, CTRLC, Interest::READABLE)?;
+
     let spi0 = ax5043::open("/dev/spidev0.0")?;
     let status = Cell::new(Status::empty());
-    let callback = |s| {
-        if s != status.get() {
-            println!("TX Status change: {:?}", s);
-            status.set(s);
-        }
+    let callback = |new: Status| {
+        status.set(print_diff("Status change", new, status.get()));
     };
     let mut radio_tx = ax5043::registers(&spi0, &callback);
 
     radio_tx.reset()?;
 
-    let stop = Arc::new(AtomicBool::new(false));
-    let handlerstop = stop.clone();
-    ctrlc::set_handler(move || {
-        handlerstop.store(true, Ordering::SeqCst);
-        println!("received Ctrl+C!");
-    })
-    .expect("Error setting Ctrl-C handler");
+    const IRQ: Token = Token(1);
+    let irq_waker = Arc::new(Waker::new(poll.registry(), IRQ)?);
+    let irq_thread_waker = irq_waker.clone();
 
-    thread::spawn(|| -> io::Result<()> {
+    thread::spawn(move || -> io::Result<()> {
         let chip = Chip::new("gpiochip0")?;
         let opts = Options::input([17])
             .edge(EdgeDetect::Both)
             .consumer("ax5043");
         let mut inputs = chip.request_lines(opts)?;
         loop {
-            let event = inputs.read_event()?;
-            println!("GPIO event: {:?}", event);
+            let _event = inputs.read_event()?;
+            irq_thread_waker.wake().unwrap();
         }
     });
 
     configure_radio(&mut radio_tx)?;
 
-    loop {
-        // Example transmission from PM table 16
-        ax5043_transmit(&mut radio_tx, &[0xAA, 0xAA, 0x1A])?;
-        thread::sleep(time::Duration::from_millis(500));
-        if stop.load(Ordering::SeqCst) {
-            break;
+    let mut tfd = TimerFd::new().unwrap();
+    tfd.set_state(TimerState::Periodic{current: Duration::new(1, 0), interval: Duration::from_millis(100)}, SetTimeFlags::Default);
+    const BEACON: Token = Token(2);
+    registry.register(
+        &mut SourceFd(&tfd.as_raw_fd()),
+        BEACON,
+        Interest::READABLE)?;
+
+    let mut irqstate = IRQState::default();
+    let mut state = AXState::default();
+
+    let mut events = Events::with_capacity(128);
+    'outer: loop {
+        poll.poll(&mut events, None)?;
+        for event in events.iter() {
+            match event.token() {
+                BEACON => {
+                    tfd.read();
+                     // Example transmission from PM table 16
+                    ax5043_transmit(&mut radio_tx, &[0xAA, 0xAA, 0x1A], &mut state)?;
+                },
+                IRQ => service_irq(&mut radio_tx, &mut irqstate)?,
+                CTRLC => break 'outer,
+                _ => unreachable!(),
+            }
         }
     }
 

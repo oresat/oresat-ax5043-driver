@@ -6,7 +6,7 @@ use std::{
     io,
     net::{IpAddr, Ipv6Addr, SocketAddr},
 };
-
+use gpiod::{Chip, Options};
 use ax5043::{config::*, fifo, Encoding, PwrFlags, PwrMode, PwrModes, Registers, Status};
 
 // Try it out: `socat STDIO UDP:localhost:10015`
@@ -111,6 +111,12 @@ fn main() -> io::Result<()> {
         .register(&mut beacon, BEACON, Interest::READABLE)?;
     let mut events = Events::with_capacity(128);
 
+    let chip = Chip::new("gpiochip1")?;
+    let opts = Options::output([27])
+        .values([false])
+        .consumer("ax5043");
+    let pa_enable = chip.request_lines(opts)?;
+
     let spi0 = ax5043::open(args.spi)?;
     let status = Cell::new(Status::empty());
     let callback = |s| {
@@ -141,11 +147,15 @@ fn main() -> io::Result<()> {
                     let mut buf = [0; 512];
                     let (amt, src) = beacon.recv_from(&mut buf)?;
                     println!("Recv {} from {}: {:?}", amt, src, &buf[..amt]);
+
+                    pa_enable.set_values([true])?;
                     fifo.write(
                         &buf[..amt],
                         fifo::TXDataFlags::PKTSTART | fifo::TXDataFlags::PKTEND,
                     )?;
                     fifo.commit()?;
+                    fifo.block_until_idle()?;
+                    pa_enable.set_values([false])?;
                 }
                 _ => unreachable!(),
             }
