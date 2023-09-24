@@ -2,7 +2,7 @@ use std::io;
 use bitflags::bitflags;
 use spidev::SpidevTransfer;
 
-use crate::{ Registers, FIFOCmd, FIFOCmds, FIFOCmdFlags };
+use crate::{ Registers, FIFOCmd, FIFOCmds, FIFOCmdFlags, RadioState };
 
 pub enum FIFOChunkRX {
     RSSI       = 0b00110001, // RSSI
@@ -152,6 +152,11 @@ impl FIFO<'_, '_> {
 
         println!("rx flags: 0x{:x}", rx[2]);
         println!("data: {:?}", &rx[3..]);
+        Ok(())
+    }
+
+    pub fn block_until_idle(&mut self) -> io::Result<()> {
+        while self.radio.RADIOSTATE.read()? as u8 != RadioState::IDLE as u8 {} // TODO: Interrupt of some sort
         Ok(())
     }
 }
