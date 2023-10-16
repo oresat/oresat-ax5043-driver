@@ -127,6 +127,13 @@ fn main() -> io::Result<()> {
     };
     let mut radio = ax5043::registers(&spi0, &callback);
     radio.reset()?;
+
+    let rev = radio.REVISION.read()?;
+    if rev != 0x51 {
+        println!("Unexpected revision {}, expected {}", rev, 0x51);
+        return Ok(())
+    }
+
     configure_radio(&mut radio)?;
 
     radio.PWRMODE.write(PwrMode {
