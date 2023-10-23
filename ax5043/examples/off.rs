@@ -1,15 +1,21 @@
 extern crate ax5043;
-use std::io;
+use clap::Parser;
+use std::{io, path::PathBuf};
+
+#[derive(Parser, Debug)]
+struct Args {
+    #[arg(default_values_os_t=vec![PathBuf::from("/dev/spidev0.0"), PathBuf::from("/dev/spidev1.1")])]
+    path: Vec<PathBuf>,
+}
 
 fn main() -> io::Result<()> {
-    let spi1 = ax5043::open("/dev/spidev0.0")?;
-    let spi2 = ax5043::open("/dev/spidev1.0")?;
+    let args = Args::parse();
 
-    let mut radio1 = ax5043::registers(&spi1, &|status| println!("0.0:{:?}", status));
-    let mut radio2 = ax5043::registers(&spi2, &|status| println!("1.0:{:?}", status));
-
-    radio1.reset()?;
-    radio2.reset()?;
-
+    for path in args.path.iter() {
+        println!("Resetting {}", path.display());
+        let spi = ax5043::open(path)?;
+        let mut radio = ax5043::Registers::new(&spi, &|status| println!("{:?}", status));
+        radio.reset()?;
+    }
     Ok(())
 }
