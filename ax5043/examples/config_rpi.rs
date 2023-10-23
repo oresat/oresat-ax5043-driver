@@ -1,6 +1,6 @@
-use ax5043::{config::Framing, config::Modulation, config::SlowRamp, config::*, *};
+use ax5043::{config::Framing, config::Modulation, config::SlowRamp, config::FEC, config::*, *, registers::*};
 
-pub fn configure_radio(radio: &mut Registers) -> std::io::Result<()> {
+pub fn configure_radio_tx(radio: &mut Registers) -> std::io::Result<config::Board> {
     let board = Board {
         sysclk: Pin { mode: config::SysClk::Z,    pullup: true,  invert: false, },
         dclk:   Pin { mode: config::DClk::Z,      pullup: true,  invert: false, },
@@ -23,8 +23,8 @@ pub fn configure_radio(radio: &mut Registers) -> std::io::Result<()> {
     };
 
     // As far as I can tell PLLUNLOCK and PLLRNGDONE have no way to clear/are level triggered
-    radio.IRQMASK.write(ax5043::IRQ::XTALREADY | ax5043::IRQ::RADIOCTRL)?;
-    radio.RADIOEVENTMASK.write(ax5043::RadioEvent::all())?;
+    radio.IRQMASK.write(registers::IRQ::XTALREADY | registers::IRQ::RADIOCTRL)?;
+    radio.RADIOEVENTMASK.write(registers::RadioEvent::all())?;
 
     configure(radio, &board)?;
 
@@ -79,7 +79,7 @@ pub fn configure_radio(radio: &mut Registers) -> std::io::Result<()> {
     // TMGTX{BOOST,SETTLE} in Packet controller
 
     autorange(radio)?;
-    Ok(())
+    Ok(board)
 }
 
 struct RXParams {
@@ -166,7 +166,7 @@ fn rx_set_params(radio: &mut Registers, _board: &config::Board, params: &RXParam
     radio.MAXDROFFSET.write(params.max_dr_offset)?;
     radio.MAXRFOFFSET.write(MaxRFOffset {
         offset: params.max_rf_offset,
-        freq_offset_correction: params.freq_offs_corr,
+        correction: params.freq_offs_corr,
     })?;
     radio.FSKDMAX.write(params.fsk_dev_max)?;
     radio.FSKDMIN.write(params.fsk_dev_min)?;
@@ -280,12 +280,12 @@ pub fn configure_radio_rx(radio: &mut Registers) -> std::io::Result<config::Boar
         ..Default::default()
     };
     rx_set_params(radio, &board, &params)?;
-    radio.RXPARAMSETS.write(RxParamSets {
-        ps0: RxParamSet::Set0,
-        ps1: RxParamSet::Set1,
-        ps2: RxParamSet::Set2,
-        ps3: RxParamSet::Set3,
-    })?;
+    radio.RXPARAMSETS.write(RxParamSets(
+        RxParamSet::Set0,
+        RxParamSet::Set1,
+        RxParamSet::Set2,
+        RxParamSet::Set3,
+    ))?;
 
 
     autorange(radio)?;

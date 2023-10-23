@@ -192,16 +192,6 @@ pub struct Pin<T> {
     pub invert: bool,
 }
 
-impl<T> From<Pin<T>> for PFSysClkFlags {
-    fn from(v: Pin<T>) -> Self {
-        let mut f = PFSysClkFlags::empty();
-        if v.pullup {
-            f |= PFSysClkFlags::PULLUP;
-        }
-        f
-    }
-}
-
 impl<T> From<Pin<T>> for PFFlags {
     fn from(v: Pin<T>) -> Self {
         let mut f = PFFlags::empty();
@@ -242,6 +232,7 @@ pub struct Xtal {
 }
 
 impl Xtal {
+    #[must_use]
     pub fn div(&self) -> u64 {
         if self.freq < 24_800_000 { 1 } else { 2 }
     }
@@ -328,7 +319,7 @@ pub fn configure(radio: &mut Registers, board: &Board) -> io::Result<()> {
     // check that dac pin is set correctly
     // check that tcxo_en is set correctly
 
-    radio.PINFUNCSYSCLK.write(PFSysClk { mode: board.sysclk.mode.into(), flags: board.sysclk.into()})?;
+    radio.PINFUNCSYSCLK.write(PFSysClk { mode: board.sysclk.mode.into(), pullup: board.sysclk.pullup})?;
     radio.PINFUNCDCLK.write(    PFDClk { mode: board.dclk.mode.into(),   flags: board.dclk.into()})?;
     radio.PINFUNCDATA.write(    PFData { mode: board.data.mode.into(),   flags: board.data.into()})?;
     radio.PINFUNCPWRAMP.write(PFPwrAmp { mode: board.pwramp.mode.into(), flags: board.pwramp.into()})?;
@@ -577,9 +568,15 @@ pub fn configure_synth(radio: &mut Registers, board: &Board, synth: &Synthesizer
         Some(x) => PLLVCOI { bias: x, flags: PLLVCOIFlags::MANUAL },
         None    => PLLVCOI { bias: 0, flags: PLLVCOIFlags::AUTOMATIC },
     })?;
+
+    let lock_default = PLLLockDet {
+        delay: LockDetDly::d14ns,
+        flags: LockDetFlags::AUTOMATIC,
+        readback: LockDetDly::d6ns
+    };
     radio.PLLLOCKDET.write(match synth.lock_detector_delay {
-        Some(x) => PLLLockDet { delay: x.into(), flags: LockDetFlags::DLY_MANUAL, ..Default::default() },
-        None    => PLLLockDet { flags: LockDetFlags::DLY_AUTOMATIC, ..Default::default() },
+        Some(x) => PLLLockDet { flags: LockDetFlags::MANUAL, delay: x.into(), ..lock_default },
+        None    => PLLLockDet { flags: LockDetFlags::AUTOMATIC, ..lock_default },
     })?;
     radio.PLLRNGCLK.write(synth.ranging_clock.into())?;
     Ok(())
@@ -699,14 +696,14 @@ pub fn configure_channel(radio: &mut Registers, board: &Board, parameters: &Chan
         Modulation::GFSK{ deviation, .. } => {
             radio.MODULATION.write(crate::Modulation {
                 mode: ModulationMode::FSK,
-                flags: ModulationFlags::empty(),
+                halfspeed: false,
             })?;
             radio.FSKDEV.write((deviation * 2_u64.pow(24) / board.xtal.freq).try_into().unwrap())?;
         }
         Modulation::GMSK{ .. } => {
             radio.MODULATION.write(crate::Modulation {
                 mode: ModulationMode::FSK,
-                flags: ModulationFlags::empty(),
+                halfspeed: false,
             })?;
         }
         _ => unimplemented!()
@@ -722,8 +719,13 @@ pub enum AmplitudeShaping {
     None {b: u16}, // Datasheet says shaping should always be used? even in AM modes?
     RaisedCosine {a: u16, b: u16, c: u16, d: u16, e: u16},
 }
-
-
+/* FIXME`
+For conventional (non-predistorted output), α0 = α2 = α3
+= α4 = 0 and 0 ≤ α1 ≤ 1 controls the output power. If hard
+amplitude shaping is selected, both the raised cosine
+amplitude shaper and the predistortion is bypassed, and α1
+used.
+*/
 pub struct TXParameters {
     pub txrate: u64,
     pub amp: AmplitudeShaping,
@@ -748,13 +750,8 @@ pub fn configure_tx(radio: &mut Registers, board: &Board, channel: &ChannelParam
                 } | match parameters.amp {
                     AmplitudeShaping::RaisedCosine { .. } => ModCfgAFlags::AMPLSHAPE,
                     AmplitudeShaping::None { .. } => ModCfgAFlags::empty(),
-                } | match parameters.plllock_gate {
-                    true => ModCfgAFlags::PLLLCK_GATE,
-                    false => ModCfgAFlags::empty(),
-                } | match parameters.brownout_gate {
-                    true => ModCfgAFlags::BROWN_GATE,
-                    false => ModCfgAFlags::empty()
-                }
+                } | if parameters.plllock_gate { ModCfgAFlags::PLLLCK_GATE } else { ModCfgAFlags::empty() }
+                  | if parameters.brownout_gate { ModCfgAFlags::BROWN_GATE } else { ModCfgAFlags::empty() }
             };
             radio.MODCFGA.write(cfga)?;
 
