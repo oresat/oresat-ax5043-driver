@@ -267,13 +267,13 @@ impl<const ADDR: u16, const S: usize, W: Into<Vec<u8>> + Clone> WriteFIFO<'_, AD
         let mut stat = [0; 2];
 
         let tx = &self.value.clone().into()[..];
-        let mut rx: &mut [u8] = &mut vec![0; tx.len()];
+        let rx: &mut [u8] = &mut vec![0; tx.len()];
 
         //println!("{:?} Write 0x{:03X}: {:X?}", self.spi.inner(), ADDR, tx);
 
         self.spi.transfer_multiple(&mut [
             SpidevTransfer::read_write(&addr, &mut stat),
-            SpidevTransfer::read_write(tx, &mut rx),
+            SpidevTransfer::read_write(tx, rx),
         ])?;
         //assert_eq!(rx, [0; S]); fails TODO: what does this return? Old value? check that it
         //matches our previous known state?
