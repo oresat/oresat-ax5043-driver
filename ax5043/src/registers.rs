@@ -1819,6 +1819,30 @@ impl From<PktLenCfg> for Reg8 {
     }
 }
 
+
+#[derive(Clone, Copy, Debug)]
+pub struct MatchLen {
+    pub len: u8, // FIXME 4bit/5bit
+    pub raw: bool,
+}
+
+impl TryFrom<Reg8> for MatchLen {
+    type Error = Reg8;
+    fn try_from(item: Reg8) -> Result<Self, Self::Error> {
+        Ok(Self {
+            len: item.0[0] & 0x1F,
+            raw: (item.0[0] & 0x80) > 0,
+        })
+    }
+}
+
+impl From<MatchLen> for Reg8 {
+    fn from(item: MatchLen) -> Self {
+        (item.len | if item.raw { 0x80 } else { 0 }).into()
+    }
+}
+
+
 // FIXME: merge with TimeGain, parameterize over m width
 #[derive(Clone, Copy, Debug)]
 pub struct TMG {

@@ -475,14 +475,14 @@ pub struct Registers<'a> {
     pub PKTADDR:        ReadWrite<'a, 0x204, 4, u32>,        // Packet Address 3
     pub PKTADDRMASK:    ReadWrite<'a, 0x208, 4, u32>,        // Packet Address Mask 3
     /* Pattern Match */
-    pub MATCH0PAT:      ReadWrite<'a, 0x210, 4, u32>, // Pattern Match Unit 0, Pattern
-    pub MATCH0LEN:      ReadWrite<'a, 0x214, 1, u8>,  // Pattern Match Unit 0, Pattern Length
-    pub MATCH0MIN:      ReadWrite<'a, 0x215, 1, u8>,  // Pattern Match Unit 0, Minimum Match
-    pub MATCH0MAX:      ReadWrite<'a, 0x216, 1, u8>,  // Pattern Match Unit 0, Maximum Match
-    pub MATCH1PAT:      ReadWrite<'a, 0x218, 2, u16>, // Pattern Match Unit 1, Pattern
-    pub MATCH1LEN:      ReadWrite<'a, 0x21C, 1, u8>,  // Pattern Match Unit 1, Pattern Length
-    pub MATCH1MIN:      ReadWrite<'a, 0x21D, 1, u8>,  // Pattern Match Unit 1, Minimum Match
-    pub MATCH1MAX:      ReadWrite<'a, 0x21E, 1, u8>,  // Pattern Match Unit 1, Maximum Match
+    pub MATCH0PAT:      ReadWrite<'a, 0x210, 4, u32>,      // Pattern Match Unit 0, Pattern
+    pub MATCH0LEN:      ReadWrite<'a, 0x214, 1, MatchLen>, // Pattern Match Unit 0, Pattern Length
+    pub MATCH0MIN:      ReadWrite<'a, 0x215, 1, u8>,       // Pattern Match Unit 0, Minimum Match
+    pub MATCH0MAX:      ReadWrite<'a, 0x216, 1, u8>,       // Pattern Match Unit 0, Maximum Match
+    pub MATCH1PAT:      ReadWrite<'a, 0x218, 2, u16>,      // Pattern Match Unit 1, Pattern
+    pub MATCH1LEN:      ReadWrite<'a, 0x21C, 1, MatchLen>, // Pattern Match Unit 1, Pattern Length
+    pub MATCH1MIN:      ReadWrite<'a, 0x21D, 1, u8>,       // Pattern Match Unit 1, Minimum Match
+    pub MATCH1MAX:      ReadWrite<'a, 0x21E, 1, u8>,       // Pattern Match Unit 1, Maximum Match
     /* Packet Controller */
     pub TMGTXBOOST:     ReadWrite<'a, 0x220, 1, TMG>,            // Transmit PLL Boost Time
     pub TMGTXSETTLE:    ReadWrite<'a, 0x221, 1, TMG>,            // Transmit PLL (post Boost) Settling Time
@@ -929,11 +929,11 @@ impl Registers<'_> {
             PKTADDR:        ReadWrite{ spi, on_status, value: 0 },
             PKTADDRMASK:    ReadWrite{ spi, on_status, value: 0 },
             MATCH0PAT:      ReadWrite{ spi, on_status, value: 0 },
-            MATCH0LEN:      ReadWrite{ spi, on_status, value: 0 },
+            MATCH0LEN:      ReadWrite{ spi, on_status, value: MatchLen { len: 0, raw: false }},
             MATCH0MIN:      ReadWrite{ spi, on_status, value: 0 },
             MATCH0MAX:      ReadWrite{ spi, on_status, value: 0x1F },
             MATCH1PAT:      ReadWrite{ spi, on_status, value: 0 },
-            MATCH1LEN:      ReadWrite{ spi, on_status, value: 0 },
+            MATCH1LEN:      ReadWrite{ spi, on_status, value: MatchLen { len: 0, raw: false }},
             MATCH1MIN:      ReadWrite{ spi, on_status, value: 0 },
             MATCH1MAX:      ReadWrite{ spi, on_status, value: 0xF },
             TMGTXBOOST:     ReadWrite{ spi, on_status, value: TMG { e: 2, m: 0x12 }},
