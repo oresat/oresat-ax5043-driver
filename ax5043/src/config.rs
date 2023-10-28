@@ -343,6 +343,9 @@ pub fn configure(radio: &mut Registers, board: &Board) -> io::Result<()> {
 
         }
         XtalKind::TCXO => {
+            // From DS Table 6 note 5:
+            // if an external clock or TCXO is used, it should be input via an AC coupling at
+            // pin CLK16P with the oscillator powered up and XTALCAP = 0x00.
             set_load_cap(radio, 3.0)?; // TCXO shouldn't be affected by load cap, set to minimum
             if board.xtal.freq > 43_000_000 {
                 radio.PERF_F10.write(PerfF10::FreqGT43MHz)?;
@@ -487,7 +490,8 @@ pub struct Synthesizer {
     pub boost: PLL,
 
     // PLLVCODIV::REFDIV derived from xo freq, keep input below 24.8mhz
-    // PLLVCODIV::RFDIV derived from carrier freq (also see F34). See blackmagic for range
+    // PLLVCODIV::RFDIV derived from carrier freq (also see F34). See blackmagic for range, also DS
+    // Table 8. Depends also on vcosel
     // PLLVCODIV::{VCOSEL,VCO2INT} from phys layout
     // PLLRANGING::VCOR{A,B} saved, otherwise 8. also has status
 
@@ -631,7 +635,7 @@ impl TryFrom<BT> for ModCfgF {
 
 pub enum Modulation {
     ASK,
-    ASKCoherent,
+    ASKCoherent, // FIXME part of ASK, relevent to detection only? has a fifo cmd
     PSK  { ramp: u8 },
     OQPSK{ ramp: u8 },
     MSK  { ramp: SlowRamp },
@@ -705,6 +709,13 @@ pub fn configure_channel(radio: &mut Registers, board: &Board, parameters: &Chan
                 mode: ModulationMode::FSK,
                 halfspeed: false,
             })?;
+            // FSKDEV depends on bitrate, set in config_tx
+        }
+        Modulation::ASK => {
+            radio.MODULATION.write(registers::Modulation {
+                mode: ModulationMode::ASK,
+                halfspeed: false,
+            })?;
         }
         _ => unimplemented!()
     }
@@ -760,6 +771,21 @@ pub fn configure_tx(radio: &mut Registers, board: &Board, channel: &ChannelParam
                 // FIXME copy of gfsk channel_config. Here because this depends on TXParameters::txrate
                 radio.FSKDEV.write(((parameters.txrate / 4)  * 2_u64.pow(24) / board.xtal.freq).try_into().unwrap())?;
             }
+        }
+        Modulation::ASK => {
+            let cfga = ModCfgA {
+                slowramp: SlowRamp::Bits1.into(),
+                flags: match board.antenna {
+                    Antenna::SingleEnded => ModCfgAFlags::TXSE,
+                    Antenna::Differential => ModCfgAFlags::TXDIFF,
+                } | match parameters.amp {
+                    AmplitudeShaping::RaisedCosine { .. } => ModCfgAFlags::AMPLSHAPE,
+                    AmplitudeShaping::None { .. } => ModCfgAFlags::empty(),
+                } | if parameters.plllock_gate { ModCfgAFlags::PLLLCK_GATE } else { ModCfgAFlags::empty() }
+                  | if parameters.brownout_gate { ModCfgAFlags::BROWN_GATE } else { ModCfgAFlags::empty() }
+            };
+            radio.MODCFGA.write(cfga)?;
+
         }
         _ => unimplemented!()
     }
