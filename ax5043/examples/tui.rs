@@ -14,119 +14,13 @@ use crossterm::{
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
 };
 
+use bitflags::Flags;
+use ax5043::registers::*;
 use ax5043::*;
 mod config_rpi;
 use crate::config_rpi::configure_radio_rx;
 
-
-fn pwr_mode<'a>(pwrmode: &PwrMode) -> Table<'a> {
-    let on = Style::default().bg(Color::Gray).fg(Color::Black);
-    let off = Style::default().fg(Color::DarkGray);
-    Table::new(vec![
-        Row::new(vec![
-            Cell::from(format!("{:?}", pwrmode.mode)),
-            Cell::from("REFEN").style(if pwrmode.flags.contains(PwrFlags::REFEN) { on } else { off }),
-            Cell::from("XOEN").style(if pwrmode.flags.contains(PwrFlags::XOEN) { on } else { off }),
-        ])
-    ])
-    .block(Block::default().borders(Borders::ALL).title("PWRMODE"))
-    .widths(&[Constraint::Length(8), Constraint::Length(5), Constraint::Length(4)])
-    .style(Style::default().fg(Color::White))
-}
-
-fn pow_stat<'a>(powstat: &PowStat) -> Table<'a> {
-    let on = Style::default().bg(Color::Gray).fg(Color::Black);
-    let off = Style::default().fg(Color::DarkGray);
-
-    Table::new(vec![
-        Row::new(vec![
-            Cell::from("vIO").style(if powstat.contains(PowStat::VIO) { on } else { off }),
-            Cell::from("BEvMODEM").style(if powstat.contains(PowStat::BEVMODEM) { on } else { off }),
-            Cell::from("BEvANA").style(if powstat.contains(PowStat::BEVANA) { on } else { off }),
-            Cell::from("vMODEM").style(if powstat.contains(PowStat::VMODEM) { on } else { off }),
-            Cell::from("vANA").style(if powstat.contains(PowStat::VANA) { on } else { off }),
-            Cell::from("vREF").style(if powstat.contains(PowStat::VREF) { on } else { off }),
-            Cell::from("REF").style(if powstat.contains(PowStat::REF) { on } else { off }),
-            Cell::from("SUM").style(if powstat.contains(PowStat::SUM) { on } else { off })
-        ])
-    ])
-    .block(Block::default().borders(Borders::ALL).title("POWSTAT"))
-    .widths(&[Constraint::Max(3), Constraint::Max(8), Constraint::Max(6), Constraint::Max(6), Constraint::Max(4), Constraint::Max(4), Constraint::Max(3), Constraint::Max(3)])
-}
-
-fn irq<'a>(irq: &IRQ) -> Table<'a> {
-    let on = Style::default().bg(Color::Gray).fg(Color::Black);
-    let off = Style::default().fg(Color::DarkGray);
-    Table::new(vec![
-        Row::new(vec![
-            Cell::from("PLLUNLOCK").style(if irq.contains(IRQ::PLLUNLOCK) { on } else { off }),
-            Cell::from("RADIOCTRL").style(if irq.contains(IRQ::RADIOCTRL) { on } else { off }),
-            Cell::from("POWER").style(if irq.contains(IRQ::POWER) { on } else { off }),
-            Cell::from("XTALREADY").style(if irq.contains(IRQ::XTALREADY) { on } else { off }),
-            Cell::from("WAKEUPTIMER").style(if irq.contains(IRQ::WAKEUPTIMER) { on } else { off }),
-            Cell::from("LPOSC").style(if irq.contains(IRQ::LPOSC) { on } else { off }),
-            Cell::from("GPADC").style(if irq.contains(IRQ::GPADC) { on } else { off }),
-            Cell::from("PLLRNGDONE").style(if irq.contains(IRQ::PLLRNGDONE) { on } else { off }),
-        ]),
-        Row::new(vec![
-            Cell::from("FIFONOTEMPTY").style(if irq.contains(IRQ::FIFONOTEMPTY) { on } else { off }),
-            Cell::from("FIFONOTFULL").style(if irq.contains(IRQ::FIFONOTFULL) { on } else { off }),
-            Cell::from("FIFOTHRCNT").style(if irq.contains(IRQ::FIFOTHRCNT) { on } else { off }),
-            Cell::from("FIFOTHRFREE").style(if irq.contains(IRQ::FIFOTHRFREE) { on } else { off }),
-            Cell::from("FIFOERROR").style(if irq.contains(IRQ::FIFOERROR) { on } else { off }),
-        ])
-    ])
-    .block(Block::default().borders(Borders::ALL).title("IRQ"))
-    .widths(&[Constraint::Max(12), Constraint::Max(11), Constraint::Max(10), Constraint::Max(11), Constraint::Max(11), Constraint::Max(5), Constraint::Max(5), Constraint::Max(10)])
-}
-
-fn spi_status<'a>(status: &Status) -> Table<'a> {
-    let on = Style::default().bg(Color::Gray).fg(Color::Black);
-    let off = Style::default().fg(Color::DarkGray);
-
-    Table::new(vec![
-        Row::new(vec![
-            Cell::from("READY"           ).style(if status.contains(Status::READY) { on } else { off }),
-            Cell::from("PLL_LOCK"        ).style(if status.contains(Status::PLL_LOCK) { on } else { off }),
-            Cell::from("FIFO_OVER"       ).style(if status.contains(Status::FIFO_OVER) { on } else { off }),
-            Cell::from("FIFO_UNDER"      ).style(if status.contains(Status::FIFO_UNDER) { on } else { off }),
-            Cell::from("THRESHOLD_FREE"  ).style(if status.contains(Status::THRESHOLD_FREE) { on } else { off }),
-            Cell::from("THRESHOLD_COUNT" ).style(if status.contains(Status::THRESHOLD_COUNT) { on } else { off }),
-            Cell::from("FIFO_FULL"       ).style(if status.contains(Status::FIFO_FULL) { on } else { off }),
-            Cell::from("FIFO_EMPTY"      ).style(if status.contains(Status::FIFO_EMPTY) { on } else { off }),
-            Cell::from("PWR_GOOD"        ).style(if status.contains(Status::PWR_GOOD) { on } else { off }),
-            Cell::from("PWR_INTERRUPT"   ).style(if status.contains(Status::PWR_INTERRUPT) { on } else { off }),
-            Cell::from("RADIO_EVENT"     ).style(if status.contains(Status::RADIO_EVENT) { on } else { off }),
-            Cell::from("XTAL_OSC_RUNNING").style(if status.contains(Status::XTAL_OSC_RUNNING) { on } else { off }),
-            Cell::from("WAKEUP_INTERRUPT").style(if status.contains(Status::WAKEUP_INTERRUPT) { on } else { off }),
-            Cell::from("LPOSC_INTERRUPT" ).style(if status.contains(Status::LPOSC_INTERRUPT) { on } else { off }),
-            Cell::from("GPADC_INTERRUPT" ).style(if status.contains(Status::GPADC_INTERRUPT) { on } else { off }),
-        ])
-    ])
-    .block(Block::default().borders(Borders::ALL).title("STATUS"))
-    .widths(&[Constraint::Max(5), Constraint::Max(8), Constraint::Max(9), Constraint::Max(10),
-              Constraint::Max(14), Constraint::Max(15), Constraint::Max(9), Constraint::Max(10),
-              Constraint::Max(8), Constraint::Max(13), Constraint::Max(11), Constraint::Max(16),
-              Constraint::Max(16), Constraint::Max(15), Constraint::Max(15)])
-}
-
-fn spark<'a, T>(name: T, unit: T, data: &'a [u64]) -> Sparkline<'a> where T: AsRef<str> + std::fmt::Display {
-    let min = data.iter().min().unwrap_or(&0);
-    let max = data.iter().max().unwrap_or(&0);
-    let name: &str = name.as_ref();
-    Sparkline::default()
-        .block(Block::default().title(format!("{name} ({min} {unit} - {max} {unit})")).borders(Borders::ALL))
-        .data(data)
-        .style(Style::default().fg(Color::Red).bg(Color::White))
-}
-
-
-fn rx_params<'a>(data: &'a [u64], last: RxParamCurSet) -> Sparkline<'a> {
-    Sparkline::default()
-    .block(Block::default().borders(Borders::ALL).title(format!("Current RX Parameters - stage {} ({:?}) special {}", last.index, last.number, last.special)))
-    .data(data)
-    .style(Style::default().fg(Color::Red).bg(Color::White))
-}
+// FIXME: Default isn't really the way to go, maybe ::new()?
 
 #[derive(Default)]
 struct RXParameterAGC {
@@ -170,75 +64,6 @@ struct RXParameterSet {
     baseband_offset: RXParameterBasebandOffset,
 }
 
-fn receiver_parameter_set<'a>(set: &RXParameterSet, active: bool) -> Table<'a> {
-    /* AGC Gain
-     * AGC Target
-     * AGC AHyst
-     * AGC MinMax
-     * Gain - Time
-     * Gain - Data Rate
-     * Gain - Phase
-     * Gain - Freq A
-     * Gain - Freq B
-     * Gain - Freq C
-     * Gain - Freq D
-     * Gain - Ampl
-     * Freq Deviaiton
-     * FourFSK
-     * BB Offset Resistor
-     */
-
-    let on = Style::default().bg(Color::Gray).fg(Color::Black);
-    let off = Style::default().fg(Color::DarkGray);
-
-    Table::new(vec![
-        Row::new(vec![
-            "AGC", "attack", "decay", "target", "ahyst", "min", "max",
-        ]),
-        Row::new(vec![
-            Cell::from(""),
-            Cell::from(set.agc.attack.to_string()),
-            Cell::from(set.agc.decay.to_string()),
-            Cell::from(set.agc.target.to_string()),
-            Cell::from(set.agc.ahyst.to_string()),
-            Cell::from(set.agc.min.to_string()),
-            Cell::from(set.agc.max.to_string()),
-        ]),
-        Row::new(vec![
-            "Gain", "time", "rate", "phase", "filt", "BB gain phase", "BB gain freq", "RF gain freq", "RF gain phase", "ampl",
-        ]),
-        Row::new(vec![
-             Cell::from(""),
-             Cell::from(set.gain.time.to_string()),
-             Cell::from(set.gain.rate.to_string()),
-             Cell::from(set.gain.phase.to_string()),
-             Cell::from(set.gain.filter.to_string()),
-             Cell::from(set.gain.baseband.freq.to_string()),
-             Cell::from(set.gain.baseband.phase.to_string()),
-             Cell::from(set.gain.rf.freq.to_string()),
-             Cell::from(set.gain.rf.phase.to_string()),
-             Cell::from(set.gain.amplitude.to_string()),
-        ]),
-        Row::new(vec![
-            "", "freq dev", "decay", "BBR block A", "BBR block B",
-        ]),
-        Row::new(vec![
-            Cell::from(""),
-            Cell::from(set.freq_dev.to_string()),
-            Cell::from(set.decay.to_string()),
-            Cell::from(set.baseband_offset.a.to_string()),
-            Cell::from(set.baseband_offset.b.to_string()),
-        ]),
-    ])
-    .block(Block::default().borders(Borders::ALL).title("RX Parameter Set"))
-    .widths(&[Constraint::Max(5), Constraint::Max(8), Constraint::Max(9), Constraint::Max(10),
-           Constraint::Max(14), Constraint::Max(15), Constraint::Max(9), Constraint::Max(10),
-           Constraint::Max(8), Constraint::Max(13), Constraint::Max(11), Constraint::Max(16),
-           Constraint::Max(16), Constraint::Max(15), Constraint::Max(15)])
-    .style(if active { on } else { off })
-}
-
-#[derive(Default)]
 struct RXParams {
     iffreq: u64,
     baseband: u64,
@@ -255,78 +80,520 @@ struct RXParams {
     rxparamset: RxParamSets,
 }
 
-
-fn receiver_parameters<'a>(param: &RXParams) -> Table<'a> {
-/* IF Frequency
- * Decimation
- * Data Rate
- * Max DR Offset
- * Max RF Offset
- * FSK Dev Max
- * FSK Dev Min
- * AFSK Space
- * AFSK Mark
- * AFSK Ctrl
- * Ampl Filt
- * Freq Leak
- *
- * RX Param Set
- * RX Param Cur
- */
-    Table::new(vec![
-        Row::new(vec![
-            "IF Freq", "Max Δ", "Baseband", "Bitrate", "Max Δ"
-        ]),
-        Row::new(vec![
-            Cell::from(format!("{} Hz", param.iffreq)),
-            Cell::from(format!("{} Hz", param.maxrfoffset)),
-            Cell::from(format!("{} Hz", param.baseband)),
-            Cell::from(format!("{} bit/s", param.bitrate)),
-            Cell::from(format!("{} bit/s", param.maxdroffset)),
-        ]),
-        Row::new(vec![
-            "FSK Dev Max", "Min", "AFSK Space", "Mark", "Ctrl"
-        ]),
-        Row::new(vec![
-            Cell::from(format!("{} Hz", param.fskdevmax)),
-            Cell::from(format!("{} Hz", param.fskdevmin)),
-            Cell::from(param.afskspace.to_string()),
-            Cell::from(param.afskmark.to_string()),
-            Cell::from(param.afskctrl.to_string()),
-        ]),
-        Row::new(vec![
-            "Ampl Filt", "Freq Leak", "RX 0", "RX 1", "RX 2", "RX 3"
-        ]),
-        Row::new(vec![
-            Cell::from(param.amplfilt.to_string()),
-            Cell::from(param.freqleak.to_string()),
-            Cell::from(format!("{:?}", param.rxparamset.ps0)),
-            Cell::from(format!("{:?}", param.rxparamset.ps1)),
-            Cell::from(format!("{:?}", param.rxparamset.ps2)),
-            Cell::from(format!("{:?}", param.rxparamset.ps3)),
-        ]),
-
-    ])
-    .block(Block::default().borders(Borders::ALL).title("RX Parameters"))
-    .widths(&[Constraint::Max(11), Constraint::Max(10), Constraint::Max(11), Constraint::Max(10),
-           Constraint::Max(14), Constraint::Max(15)])
-
+impl Default for RXParams {
+    fn default() -> Self {
+        Self {
+            iffreq: 0,
+            baseband: 0,
+            bitrate: 0,
+            maxdroffset: 0,
+            maxrfoffset: 0,
+            fskdevmax: 0,
+            fskdevmin: 0,
+            afskspace: 0,
+            afskmark: 0,
+            afskctrl: 0,
+            amplfilt: 0,
+            freqleak: 0,
+            rxparamset: RxParamSets(
+                RxParamSet::Set0,
+                RxParamSet::Set0,
+                RxParamSet::Set0,
+                RxParamSet::Set0,
+            ),
+        }
+    }
 }
 
-
 struct UIState {
+    on: Style,
+    off: Style,
+    spark: Style,
     board: config::Board,
     rx: VecDeque<RXState>,
     status: Status,
     pwrmode: PwrMode,
     powstat: PowStat,
     irq: IRQ,
+    radio_event: RadioEvent,
+    radio_state: RadioState,
     rxparams: RXParams,
     set0 : RXParameterSet,
     set1 : RXParameterSet,
     set2 : RXParameterSet,
     set3 : RXParameterSet,
+    synthesizer: Synthesizer,
+    packet_controller: PacketController,
+    packet_format: PacketFormat,
 }
+
+impl Default for UIState {
+    fn default() -> Self {
+        Self {
+            on: Style::default().bg(Color::Gray).fg(Color::Black),
+            off: Style::default().fg(Color::DarkGray),
+            spark: Style::default().fg(Color::Red).bg(Color::White),
+            board: config::Board::default(),
+            rx: VecDeque::<RXState>::default(),
+            status: Status::empty(),
+            pwrmode: PwrMode {
+                mode: PwrModes::POWEROFF,
+                flags: PwrFlags::empty(),
+            },
+            powstat: PowStat::empty(),
+            irq: IRQ::empty(),
+            radio_event: RadioEvent::empty(),
+            radio_state: RadioState::IDLE,
+            rxparams: RXParams::default(),
+            set0 : RXParameterSet::default(),
+            set1 : RXParameterSet::default(),
+            set2 : RXParameterSet::default(),
+            set3 : RXParameterSet::default(),
+            synthesizer: Synthesizer::default(),
+            packet_controller: PacketController::default(),
+            packet_format: PacketFormat::default(),
+        }
+    }
+}
+
+impl UIState {
+    fn onoff<F: Flags>(&self, field: F, flag: F) -> Style {
+        if field.contains(flag) {
+            self.on
+        } else {
+            self.off
+        }
+    }
+
+    fn pwr_mode<'a>(&self) -> Table<'a> {
+        let flags = self.pwrmode.flags;
+        Table::new(vec![
+            Row::new(vec![
+                Cell::from(format!("{:?}", self.pwrmode.mode)),
+                Cell::from("REFEN").style(self.onoff(flags, PwrFlags::REFEN)),
+                Cell::from("XOEN" ).style(self.onoff(flags, PwrFlags::XOEN)),
+            ])
+        ])
+        .block(Block::default().borders(Borders::ALL).title("PWRMODE"))
+        .widths(&[Constraint::Length(8), Constraint::Length(5), Constraint::Length(4)])
+        .style(Style::default().fg(Color::White))
+    }
+
+    fn pow_stat<'a>(&self) -> Table<'a> {
+        let flags = self.powstat;
+        Table::new(vec![
+            Row::new(vec![
+                Cell::from("vIO"     ).style(self.onoff(flags, PowStat::VIO)),
+                Cell::from("BEvMODEM").style(self.onoff(flags, PowStat::BEVMODEM)),
+                Cell::from("BEvANA"  ).style(self.onoff(flags, PowStat::BEVANA)),
+                Cell::from("vMODEM"  ).style(self.onoff(flags, PowStat::VMODEM)),
+                Cell::from("vANA"    ).style(self.onoff(flags, PowStat::VANA)),
+                Cell::from("vREF"    ).style(self.onoff(flags, PowStat::VREF)),
+                Cell::from("REF"     ).style(self.onoff(flags, PowStat::REF)),
+                Cell::from("SUM"     ).style(self.onoff(flags, PowStat::SUM))
+            ])
+        ])
+        .block(Block::default().borders(Borders::ALL).title("POWSTAT"))
+        .widths(&[Constraint::Max(3), Constraint::Max(8), Constraint::Max(6), Constraint::Max(6),
+                Constraint::Max(4), Constraint::Max(4), Constraint::Max(3), Constraint::Max(3)])
+    }
+
+    fn irq<'a>(&self) -> Table<'a> {
+        let flags = self.irq;
+        Table::new(vec![
+            Row::new(vec![
+                Cell::from("PLLUNLOCK"  ).style(self.onoff(flags, IRQ::PLLUNLOCK)),
+                Cell::from("RADIOCTRL"  ).style(self.onoff(flags, IRQ::RADIOCTRL)),
+                Cell::from("POWER"      ).style(self.onoff(flags, IRQ::POWER)),
+                Cell::from("XTALREADY"  ).style(self.onoff(flags, IRQ::XTALREADY)),
+                Cell::from("WAKEUPTIMER").style(self.onoff(flags, IRQ::WAKEUPTIMER)),
+                Cell::from("LPOSC"      ).style(self.onoff(flags, IRQ::LPOSC)),
+                Cell::from("GPADC"      ).style(self.onoff(flags, IRQ::GPADC)),
+                Cell::from("PLLRNGDONE" ).style(self.onoff(flags, IRQ::PLLRNGDONE)),
+            ]),
+            Row::new(vec![
+                Cell::from("FIFONOTEMPTY").style(self.onoff(flags, IRQ::FIFONOTEMPTY)),
+                Cell::from("FIFONOTFULL" ).style(self.onoff(flags, IRQ::FIFONOTFULL)),
+                Cell::from("FIFOTHRCNT"  ).style(self.onoff(flags, IRQ::FIFOTHRCNT)),
+                Cell::from("FIFOTHRFREE" ).style(self.onoff(flags, IRQ::FIFOTHRFREE)),
+                Cell::from("FIFOERROR"   ).style(self.onoff(flags, IRQ::FIFOERROR)),
+            ])
+        ])
+        .block(Block::default().borders(Borders::ALL).title("IRQ"))
+        .widths(&[Constraint::Max(12), Constraint::Max(11), Constraint::Max(10), Constraint::Max(11),
+                Constraint::Max(11), Constraint::Max(5), Constraint::Max(5), Constraint::Max(10)])
+    }
+
+    fn spi_status<'a>(&self) -> Table<'a> {
+        let flags = self.status;
+        Table::new(vec![
+            Row::new(vec![
+                Cell::from("READY"           ).style(self.onoff(flags, Status::READY)),
+                Cell::from("PLL_LOCK"        ).style(self.onoff(flags, Status::PLL_LOCK)),
+                Cell::from("FIFO_OVER"       ).style(self.onoff(flags, Status::FIFO_OVER)),
+                Cell::from("FIFO_UNDER"      ).style(self.onoff(flags, Status::FIFO_UNDER)),
+                Cell::from("THRESHOLD_FREE"  ).style(self.onoff(flags, Status::THRESHOLD_FREE)),
+                Cell::from("THRESHOLD_COUNT" ).style(self.onoff(flags, Status::THRESHOLD_COUNT)),
+                Cell::from("FIFO_FULL"       ).style(self.onoff(flags, Status::FIFO_FULL)),
+                Cell::from("FIFO_EMPTY"      ).style(self.onoff(flags, Status::FIFO_EMPTY)),
+                Cell::from("PWR_GOOD"        ).style(self.onoff(flags, Status::PWR_GOOD)),
+                Cell::from("PWR_INTERRUPT"   ).style(self.onoff(flags, Status::PWR_INTERRUPT)),
+                Cell::from("RADIO_EVENT"     ).style(self.onoff(flags, Status::RADIO_EVENT)),
+                Cell::from("XTAL_OSC_RUNNING").style(self.onoff(flags, Status::XTAL_OSC_RUNNING)),
+                Cell::from("WAKEUP_INTERRUPT").style(self.onoff(flags, Status::WAKEUP_INTERRUPT)),
+                Cell::from("LPOSC_INTERRUPT" ).style(self.onoff(flags, Status::LPOSC_INTERRUPT)),
+                Cell::from("GPADC_INTERRUPT" ).style(self.onoff(flags, Status::GPADC_INTERRUPT)),
+            ])
+        ])
+        .block(Block::default().borders(Borders::ALL).title("STATUS"))
+        .widths(&[Constraint::Max(5), Constraint::Max(8), Constraint::Max(9), Constraint::Max(10),
+                  Constraint::Max(14), Constraint::Max(15), Constraint::Max(9), Constraint::Max(10),
+                  Constraint::Max(8), Constraint::Max(13), Constraint::Max(11), Constraint::Max(16),
+                  Constraint::Max(16), Constraint::Max(15), Constraint::Max(15)])
+    }
+
+    fn radio_event<'a>(&self) -> Table<'a> {
+        let flags = self.radio_event;
+        Table::new(vec![
+            Row::new(vec![
+                Cell::from("DONE"    ).style(self.onoff(flags, RadioEvent::DONE)),
+                Cell::from("SETTLED" ).style(self.onoff(flags, RadioEvent::SETTLED)),
+                Cell::from("STATE"   ).style(self.onoff(flags, RadioEvent::RADIOSTATECHG)),
+                Cell::from("PARAMSET").style(self.onoff(flags, RadioEvent::RXPARAMSETCHG)),
+                Cell::from("FRAMECLK").style(self.onoff(flags, RadioEvent::FRAMECLK)),
+            ])
+        ])
+        .block(Block::default().borders(Borders::ALL).title("Radio Event"))
+        .widths(&[Constraint::Max(4), Constraint::Max(7), Constraint::Max(5), Constraint::Max(8), Constraint::Max(8)])
+    }
+
+    fn radio_state<'a>(&self) -> Table<'a> {
+        Table::new(vec![
+            Row::new([
+                Cell::from(format!("{:?}", self.radio_state)),
+            ])
+        ])
+        .block(Block::default().borders(Borders::ALL).title("Radio State"))
+        .widths(&[Constraint::Max(10)])
+    }
+
+    fn sparkline<'a, T>(&self, name: T, unit: T, data: &'a [u64]) -> Sparkline<'a> where T: AsRef<str> + std::fmt::Display {
+        let min = data.iter().min().unwrap_or(&0);
+        let max = data.iter().max().unwrap_or(&0);
+        let name: &str = name.as_ref();
+        Sparkline::default()
+            .block(Block::default().title(format!("{name} ({min} {unit} - {max} {unit})")).borders(Borders::ALL))
+            .data(data)
+            .style(self.spark)
+    }
+
+    fn spark_signed<'a, T>(&self, name: T, unit: T, data: &'a [u64], min: i64, max: i64) -> Sparkline<'a> where T: AsRef<str> + std::fmt::Display {
+        Sparkline::default()
+            .block(Block::default().title(format!("{name} ({min} {unit} - {max} {unit})")).borders(Borders::ALL))
+            .data(data)
+            .style(self.spark)
+    }
+
+    fn rx_params<'a>(&self, data: &'a [u64], last: RxParamCurSet) -> Sparkline<'a> {
+        Sparkline::default()
+        .block(Block::default().borders(Borders::ALL).title(format!("Current RX Parameters - stage {} ({:?}) special {}", last.index, last.number, last.special)))
+        .data(data)
+        .style(self.spark)
+    }
+
+    fn receiver_parameter_set<'a>(&self, set: &RXParameterSet, active: bool) -> Table<'a> {
+        Table::new(vec![
+            Row::new(vec![
+                "AGC", "attack", "decay", "target", "ahyst", "min", "max",
+            ]),
+            Row::new(vec![
+                Cell::from(""),
+                Cell::from(set.agc.attack.to_string()),
+                Cell::from(set.agc.decay.to_string()),
+                Cell::from(set.agc.target.to_string()),
+                Cell::from(set.agc.ahyst.to_string()),
+                Cell::from(set.agc.min.to_string()),
+                Cell::from(set.agc.max.to_string()),
+            ]),
+            Row::new(vec![
+                "Gain", "time", "rate", "phase", "filt", "BB gain phase", "BB gain freq", "RF gain freq", "RF gain phase", "ampl",
+            ]),
+            Row::new(vec![
+                 Cell::from(""),
+                 Cell::from(set.gain.time.to_string()),
+                 Cell::from(set.gain.rate.to_string()),
+                 Cell::from(set.gain.phase.to_string()),
+                 Cell::from(set.gain.filter.to_string()),
+                 Cell::from(set.gain.baseband.freq.to_string()),
+                 Cell::from(set.gain.baseband.phase.to_string()),
+                 Cell::from(set.gain.rf.freq.to_string()),
+                 Cell::from(set.gain.rf.phase.to_string()),
+                 Cell::from(set.gain.amplitude.to_string()),
+            ]),
+            Row::new(vec![
+                "", "freq dev", "decay", "BBR block A", "BBR block B",
+            ]),
+            Row::new(vec![
+                Cell::from(""),
+                Cell::from(set.freq_dev.to_string()),
+                Cell::from(set.decay.to_string()),
+                Cell::from(set.baseband_offset.a.to_string()),
+                Cell::from(set.baseband_offset.b.to_string()),
+            ]),
+        ])
+        .block(Block::default().borders(Borders::ALL).title("RX Parameter Set"))
+        .widths(&[Constraint::Max(5), Constraint::Max(8), Constraint::Max(9), Constraint::Max(10),
+               Constraint::Max(14), Constraint::Max(15), Constraint::Max(9), Constraint::Max(10),
+               Constraint::Max(8), Constraint::Max(13), Constraint::Max(11), Constraint::Max(16),
+               Constraint::Max(16), Constraint::Max(15), Constraint::Max(15)])
+        .style(if active { self.on } else { self.off })
+    }
+
+    fn receiver_parameters<'a>(&self) -> Table<'a> {
+        Table::new(vec![
+            Row::new(vec![
+                "IF Freq", "Max Δ", "Baseband", "Bitrate", "Max Δ"
+            ]),
+            Row::new(vec![
+                Cell::from(format!("{} Hz", self.rxparams.iffreq)),
+                Cell::from(format!("{} Hz", self.rxparams.maxrfoffset)),
+                Cell::from(format!("{} Hz", self.rxparams.baseband)),
+                Cell::from(format!("{} bit/s", self.rxparams.bitrate)),
+                Cell::from(format!("{} bit/s", self.rxparams.maxdroffset)),
+            ]),
+            Row::new(vec![
+                "FSK Dev Max", "Min", "AFSK Space", "Mark", "Ctrl"
+            ]),
+            Row::new(vec![
+                Cell::from(format!("{} Hz", self.rxparams.fskdevmax)),
+                Cell::from(format!("{} Hz", self.rxparams.fskdevmin)),
+                Cell::from(self.rxparams.afskspace.to_string()),
+                Cell::from(self.rxparams.afskmark.to_string()),
+                Cell::from(self.rxparams.afskctrl.to_string()),
+            ]),
+            Row::new(vec![
+                "Ampl Filt", "Freq Leak", "RX 0", "RX 1", "RX 2", "RX 3"
+            ]),
+            Row::new(vec![
+                Cell::from(self.rxparams.amplfilt.to_string()),
+                Cell::from(self.rxparams.freqleak.to_string()),
+                Cell::from(format!("{:?}", self.rxparams.rxparamset.0)),
+                Cell::from(format!("{:?}", self.rxparams.rxparamset.1)),
+                Cell::from(format!("{:?}", self.rxparams.rxparamset.2)),
+                Cell::from(format!("{:?}", self.rxparams.rxparamset.3)),
+            ]),
+        ])
+        .block(Block::default().borders(Borders::ALL).title("RX Parameters"))
+        .widths(&[Constraint::Max(11), Constraint::Max(10), Constraint::Max(11), Constraint::Max(10),
+               Constraint::Max(14), Constraint::Max(15)])
+    }
+
+    fn synth<'a>(&self) -> Table<'a> {
+        /* pllloop / boost [ b direct filten filt ]
+         * pllcpi / boost [ cpi ]
+         * pllvcodiv [ VCOI_MAN VCO2INT VCOSEL  RFDIV REFDIV ]
+         * pllranging A/B [ sticky lock err start vcor ]
+         * freq a/b
+         */
+
+        Table::new(vec![
+            Row::new(vec![
+                Cell::from(""),
+                Cell::from("Freq"),
+                Cell::from("Ranging"),
+            ]),
+            Row::new(vec![
+                Cell::from("A"),
+                Cell::from(format!("{} Hz", self.synthesizer.freqa)),
+                Cell::from(format!("{:?}", self.synthesizer.ranginga)),
+
+            ]),
+            Row::new(vec![
+                Cell::from("B"),
+                Cell::from(format!("{} Hz", self.synthesizer.freqb)),
+                Cell::from(format!("{:?}", self.synthesizer.rangingb)),
+            ]),
+            Row::new(vec![
+                Cell::from(""),
+                Cell::from("CPI"),
+                Cell::from("Loop"),
+            ]),
+            Row::new(vec![
+                Cell::from("PLL"),
+                Cell::from(format!("{:?}", self.synthesizer.cpi)),
+                Cell::from(format!("{:?}", self.synthesizer.pllloop)),
+            ]),
+            Row::new(vec![
+                Cell::from("Boost"),
+                Cell::from(format!("{:?}", self.synthesizer.cpiboost)),
+                Cell::from(format!("{:?}", self.synthesizer.pllloopboost)),
+            ]),
+
+            Row::new(vec![
+                Cell::from(""),
+                Cell::from(""),
+                Cell::from(format!("{:?}", self.synthesizer.vcodiv)),
+            ]),
+        ])
+        .block(Block::default().borders(Borders::ALL).title("Synthesizer"))
+        .widths(&[Constraint::Max(5), Constraint::Max(13), Constraint::Max(80)])
+    }
+
+    fn packet_controller<'a>(&self) -> Table<'a> {
+        Table::new(vec![
+            Row::new(vec![
+                Cell::from("TX Boost"),
+                Cell::from("Settle"),
+                Cell::from("RX Boost"),
+                Cell::from("Settle"),
+                Cell::from("ACQ Offs"),
+                Cell::from("Coarse AGC"),
+                Cell::from("AGC"),
+                Cell::from("RSSI"),
+                Cell::from("Pmbl 1"),
+                Cell::from("2"),
+                Cell::from("3"),
+            ]),
+            Row::new(vec![
+                Cell::from(self.packet_controller.tmg_tx_boost.to_string()),
+                Cell::from(self.packet_controller.tmg_tx_settle.to_string()),
+                Cell::from(self.packet_controller.tmg_rx_boost.to_string()),
+                Cell::from(self.packet_controller.tmg_rx_settle.to_string()),
+                Cell::from(self.packet_controller.tmg_rx_offsacq.to_string()),
+                Cell::from(self.packet_controller.tmg_rx_coarseagc.to_string()),
+                Cell::from(self.packet_controller.tmg_rx_agc.to_string()),
+                Cell::from(self.packet_controller.tmg_rx_rssi.to_string()),
+                Cell::from(self.packet_controller.tmg_rx_preamble1.to_string()),
+                Cell::from(self.packet_controller.tmg_rx_preamble2.to_string()),
+                Cell::from(self.packet_controller.tmg_rx_preamble3.to_string()),
+            ]),
+            Row::new(vec![
+                Cell::from("RSSI Ref"),
+                Cell::from("Abs Thr"),
+                Cell::from("BGND Gain"),
+                Cell::from("BGND thr"),
+                Cell::from("Chunk"),
+            ]),
+            Row::new(vec![
+                Cell::from(self.packet_controller.rssi_reference.to_string()),
+                Cell::from(self.packet_controller.rssi_abs_thr.to_string()),
+                Cell::from(self.packet_controller.bgnd_rssi_gain.to_string()),
+                Cell::from(self.packet_controller.bgnd_rssi_thr.to_string()),
+                Cell::from(self.packet_controller.pkt_chunk_size.to_string()),
+            ]),
+        ])
+        .block(Block::default().borders(Borders::ALL).title("Packet Controller"))
+        .widths(&[Constraint::Max(10), Constraint::Max(10), Constraint::Max(10), Constraint::Max(10),
+            Constraint::Max(10), Constraint::Max(10), Constraint::Max(10), Constraint::Max(10),
+            Constraint::Max(10), Constraint::Max(10), Constraint::Max(10), Constraint::Max(10),
+        ])
+    }
+
+    fn packet_controller_flags<'a>(&self) -> Table<'a> {
+        Table::new(vec![
+            Row::new(vec![
+                Cell::from("Misc Flag"),
+                Cell::from("Store Flg"),
+                Cell::from("Acc Flags"),
+            ]),
+            Row::new(vec![
+                Cell::from(format!("{:?}", self.packet_controller.pkt_misc_flags)),
+                Cell::from(format!("{:?}", self.packet_controller.pkt_store_flags)),
+                Cell::from(format!("{:?}", self.packet_controller.pkt_accept_flags)),
+           ]),
+        ])
+        .widths(&[Constraint::Max(30), Constraint::Max(30), Constraint::Max(50)])
+    }
+
+    /*
+    lencfg: PktLenCfg,
+    lenoffset: u8,
+    maxlen: u8,
+    addr: u32,
+    addrmask: u32,
+*/
+
+    fn packet_format<'a>(&self) -> Table<'a> {
+        Table::new(vec![
+            Row::new(vec![
+                Cell::from("Addr pos"),
+                Cell::from("Addr flags"),
+                Cell::from("len pos"),
+                Cell::from("len bits"),
+            ]),
+            Row::new(vec![
+                Cell::from(format!("{}", self.packet_format.addrcfg.addr_pos)),
+                Cell::from(format!("{:?}", self.packet_format.addrcfg.flags)),
+                Cell::from(self.packet_format.lencfg.pos.to_string()),
+                Cell::from(self.packet_format.lencfg.bits.to_string()),
+            ]),
+            Row::new(vec![
+                Cell::from("Addr"),
+                Cell::from("Mask"),
+                Cell::from("len off"),
+                Cell::from("len max"),
+            ]),
+            Row::new(vec![
+                Cell::from(self.packet_format.addr.to_string()),
+                Cell::from(self.packet_format.addrmask.to_string()),
+                Cell::from(self.packet_format.lenoffset.to_string()),
+                Cell::from(self.packet_format.maxlen.to_string()),
+            ]),
+        ])
+        .block(Block::default().borders(Borders::ALL).title("Packet Format"))
+        .widths(&[Constraint::Max(10), Constraint::Min(30), Constraint::Min(10), Constraint::Min(10)])
+    }
+}
+
+struct PacketController {
+    tmg_tx_boost: TMG,
+    tmg_tx_settle: TMG,
+    tmg_rx_boost: TMG,
+    tmg_rx_settle: TMG,
+    tmg_rx_offsacq: TMG,
+    tmg_rx_coarseagc: TMG,
+    tmg_rx_agc: TMG,
+    tmg_rx_rssi: TMG,
+    tmg_rx_preamble1: TMG,
+    tmg_rx_preamble2: TMG,
+    tmg_rx_preamble3: TMG,
+    rssi_reference: u8,
+    rssi_abs_thr: u8,
+    bgnd_rssi_gain: u8,
+    bgnd_rssi_thr: u8,
+    pkt_chunk_size: u8,
+    pkt_misc_flags: PktMiscFlags,
+    pkt_store_flags: PktStoreFlags,
+    pkt_accept_flags: PktAcceptFlags,
+}
+
+impl Default for PacketController {
+    fn default() -> Self {
+        Self {
+            tmg_tx_boost: TMG{ e: 0, m: 0 },
+            tmg_tx_settle: TMG{ e: 0, m: 0 },
+            tmg_rx_boost: TMG{ e: 0, m: 0 },
+            tmg_rx_settle: TMG{ e: 0, m: 0 },
+            tmg_rx_offsacq: TMG{ e: 0, m: 0 },
+            tmg_rx_coarseagc: TMG{ e: 0, m: 0 },
+            tmg_rx_agc: TMG{ e: 0, m: 0 },
+            tmg_rx_rssi: TMG{ e: 0, m: 0 },
+            tmg_rx_preamble1: TMG{ e: 0, m: 0 },
+            tmg_rx_preamble2: TMG{ e: 0, m: 0 },
+            tmg_rx_preamble3: TMG{ e: 0, m: 0 },
+            rssi_reference: 0,
+            rssi_abs_thr: 0,
+            bgnd_rssi_gain: 0,
+            bgnd_rssi_thr: 0,
+            pkt_chunk_size: 0,
+            pkt_misc_flags: PktMiscFlags::empty(),
+            pkt_store_flags: PktStoreFlags::empty(),
+            pkt_accept_flags: PktAcceptFlags::empty(),
+        }
+    }
+}
+
+
 
 fn ui<B: Backend>(f: &mut Frame<B>, state: &UIState) {
     let chunks = Layout::default()
@@ -345,15 +612,19 @@ fn ui<B: Backend>(f: &mut Frame<B>, state: &UIState) {
     let power = Layout::default()
         .direction(Direction::Horizontal)
         .constraints([
-            Constraint::Min(50),
-            Constraint::Min(50),
+            Constraint::Min(21),
+            Constraint::Min(46),
+            Constraint::Min(85),
+            Constraint::Min(40),
             Constraint::Min(0),
         ].as_ref())
         .split(chunks[0]);
 
-    f.render_widget(pwr_mode(&state.pwrmode), power[0]);
-    f.render_widget(pow_stat(&state.powstat), power[1]);
-    f.render_widget(irq(&state.irq), power[2]);
+    f.render_widget(state.pwr_mode(), power[0]);
+    f.render_widget(state.pow_stat(), power[1]);
+    f.render_widget(state.irq(), power[2]);
+    f.render_widget(state.radio_event(), power[3]);
+    f.render_widget(state.radio_state(), power[4]);
 
     let rx = Layout::default()
         .direction(Direction::Horizontal)
@@ -376,12 +647,18 @@ fn ui<B: Backend>(f: &mut Frame<B>, state: &UIState) {
         ].as_ref())
         .split(rx[1]);
 
-    f.render_widget(receiver_parameters(&state.rxparams), parameters[0]);
-    f.render_widget(receiver_parameter_set(&state.set0, state.rx.back().unwrap_or(&RXState::default()).paramcurset.number == RxParamSet::Set0), parameters[1]);
-    f.render_widget(receiver_parameter_set(&state.set1, state.rx.back().unwrap_or(&RXState::default()).paramcurset.number == RxParamSet::Set1), parameters[2]);
-    f.render_widget(receiver_parameter_set(&state.set2, state.rx.back().unwrap_or(&RXState::default()).paramcurset.number == RxParamSet::Set2), parameters[3]);
-    f.render_widget(receiver_parameter_set(&state.set3, state.rx.back().unwrap_or(&RXState::default()).paramcurset.number == RxParamSet::Set3), parameters[4]);
 
+    f.render_widget(state.synth(), parameters[0]);
+    f.render_widget(state.packet_controller(), parameters[1]);
+    f.render_widget(state.packet_controller_flags(), parameters[2]);
+    f.render_widget(state.packet_format(), parameters[3]);
+/*
+    f.render_widget(state.receiver_parameters(), parameters[1]);
+    f.render_widget(state.receiver_parameter_set(&state.set0, state.rx.back().unwrap_or(&RXState::default()).paramcurset.number == RxParamSet::Set0), parameters[2]);
+    f.render_widget(state.receiver_parameter_set(&state.set1, state.rx.back().unwrap_or(&RXState::default()).paramcurset.number == RxParamSet::Set1), parameters[2]);
+    f.render_widget(state.receiver_parameter_set(&state.set2, state.rx.back().unwrap_or(&RXState::default()).paramcurset.number == RxParamSet::Set2), parameters[3]);
+    f.render_widget(state.receiver_parameter_set(&state.set3, state.rx.back().unwrap_or(&RXState::default()).paramcurset.number == RxParamSet::Set3), parameters[3]);
+*/
     let sparks = Layout::default()
         .direction(Direction::Vertical)
         .margin(1)
@@ -398,17 +675,34 @@ fn ui<B: Backend>(f: &mut Frame<B>, state: &UIState) {
             Constraint::Min(0),
         ].as_ref())
         .split(rx[0]);
-    f.render_widget(spark("RSSI", "dB", &state.rx.iter().map(|r| u64::from(r.rssi)).collect::<Vec<u64>>()), sparks[0]);
-    f.render_widget(spark("Background RSSI", "dB",  &state.rx.iter().map(|r| u64::from(r.bgndrssi)).collect::<Vec<u64>>()), sparks[1]);
-    f.render_widget(spark("AGC Counter", "dB", &state.rx.iter().map(|r| u64::from(r.agccounter)).collect::<Vec<u64>>()), sparks[2]);
-    f.render_widget(spark("Data Rate", "bits/s", &state.rx.iter().map(|r| u64::from(r.datarate)).collect::<Vec<u64>>()), sparks[3]);
-    f.render_widget(spark("Amplitude", "", &state.rx.iter().map(|r| u64::from(r.ampl)).collect::<Vec<u64>>()), sparks[4]);
-    f.render_widget(spark("Phase", "", &state.rx.iter().map(|r| u64::from(r.phase)).collect::<Vec<u64>>()), sparks[5]);
-    //f.render_widget(spark("FSK Demodulation", "", &state.rx.iter().map(|r| r.fskdemod).collect::<Vec<u64>>()), sparks[6]);
-    f.render_widget(spark("RF Frequency", "Hz", &state.rx.iter().map(|r| u64::from(r.rffreq)).collect::<Vec<u64>>()), sparks[7]);
-    f.render_widget(spark("Frequency", "Hz", &state.rx.iter().map(|r| u64::from(r.freq)).collect::<Vec<u64>>()), sparks[8]);
-    f.render_widget(rx_params(&state.rx.iter().map(|r| u64::from(r.paramcurset.index)).collect::<Vec<u64>>(), state.rx.back().unwrap_or(&RXState::default()).paramcurset), sparks[9]);
-    f.render_widget(spi_status(&state.status), chunks[2]);
+    let data = &state.rx.iter().map(|r| i64::from(r.rssi)).collect::<Vec<i64>>();
+    let min: i64 = *data.iter().min().unwrap_or(&0);
+    let max: i64 = *data.iter().max().unwrap_or(&0);
+    let data = &data.iter().map(|x| u64::try_from(x - min).unwrap()).collect::<Vec<u64>>();
+    f.render_widget(state.spark_signed("RSSI", "dB", data, min, max), sparks[0]);
+    f.render_widget(state.sparkline("Background RSSI", "dB",  &state.rx.iter().map(|r| u64::from(r.bgndrssi)).collect::<Vec<u64>>()), sparks[1]);
+
+    let data = &state.rx.iter().map(|r| i64::from(r.agccounter)).collect::<Vec<i64>>();
+    let min: i64 = *data.iter().min().unwrap_or(&0);
+    let max: i64 = *data.iter().max().unwrap_or(&0);
+    let data = &data.iter().map(|x| u64::try_from(x - min).unwrap()).collect::<Vec<u64>>();
+    f.render_widget(state.spark_signed("AGC Counter", "dB", data, min, max), sparks[2]);
+    f.render_widget(state.sparkline("Data Rate", "bits/s", &state.rx.iter().map(|r| u64::from(r.datarate)).collect::<Vec<u64>>()), sparks[3]);
+    f.render_widget(state.sparkline("Amplitude", "", &state.rx.iter().map(|r| u64::from(r.ampl)).collect::<Vec<u64>>()), sparks[4]);
+    f.render_widget(state.sparkline("Phase", "", &state.rx.iter().map(|r| u64::from(r.phase)).collect::<Vec<u64>>()), sparks[5]);
+    let data = &state.rx.iter().map(|r| i64::from(r.fskdemod)).collect::<Vec<i64>>();
+    let min: i64 = *data.iter().min().unwrap_or(&0);
+    let max: i64 = *data.iter().max().unwrap_or(&0);
+    let data = &data.iter().map(|x| u64::try_from(x - min).unwrap()).collect::<Vec<u64>>();
+    f.render_widget(state.spark_signed("FSK Demodulation", "", data, min, max), sparks[6]);
+    let data = &state.rx.iter().map(|r| i64::from(r.rffreq)).collect::<Vec<i64>>();
+    let min: i64 = *data.iter().min().unwrap_or(&0);
+    let max: i64 = *data.iter().max().unwrap_or(&0);
+    let data = &data.iter().map(|x| u64::try_from(x - min).unwrap()).collect::<Vec<u64>>();
+    f.render_widget(state.spark_signed("RF Frequency", "Hz", data, min, max), sparks[7]);
+    f.render_widget(state.sparkline("Frequency", "Hz", &state.rx.iter().map(|r| u64::from(r.freq)).collect::<Vec<u64>>()), sparks[8]);
+    f.render_widget(state.rx_params(&state.rx.iter().map(|r| u64::from(r.paramcurset.index)).collect::<Vec<u64>>(), state.rx.back().unwrap_or(&RXState::default()).paramcurset), sparks[9]);
+    f.render_widget(state.spi_status(), chunks[2]);
 }
 
 pub fn ax5043_listen(radio: &mut Registers) -> io::Result<()> {
@@ -418,12 +712,15 @@ pub fn ax5043_listen(radio: &mut Registers) -> io::Result<()> {
         flags: PwrFlags::XOEN | PwrFlags::REFEN,
         mode: PwrModes::SYNTHRX,
     })?;
-    let mut fifo = fifo::FIFO {
-        threshold: 0,
-        autocommit: false,
-        radio,
-    };
-    fifo.reset()?;
+
+    radio.FIFOCMD.write(FIFOCmd {
+        mode: FIFOCmds::CLEAR_ERROR,
+        auto_commit: false,
+    })?;
+    radio.FIFOCMD.write(FIFOCmd {
+        mode: FIFOCmds::CLEAR_DATA,
+        auto_commit: false,
+    })?;
 
     radio.PWRMODE.write(PwrMode {
         flags: PwrFlags::XOEN | PwrFlags::REFEN,
@@ -432,25 +729,45 @@ pub fn ax5043_listen(radio: &mut Registers) -> io::Result<()> {
     Ok(())
 }
 
-#[derive(Default)]
 struct RXState {
-    rssi: u8,
+    rssi: i8,
     bgndrssi: u8,
-    agccounter: u32,
+    agccounter: i32,
     datarate: u32,
     ampl: u16,
     phase: u16,
     fskdemod: i32,
-    rffreq: u32,
+    rffreq: i32,
     freq: u16,
     paramcurset: RxParamCurSet,
+}
+
+impl Default for RXState {
+    fn default() -> Self {
+        Self {
+            rssi: 0,
+            bgndrssi: 0,
+            agccounter: 0,
+            datarate: 0,
+            ampl: 0,
+            phase: 0,
+            fskdemod: 0,
+            rffreq: 0,
+            freq: 0,
+            paramcurset: RxParamCurSet {
+                index: 0,
+                number: RxParamSet::Set0,
+                special: 0,
+            },
+        }
+    }
 }
 
 fn get_signal(radio: &mut Registers) -> io::Result<RXState> {
     Ok(RXState {
         rssi: radio.RSSI.read()?,
         bgndrssi: radio.BGNDRSSI.read()?,
-        agccounter: (radio.AGCCOUNTER.read()? as u32 * 4) / 3,
+        agccounter: (i32::from(radio.AGCCOUNTER.read()?) * 4) / 3,
         datarate: radio.TRKDATARATE.read()?,
         ampl: radio.TRKAMPL.read()?,
         phase: radio.TRKPHASE.read()?,
@@ -461,7 +778,7 @@ fn get_signal(radio: &mut Registers) -> io::Result<RXState> {
             }
             demod
         },
-        rffreq: radio.TRKRFFREQ.read()?,
+        rffreq: radio.TRKRFFREQ.read()?.0,
         freq: radio.TRKFREQ.read()?, // trkfreq / 2^16 * bitrate
         paramcurset: radio.RXPARAMCURSET.read()?,
     })
@@ -649,6 +966,122 @@ fn get_rx_params(radio: &mut Registers, board: &config::Board) -> io::Result<RXP
     })
 }
 
+struct Synthesizer {
+    freqa: u64,
+    freqb: u64,
+    pllloop: PLLLoop,
+    pllloopboost: PLLLoop,
+    cpi: u8,
+    cpiboost: u8,
+    vcodiv: PLLVCODiv,
+    ranginga: PLLRanging,
+    rangingb: PLLRanging,
+}
+
+impl Default for Synthesizer {
+    fn default() -> Self {
+        Self {
+            freqa: 0,
+            freqb: 0,
+            pllloop: PLLLoop {
+                filter: FLT::EXTERNAL,
+                flags: PLLLoopFlags::empty(),
+                freqsel: FreqSel::A,
+            },
+            pllloopboost: PLLLoop {
+                filter: FLT::EXTERNAL,
+                flags: PLLLoopFlags::empty(),
+                freqsel: FreqSel::A,
+            },
+            cpi: 0,
+            cpiboost: 0,
+            vcodiv: PLLVCODiv {
+                mode: PLLVCORefDiv::F_XTAL,
+                flags: PLLVCODivFlags::empty()
+            },
+            ranginga: PLLRanging {
+                vcor: 0,
+                flags: PLLRangingFlags::empty(),
+            },
+            rangingb: PLLRanging {
+                vcor: 0,
+                flags: PLLRangingFlags::empty(),
+            },
+        }
+    }
+}
+
+fn synthesizer(radio: &mut Registers, board: &config::Board) -> io::Result<Synthesizer> {
+    Ok(Synthesizer {
+        pllloop: radio.PLLLOOP.read()?,
+        pllloopboost: radio.PLLLOOPBOOST.read()?,
+        cpi: radio.PLLCPI.read()?,
+        cpiboost: radio.PLLCPIBOOST.read()?,
+        vcodiv: radio.PLLVCODIV.read()?,
+        ranginga: radio.PLLRANGINGA.read()?,
+        rangingb: radio.PLLRANGINGB.read()?,
+        freqa: u64::from(radio.FREQA.read()?) * board.xtal.freq / 2_u64.pow(24),
+        freqb: u64::from(radio.FREQB.read()?) * board.xtal.freq / 2_u64.pow(24),
+    })
+}
+
+
+fn packet_controller(radio: &mut Registers) -> io::Result<PacketController> {
+    Ok(PacketController {
+        tmg_tx_boost: radio.TMGTXBOOST.read()?,
+        tmg_tx_settle: radio.TMGTXSETTLE.read()?,
+        tmg_rx_boost: radio.TMGRXBOOST.read()?,
+        tmg_rx_settle: radio.TMGRXSETTLE.read()?,
+        tmg_rx_offsacq: radio.TMGRXOFFSACQ.read()?,
+        tmg_rx_coarseagc: radio.TMGRXCOARSEAGC.read()?,
+        tmg_rx_agc: radio.TMGRXAGC.read()?,
+        tmg_rx_rssi: radio.TMGRXRSSI.read()?,
+        tmg_rx_preamble1: radio.TMGRXPREAMBLE1.read()?,
+        tmg_rx_preamble2: radio.TMGRXPREAMBLE2.read()?,
+        tmg_rx_preamble3: radio.TMGRXPREAMBLE3.read()?,
+        rssi_reference: radio.RSSIREFERENCE.read()?,
+        rssi_abs_thr: radio.RSSIABSTHR.read()?,
+        bgnd_rssi_gain: radio.BGNDRSSIGAIN.read()?,
+        bgnd_rssi_thr: radio.BGNDRSSITHR.read()?,
+        pkt_chunk_size: radio.PKTCHUNKSIZE.read()?,
+        pkt_misc_flags: radio.PKTMISCFLAGS.read()?,
+        pkt_store_flags: radio.PKTSTOREFLAGS.read()?,
+        pkt_accept_flags: radio.PKTACCEPTFLAGS.read()?,
+    })
+}
+
+struct PacketFormat {
+    addrcfg: PktAddrCfg,
+    lencfg: PktLenCfg,
+    lenoffset: u8,
+    maxlen: u8,
+    addr: u32,
+    addrmask: u32,
+}
+
+impl Default for PacketFormat {
+    fn default() -> Self {
+        Self {
+            addrcfg: PktAddrCfg { addr_pos: 0, flags: PktAddrCfgFlags::empty()},
+            lencfg: PktLenCfg {pos: 0, bits: 0},
+            lenoffset: 0,
+            maxlen: 0,
+            addr: 0,
+            addrmask: 0,
+        }
+    }
+}
+
+fn packet_format(radio: &mut Registers) -> io::Result<PacketFormat> {
+    Ok(PacketFormat {
+        addrcfg: radio.PKTADDRCFG.read()?,
+        lencfg: radio.PKTLENCFG.read()?,
+        lenoffset: radio.PKTLENOFFSET.read()?,
+        maxlen: radio.PKTMAXLEN.read()?,
+        addr: radio.PKTADDR.read()?,
+        addrmask: radio.PKTADDRMASK.read()?,
+    })
+}
 
 fn main() -> Result<(), io::Error> {
     panic::set_hook(Box::new(|panic| {
@@ -671,20 +1104,7 @@ fn main() -> Result<(), io::Error> {
     let backend = CrosstermBackend::new(stdout);
     let mut terminal = Terminal::new(backend)?;
 
-    let mut uistate = UIState {
-        board: config::Board::default(),
-        rx: VecDeque::new(),
-        status: Status::default(),
-        pwrmode: PwrMode::default(),
-        powstat: PowStat::default(),
-        irq: IRQ::default(),
-        rxparams: RXParams::default(),
-        set0: RXParameterSet::default(),
-        set1: RXParameterSet::default(),
-        set2: RXParameterSet::default(),
-        set3: RXParameterSet::default(),
-    };
-
+    let mut uistate = UIState::default();
     terminal.draw(|f| {
         ui(f, &uistate);
     })?;
@@ -701,7 +1121,7 @@ fn main() -> Result<(), io::Error> {
             ui(f, &state.borrow());
         });
     };
-    let mut radio = ax5043::registers(&spi0, &callback);
+    let mut radio = ax5043::Registers::new(&spi0, &callback);
 
     radio.reset()?;
 
@@ -735,6 +1155,8 @@ fn main() -> Result<(), io::Error> {
         Interest::READABLE)?;
 
     let board = configure_radio_rx(&mut radio)?;
+    radio.RADIOEVENTMASK.write(RadioEvent::all())?;
+
     state.borrow_mut().board = board.clone();
     state.borrow_mut().pwrmode = radio.PWRMODE.read()?;
     state.borrow_mut().powstat = radio.POWSTAT.read()?;
@@ -755,11 +1177,30 @@ fn main() -> Result<(), io::Error> {
     _ = radio.PLLRANGINGA.read()?; // sticky lock bit ~ IRQPLLUNLIOCK, gate
     _ = radio.POWSTICKYSTAT.read()?; // clear sticky power flags for PWR_GOOD
 
+    //radio.PKTCHUNKSIZE.write(0b1011)?;
+    //radio.PKTMISCFLAGS.write(PktMiscFlags::BGND_RSSI)?;
+    //radio.PKTACCEPTFLAGS.write(
+    //      PktAcceptFlags::RESIDUE
+    //    | PktAcceptFlags::ABRT
+    //    | PktAcceptFlags::CRCF
+    //    | PktAcceptFlags::ADDRF
+    //    | PktAcceptFlags::SZF
+    //    | PktAcceptFlags::LRGP
+    //)?;
     state.borrow_mut().rxparams = get_rx_params(&mut radio, &board)?;
     state.borrow_mut().set0 = get_rx_parameter_set0(&mut radio)?;
     state.borrow_mut().set1 = get_rx_parameter_set1(&mut radio)?;
     state.borrow_mut().set2 = get_rx_parameter_set2(&mut radio)?;
     state.borrow_mut().set3 = get_rx_parameter_set3(&mut radio)?;
+    state.borrow_mut().synthesizer = synthesizer(&mut radio, &board)?;
+    state.borrow_mut().packet_controller = packet_controller(&mut radio)?;
+    state.borrow_mut().packet_format = packet_format(&mut radio)?;
+
+
+    // Expect 32 bit preamble
+    radio.MATCH0PAT.write(0x1111_1111)?;
+    radio.MATCH0LEN.write(MatchLen { len: 32, raw: true})?;
+    radio.TMGRXPREAMBLE1.write(TMG { m: 1, e: 6, })?;
 
     let mut events = Events::with_capacity(128);
     'outer: loop {
@@ -775,9 +1216,19 @@ fn main() -> Result<(), io::Error> {
                     if state.borrow().rx.len() > 100 {
                         state.borrow_mut().rx.pop_front();
                     }
+
+                    _ = radio.PLLRANGINGA.read()?; // sticky lock bit ~ IRQPLLUNLIOCK, gate
                     state.borrow_mut().pwrmode = radio.PWRMODE.read()?;
                     state.borrow_mut().powstat = radio.POWSTAT.read()?;
                     state.borrow_mut().irq = radio.IRQREQUEST.read()?;
+                    state.borrow_mut().radio_event = radio.RADIOEVENTREQ.read()?;
+                    state.borrow_mut().radio_state = radio.RADIOSTATE.read()?;
+
+                    if !radio.FIFOSTAT.read()?.contains(FIFOStat::EMPTY) {
+                        let data = radio.FIFODATARX.read()?;
+                        println!("{:?}", data);
+                    }
+
                     let _ = term.borrow_mut().draw(|f| {
                         ui(f, &state.borrow());
                     });
