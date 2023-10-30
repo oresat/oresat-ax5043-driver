@@ -1028,6 +1028,7 @@ impl From<FIFOChunkTX> for Vec<u8> {
                     data.len().try_into().unwrap(),
                     flags.bits(),
                 ];
+                chunk[1] += 1; // length includes flag byte
                 chunk.append(&mut data);
                 chunk
             }
