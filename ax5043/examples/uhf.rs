@@ -58,7 +58,6 @@ fn configure_radio(radio: &mut Registers, mode: &Mode, power: u16) -> io::Result
     let channel = match mode {
         Mode::Transmit => ChannelParameters {
             modulation: config::Modulation::GMSK {
-                //deviation: 24000,
                 ramp: config::SlowRamp::Bits1,
                 bt: BT(0.5),
             },
@@ -150,7 +149,7 @@ fn transmit(radio: &mut Registers, buf: &[u8], amt: usize) -> io::Result<()> {
     radio.FIFODATATX.write(preamble)?;
 
     println!("sending {} chunks", packet.len());
-    println!("{:?}", packet);
+    println!("{:X?}", packet);
 
     for chunk in packet {
         println!("chunk");
@@ -245,15 +244,14 @@ struct Args {
 fn main() -> io::Result<()> {
     let args = Args::parse();
 
+    let mut poll = Poll::new()?;
+    let registry = poll.registry();
+    let mut events = Events::with_capacity(128);
+
     let addr = SocketAddr::new(IpAddr::V6(Ipv6Addr::UNSPECIFIED), args.beacon);
     let mut beacon = UdpSocket::bind(addr)?;
     const BEACON: Token = Token(0);
-
-    let mut poll = Poll::new()?;
-    let registry = poll.registry();
-
     registry.register(&mut beacon, BEACON, Interest::READABLE)?;
-    let mut events = Events::with_capacity(128);
 
     let mut tfd = TimerFd::new().unwrap();
     tfd.set_state(
@@ -301,7 +299,7 @@ fn main() -> io::Result<()> {
                 BEACON => {
                     let mut buf = [0; 2048];
                     let (amt, src) = beacon.recv_from(&mut buf)?;
-                    println!("Recv {} from {}: {:?}", amt, src, &buf[..amt]);
+                    println!("Recv {} from {}: {:X?}", amt, src, &buf[..amt]);
                     if let Mode::Transmit = args.mode {
                         transmit(&mut radio, &buf, amt)?
                     }
