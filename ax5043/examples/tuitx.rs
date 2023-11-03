@@ -1,11 +1,11 @@
-use std::{io, cell, time::Duration, os::fd::AsRawFd, collections::VecDeque, panic, backtrace::Backtrace};
+use std::{io, cell, time::Duration, os::fd::AsRawFd, panic, backtrace::Backtrace};
 use mio::{Events, Poll, unix::SourceFd, Token, Interest};
 use mio_signals::{Signal, Signals};
 use timerfd::{TimerFd, TimerState, SetTimeFlags};
 use ratatui::{
     prelude::*,
     backend::CrosstermBackend,
-    widgets::{Block, Borders, Sparkline},
+    widgets::{Block, Borders, Table, Row, Cell, Sparkline},
     Terminal
 };
 use crossterm::{
@@ -14,41 +14,25 @@ use crossterm::{
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
 };
 
-use ax5043::registers::*;
-use ax5043::*;
-use ax5043::tui::*;
+use ax5043::{*, registers::*, tui::*,};
 mod config_rpi;
-use crate::config_rpi::configure_radio_rx;
-
-// FIXME: Default isn't really the way to go, maybe ::new()?
-
+use crate::config_rpi::configure_radio_tx;
 
 struct UIState {
-    spark: Style,
     board: config::Board,
-    rx: VecDeque<RXState>,
     status: Status,
     pwrmode: PwrMode,
     powstat: PowStat,
     irq: IRQ,
     radio_event: RadioEvent,
     radio_state: RadioState,
-    rxparams: RXParams,
-    set0 : RXParameterSet,
-    set1 : RXParameterSet,
-    set2 : RXParameterSet,
-    set3 : RXParameterSet,
     synthesizer: Synthesizer,
-    packet_controller: PacketController,
-    packet_format: PacketFormat,
 }
 
 impl Default for UIState {
     fn default() -> Self {
         Self {
-            spark: Style::default().fg(Color::Red).bg(Color::White),
             board: config::Board::default(),
-            rx: VecDeque::<RXState>::default(),
             status: Status::empty(),
             pwrmode: PwrMode {
                 mode: PwrModes::POWEROFF,
@@ -58,41 +42,8 @@ impl Default for UIState {
             irq: IRQ::empty(),
             radio_event: RadioEvent::empty(),
             radio_state: RadioState::IDLE,
-            rxparams: RXParams::default(),
-            set0 : RXParameterSet::default(),
-            set1 : RXParameterSet::default(),
-            set2 : RXParameterSet::default(),
-            set3 : RXParameterSet::default(),
             synthesizer: Synthesizer::default(),
-            packet_controller: PacketController::default(),
-            packet_format: PacketFormat::default(),
         }
-    }
-}
-
-impl UIState {
-    fn sparkline<'a, T>(&self, name: T, unit: T, data: &'a [u64]) -> Sparkline<'a> where T: AsRef<str> + std::fmt::Display {
-        let min = data.iter().min().unwrap_or(&0);
-        let max = data.iter().max().unwrap_or(&0);
-        let name: &str = name.as_ref();
-        Sparkline::default()
-            .block(Block::default().title(format!("{name} ({min} {unit} - {max} {unit})")).borders(Borders::ALL))
-            .data(data)
-            .style(self.spark)
-    }
-
-    fn spark_signed<'a, T>(&self, name: T, unit: T, data: &'a [u64], min: i64, max: i64) -> Sparkline<'a> where T: AsRef<str> + std::fmt::Display {
-        Sparkline::default()
-            .block(Block::default().title(format!("{name} ({min} {unit} - {max} {unit})")).borders(Borders::ALL))
-            .data(data)
-            .style(self.spark)
-    }
-
-    fn rx_params<'a>(&self, data: &'a [u64], last: RxParamCurSet) -> Sparkline<'a> {
-        Sparkline::default()
-        .block(Block::default().borders(Borders::ALL).title(format!("Current RX Parameters - stage {} ({:?}) special {}", last.index, last.number, last.special)))
-        .data(data)
-        .style(self.spark)
     }
 }
 
@@ -127,6 +78,8 @@ fn ui<B: Backend>(f: &mut Frame<B>, state: &UIState) {
     f.render_widget(state.radio_event.widget(), power[3]);
     f.render_widget(state.radio_state.widget(), power[4]);
 
+    f.render_widget(state.synthesizer.widget(), chunks[1]);
+/*
     let rx = Layout::default()
         .direction(Direction::Horizontal)
         .margin(1)
@@ -148,18 +101,12 @@ fn ui<B: Backend>(f: &mut Frame<B>, state: &UIState) {
         ].as_ref())
         .split(rx[1]);
 
-
-    f.render_widget(state.synthesizer.widget(), parameters[0]);
-    f.render_widget(state.packet_controller.widget(), parameters[1]);
-    f.render_widget(state.packet_controller.widget_flags(), parameters[2]);
-    f.render_widget(state.packet_format.widget(), parameters[3]);
-/*
-    f.render_widget(state.receiver_parameters(), parameters[1]);
-    f.render_widget(state.receiver_parameter_set(&state.set0, state.rx.back().unwrap_or(&RXState::default()).paramcurset.number == RxParamSet::Set0), parameters[2]);
+    f.render_widget(state.receiver_parameters(), parameters[0]);
+    f.render_widget(state.receiver_parameter_set(&state.set0, state.rx.back().unwrap_or(&RXState::default()).paramcurset.number == RxParamSet::Set0), parameters[1]);
     f.render_widget(state.receiver_parameter_set(&state.set1, state.rx.back().unwrap_or(&RXState::default()).paramcurset.number == RxParamSet::Set1), parameters[2]);
     f.render_widget(state.receiver_parameter_set(&state.set2, state.rx.back().unwrap_or(&RXState::default()).paramcurset.number == RxParamSet::Set2), parameters[3]);
-    f.render_widget(state.receiver_parameter_set(&state.set3, state.rx.back().unwrap_or(&RXState::default()).paramcurset.number == RxParamSet::Set3), parameters[3]);
-*/
+    f.render_widget(state.receiver_parameter_set(&state.set3, state.rx.back().unwrap_or(&RXState::default()).paramcurset.number == RxParamSet::Set3), parameters[4]);
+
     let sparks = Layout::default()
         .direction(Direction::Vertical)
         .margin(1)
@@ -176,18 +123,9 @@ fn ui<B: Backend>(f: &mut Frame<B>, state: &UIState) {
             Constraint::Min(0),
         ].as_ref())
         .split(rx[0]);
-    let data = &state.rx.iter().map(|r| i64::from(r.rssi)).collect::<Vec<i64>>();
-    let min: i64 = *data.iter().min().unwrap_or(&0);
-    let max: i64 = *data.iter().max().unwrap_or(&0);
-    let data = &data.iter().map(|x| u64::try_from(x - min).unwrap()).collect::<Vec<u64>>();
-    f.render_widget(state.spark_signed("RSSI", "dB", data, min, max), sparks[0]);
+    f.render_widget(state.sparkline("RSSI", "dB", &state.rx.iter().map(|r| u64::from(r.rssi)).collect::<Vec<u64>>()), sparks[0]);
     f.render_widget(state.sparkline("Background RSSI", "dB",  &state.rx.iter().map(|r| u64::from(r.bgndrssi)).collect::<Vec<u64>>()), sparks[1]);
-
-    let data = &state.rx.iter().map(|r| i64::from(r.agccounter)).collect::<Vec<i64>>();
-    let min: i64 = *data.iter().min().unwrap_or(&0);
-    let max: i64 = *data.iter().max().unwrap_or(&0);
-    let data = &data.iter().map(|x| u64::try_from(x - min).unwrap()).collect::<Vec<u64>>();
-    f.render_widget(state.spark_signed("AGC Counter", "dB", data, min, max), sparks[2]);
+    f.render_widget(state.sparkline("AGC Counter", "dB", &state.rx.iter().map(|r| u64::from(r.agccounter)).collect::<Vec<u64>>()), sparks[2]);
     f.render_widget(state.sparkline("Data Rate", "bits/s", &state.rx.iter().map(|r| u64::from(r.datarate)).collect::<Vec<u64>>()), sparks[3]);
     f.render_widget(state.sparkline("Amplitude", "", &state.rx.iter().map(|r| u64::from(r.ampl)).collect::<Vec<u64>>()), sparks[4]);
     f.render_widget(state.sparkline("Phase", "", &state.rx.iter().map(|r| u64::from(r.phase)).collect::<Vec<u64>>()), sparks[5]);
@@ -203,88 +141,10 @@ fn ui<B: Backend>(f: &mut Frame<B>, state: &UIState) {
     f.render_widget(state.spark_signed("RF Frequency", "Hz", data, min, max), sparks[7]);
     f.render_widget(state.sparkline("Frequency", "Hz", &state.rx.iter().map(|r| u64::from(r.freq)).collect::<Vec<u64>>()), sparks[8]);
     f.render_widget(state.rx_params(&state.rx.iter().map(|r| u64::from(r.paramcurset.index)).collect::<Vec<u64>>(), state.rx.back().unwrap_or(&RXState::default()).paramcurset), sparks[9]);
+*/
+
     f.render_widget(state.status.widget(), chunks[2]);
 }
-
-pub fn ax5043_listen(radio: &mut Registers) -> io::Result<()> {
-
-    // pll not locked
-    radio.PWRMODE.write(PwrMode {
-        flags: PwrFlags::XOEN | PwrFlags::REFEN,
-        mode: PwrModes::SYNTHRX,
-    })?;
-
-    radio.FIFOCMD.write(FIFOCmd {
-        mode: FIFOCmds::CLEAR_ERROR,
-        auto_commit: false,
-    })?;
-    radio.FIFOCMD.write(FIFOCmd {
-        mode: FIFOCmds::CLEAR_DATA,
-        auto_commit: false,
-    })?;
-
-    radio.PWRMODE.write(PwrMode {
-        flags: PwrFlags::XOEN | PwrFlags::REFEN,
-        mode: PwrModes::RX,
-    })?;
-    Ok(())
-}
-
-struct RXState {
-    rssi: i8,
-    bgndrssi: u8,
-    agccounter: i32,
-    datarate: u32,
-    ampl: u16,
-    phase: u16,
-    fskdemod: i32,
-    rffreq: i32,
-    freq: u16,
-    paramcurset: RxParamCurSet,
-}
-
-impl Default for RXState {
-    fn default() -> Self {
-        Self {
-            rssi: 0,
-            bgndrssi: 0,
-            agccounter: 0,
-            datarate: 0,
-            ampl: 0,
-            phase: 0,
-            fskdemod: 0,
-            rffreq: 0,
-            freq: 0,
-            paramcurset: RxParamCurSet {
-                index: 0,
-                number: RxParamSet::Set0,
-                special: 0,
-            },
-        }
-    }
-}
-
-fn get_signal(radio: &mut Registers) -> io::Result<RXState> {
-    Ok(RXState {
-        rssi: radio.RSSI.read()?,
-        bgndrssi: radio.BGNDRSSI.read()?,
-        agccounter: (i32::from(radio.AGCCOUNTER.read()?) * 4) / 3,
-        datarate: radio.TRKDATARATE.read()?,
-        ampl: radio.TRKAMPL.read()?,
-        phase: radio.TRKPHASE.read()?,
-        fskdemod: {
-            let mut demod: i32 = radio.TRKFSKDEMOD.read()?.into();
-            if demod > 2_i32.pow(13) {
-                demod = demod - 2_i32.pow(14)
-            }
-            demod
-        },
-        rffreq: radio.TRKRFFREQ.read()?.0,
-        freq: radio.TRKFREQ.read()?, // trkfreq / 2^16 * bitrate
-        paramcurset: radio.RXPARAMCURSET.read()?,
-    })
-}
-
 
 fn main() -> Result<(), io::Error> {
     panic::set_hook(Box::new(|panic| {
@@ -312,7 +172,7 @@ fn main() -> Result<(), io::Error> {
         ui(f, &uistate);
     })?;
 
-    let spi0 = ax5043::open("/dev/spidev1.0")?;
+    let spi0 = ax5043::open("/dev/spidev0.0")?;
     let state = cell::RefCell::new(&mut uistate);
     let term = cell::RefCell::new(&mut terminal);
     let callback = |new: Status| {
@@ -349,15 +209,15 @@ fn main() -> Result<(), io::Error> {
         STDIN,
         Interest::READABLE)?;
 
-    let mut tfd = TimerFd::new().unwrap();
-    tfd.set_state(TimerState::Periodic{current: Duration::new(1, 0), interval: Duration::from_millis(50)}, SetTimeFlags::Default);
+    let mut tfd = TimerFd::new_custom(timerfd::ClockId::Monotonic, true, false).unwrap();
+    tfd.set_state(TimerState::Periodic{current: Duration::new(1, 0), interval: Duration::from_millis(200)}, SetTimeFlags::Default);
     const BEACON: Token = Token(2);
     registry.register(
         &mut SourceFd(&tfd.as_raw_fd()),
         BEACON,
         Interest::READABLE)?;
 
-    let board = configure_radio_rx(&mut radio)?;
+    let board = configure_radio_tx(&mut radio)?;
     radio.RADIOEVENTMASK.write(RadioEvent::all())?;
 
     state.borrow_mut().board = board.clone();
@@ -369,7 +229,11 @@ fn main() -> Result<(), io::Error> {
     });
 
 
-    ax5043_listen(&mut radio)?;
+    radio.PWRMODE.write(PwrMode {
+        flags: PwrFlags::XOEN | PwrFlags::REFEN,
+        mode: PwrModes::TX,
+    })?;
+
     state.borrow_mut().pwrmode = radio.PWRMODE.read()?;
     state.borrow_mut().powstat = radio.POWSTAT.read()?;
     state.borrow_mut().irq = radio.IRQREQUEST.read()?;
@@ -377,33 +241,10 @@ fn main() -> Result<(), io::Error> {
         ui(f, &state.borrow());
     });
 
+    state.borrow_mut().synthesizer = Synthesizer::new(&mut radio, &board)?;
+
     _ = radio.PLLRANGINGA.read()?; // sticky lock bit ~ IRQPLLUNLIOCK, gate
     _ = radio.POWSTICKYSTAT.read()?; // clear sticky power flags for PWR_GOOD
-
-    //radio.PKTCHUNKSIZE.write(0b1011)?;
-    //radio.PKTMISCFLAGS.write(PktMiscFlags::BGND_RSSI)?;
-    //radio.PKTACCEPTFLAGS.write(
-    //      PktAcceptFlags::RESIDUE
-    //    | PktAcceptFlags::ABRT
-    //    | PktAcceptFlags::CRCF
-    //    | PktAcceptFlags::ADDRF
-    //    | PktAcceptFlags::SZF
-    //    | PktAcceptFlags::LRGP
-    //)?;
-    state.borrow_mut().rxparams = RXParams::new(&mut radio, &board)?;
-    state.borrow_mut().set0 = RXParameterSet::set0(&mut radio)?;
-    state.borrow_mut().set1 = RXParameterSet::set1(&mut radio)?;
-    state.borrow_mut().set2 = RXParameterSet::set2(&mut radio)?;
-    state.borrow_mut().set3 = RXParameterSet::set3(&mut radio)?;
-    state.borrow_mut().synthesizer = Synthesizer::new(&mut radio, &board)?;
-    state.borrow_mut().packet_controller = PacketController::new(&mut radio)?;
-    state.borrow_mut().packet_format = PacketFormat::new(&mut radio)?;
-
-
-    // Expect 32 bit preamble
-    radio.MATCH0PAT.write(0x1111_1111)?;
-    radio.MATCH0LEN.write(MatchLen { len: 32, raw: true})?;
-    radio.TMGRXPREAMBLE1.write(TMG { m: 1, e: 6, })?;
 
     let mut events = Events::with_capacity(128);
     'outer: loop {
@@ -412,29 +253,77 @@ fn main() -> Result<(), io::Error> {
             match event.token() {
                 BEACON => {
                     tfd.read();
-                    // Example transmission from PM table 16
-                    //ax5043_transmit(&mut radio_tx, &[0xAA, 0xAA, 0x1A])?;
-                    let signal = get_signal(&mut radio)?;
-                    state.borrow_mut().rx.push_back(signal);
-                    if state.borrow().rx.len() > 100 {
-                        state.borrow_mut().rx.pop_front();
-                    }
+
+                    radio.PWRMODE.write(PwrMode {
+                        flags: PwrFlags::XOEN | PwrFlags::REFEN,
+                        mode: PwrModes::TX,
+                    })?;
 
                     _ = radio.PLLRANGINGA.read()?; // sticky lock bit ~ IRQPLLUNLIOCK, gate
-                    state.borrow_mut().pwrmode = radio.PWRMODE.read()?;
-                    state.borrow_mut().powstat = radio.POWSTAT.read()?;
-                    state.borrow_mut().irq = radio.IRQREQUEST.read()?;
-                    state.borrow_mut().radio_event = radio.RADIOEVENTREQ.read()?;
-                    state.borrow_mut().radio_state = radio.RADIOSTATE.read()?;
+                    _ = radio.POWSTICKYSTAT.read()?; // clear sticky power flags for PWR_GOOD
 
-                    if !radio.FIFOSTAT.read()?.contains(FIFOStat::EMPTY) {
-                        let data = radio.FIFODATARX.read()?;
-                        println!("{:?}", data);
+                    radio.FIFOCMD.write(FIFOCmd {
+                        mode: FIFOCmds::CLEAR_ERROR,
+                        auto_commit: false,
+                    })?;
+                    radio.FIFOCMD.write(FIFOCmd {
+                        mode: FIFOCmds::CLEAR_DATA,
+                        auto_commit: false,
+                    })?;
+
+
+
+                    // Preamble - see PM p16
+                    let preamble = FIFOChunkTX::DATA {
+                        flags: FIFODataTXFlags::RAW,
+                        data: vec![0x11; 4],
+                    };
+
+                    let packet = FIFOChunkTX::DATA {
+                        flags: FIFODataTXFlags::PKTSTART | FIFODataTXFlags::PKTEND,
+                        data: vec![0xAA; 200]
+                    };
+                    radio.FIFODATATX.write(preamble)?;
+                    radio.FIFODATATX.write(packet)?;
+
+                    /*
+                    let carrier = FIFOChunkTX::DATA {
+                        flags: FIFODataTXFlags::UNENC,
+                        data: vec![0xFF; 200]
+                    };
+                    radio.FIFODATATX.write(carrier)?;
+                    */
+                    radio.FIFOCMD.write(FIFOCmd {
+                        mode: FIFOCmds::COMMIT,
+                        auto_commit: false,
+                    })?;
+
+                    // FIXME: FIFOSTAT CLEAR?
+
+                    loop  { // TODO: Interrupt of some sort
+
+                        _ = radio.PLLRANGINGA.read()?; // sticky lock bit ~ IRQPLLUNLIOCK, gate
+                        state.borrow_mut().pwrmode = radio.PWRMODE.read()?;
+                        state.borrow_mut().powstat = radio.POWSTAT.read()?;
+                        state.borrow_mut().irq = radio.IRQREQUEST.read()?;
+                        state.borrow_mut().radio_event = radio.RADIOEVENTREQ.read()?;
+                        let radiostate = radio.RADIOSTATE.read()?;
+                        state.borrow_mut().radio_state = radiostate;
+                        let _ = term.borrow_mut().draw(|f| {
+                            ui(f, &state.borrow());
+                        });
+
+                        if radiostate == RadioState::IDLE {
+                            break
+                        }
                     }
+                    _ = radio.PLLRANGINGA.read()?; // sticky lock bit ~ IRQPLLUNLIOCK, gate
+                    _ = radio.POWSTICKYSTAT.read()?; // clear sticky power flags for PWR_GOOD
+                    radio.PWRMODE.write(PwrMode {
+                        flags: PwrFlags::XOEN | PwrFlags::REFEN,
+                        mode: PwrModes::POWEROFF,
+                    })?;
 
-                    let _ = term.borrow_mut().draw(|f| {
-                        ui(f, &state.borrow());
-                    });
                 },
                 //IRQ => service_irq(&mut radio_tx, &mut irqstate)?,
                 STDIN => match crossterm::event::read()? {

@@ -9,9 +9,10 @@ use registers::*;
 
 pub mod config;
 pub mod registers;
+pub mod tui;
 
 bitflags! {
-    #[derive(Debug, Copy, Clone, PartialEq)]
+    #[derive(Clone, Copy, Debug, PartialEq)]
     pub struct Status: u16 {
         const READY            = 0x8000;
         const PLL_LOCK         = 0x4000;
