@@ -816,6 +816,96 @@ pub fn configure_tx(radio: &mut Registers, board: &Board, channel: &ChannelParam
     Ok(())
 }
 
+pub struct RXParameterAGC {
+    pub attack: u8,
+    pub decay: u8,
+    pub target: u8,
+    pub ahyst: u8,
+    pub min: u8,
+    pub max: u8,
+}
+
+pub struct RXParameterFreq {
+    pub phase: u8,
+    pub freq: u8,
+}
+
+pub struct RXParameterGain {
+    pub time: TimeGain,
+    pub datarate: DRGain,
+    pub phase: u8,
+    pub filter: u8,
+    pub baseband: RXParameterFreq,
+    pub rf: RXParameterFreq,
+    pub amplitude: u8,
+}
+
+pub struct RXParameterBasebandOffset {
+    pub a: u8,
+    pub b: u8
+}
+
+pub struct RXParameterSet {
+    pub agc: RXParameterAGC,
+    pub gain: RXParameterGain,
+    pub freq_dev: u16,
+    pub decay: u8,
+    pub baseband_offset: RXParameterBasebandOffset,
+}
+
+
+impl RXParameterSet {
+    pub fn write0(&self, radio: &mut Registers) -> io::Result<()> {
+        radio.AGCGAIN0.write(AGCGain {
+            attack: self.agc.attack,
+            decay: self.agc.decay,
+        })?;
+        radio.AGCTARGET0.write(self.agc.target)?;
+        radio.AGCAHYST0.write(AGCHyst {
+            hyst: self.agc.ahyst,
+        })?;
+        radio.AGCMINMAX0.write(AGCMinMax {
+            min: self.agc.min,
+            max: self.agc.max,
+        })?;
+        radio.TIMEGAIN0.write(self.gain.time)?;
+        radio.DRGAIN0.write(self.gain.datarate)?;
+        radio.PHASEGAIN0.write(PhaseGain {
+            gain: self.gain.phase,
+            filter: self.gain.filter,
+        })?;
+        radio.FREQGAINA0.write(FreqGainA {
+            gain: self.gain.baseband.phase,
+            flags: FreqGainAFlags::empty(),
+        })?;
+        radio.FREQGAINB0.write(FreqGainB {
+            gain: self.gain.baseband.freq,
+            flags: FreqGainBFlags::empty(),
+        })?;
+        radio.FREQGAINC0.write(FreqGainC {
+            gain: self.gain.rf.phase,
+        })?;
+        radio.FREQGAIND0.write(FreqGainD {
+            gain: self.gain.rf.freq,
+            freeze: false,
+        })?;
+        radio.AMPLGAIN0.write(AmplGain {
+            gain: self.gain.amplitude,
+            flags: AmplGainFlags::AGC,
+        })?;
+        radio.FREQDEV0.write(self.freq_dev)?;
+        radio.FOURFSK0.write(FourFSK {
+            decay: self.decay,
+            update: true,
+        })?;
+        radio.BBOFFSRES0.write(BBOffsRes {
+            res_int_a: self.baseband_offset.a,
+            res_int_b: self.baseband_offset.b,
+        })?;
+        Ok(())
+    }
+}
+
 
 pub struct RXParameters {
     // MODULATION::RX_HALFSPEED

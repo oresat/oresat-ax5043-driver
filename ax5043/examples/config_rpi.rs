@@ -129,25 +129,6 @@ impl Default for RXParams {
     }
 }
 
-/*
-fn param_set() {
-    /*
-    AGC Gain
-    AGC Target
-    AGC AHyst
-    AGC MinMax
-    Gain - Time
-    Gain - Data Rate
-    Gain - Phase
-    Gain - Freq A
-    Gain - Freq B
-    Gain - Freq C
-    Gain - Freq D
-    Gain - Ampl
-    Freq Deviaiton
-    FourFSK
-    BB Offset Resistor
-    */
 }
 */
 /* Max RF Offset
@@ -183,21 +164,6 @@ fn rx_set_params(radio: &mut Registers, _board: &config::Board, params: &RXParam
     radio.AMPLFILTER.write(params.ampl_filter)?;
     radio.FREQUENCYLEAK.write(params.frequency_leak)?;
 
-    // RX Parameter set 0
-    radio.AGCGAIN0.write(AGCGain {
-        attack: 3,
-        decay: 9,
-    })?;
-    radio.AGCTARGET0.write(0x89)?;
-    radio.TIMEGAIN0.write(TimeGain {
-        exponent: 9,
-        mantissa: 8,
-    })?;
-    radio.DRGAIN0.write(DRGain {
-        exponent: 3,
-        mantissa: 8,
-    })?;
-    radio.FREQDEV0.write(0x0000)?;
 
     Ok(())
 
@@ -215,11 +181,51 @@ pub fn configure_radio_rx(radio: &mut Registers) -> io::Result<(Board, ChannelPa
         ..Default::default()
     };
     rx_set_params(radio, &board, &params)?;
+
+    let set0 = RXParameterSet {
+        agc: RXParameterAGC {
+            attack: 4,
+            decay: 7,
+            target: 0x89,
+            ahyst: 0,
+            min: 0,
+            max: 0,
+        },
+        gain: RXParameterGain {
+            time: TimeGain {
+                mantissa: 9,
+                exponent: 8,
+            },
+            datarate: DRGain {
+                mantissa: 9,
+                exponent: 4,
+            },
+            phase: 0b0011,
+            filter: 0b11,
+            baseband: RXParameterFreq {
+                phase: 0b1111,
+                freq: 0b0_1111,
+            },
+            rf: RXParameterFreq {
+                phase: 0b0_1010,
+                freq: 0b0_1010,
+            },
+            amplitude: 0b0010,
+        },
+        freq_dev: 0, //0x020,
+        decay: 0b0110,
+        baseband_offset: RXParameterBasebandOffset {
+            a: 0b1000,
+            b: 0b1000,
+        },
+    };
+    set0.write0(radio)?;
+
     radio.RXPARAMSETS.write(RxParamSets(
         RxParamSet::Set0,
-        RxParamSet::Set1,
-        RxParamSet::Set2,
-        RxParamSet::Set3,
+        RxParamSet::Set0,
+        RxParamSet::Set0,
+        RxParamSet::Set0,
     ))?;
 
 
