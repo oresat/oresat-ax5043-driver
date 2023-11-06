@@ -55,6 +55,7 @@ fn config(radio: &mut Registers, antenna: config::Antenna) -> io::Result<config:
         encoding: Encoding::NRZI | Encoding::SCRAM,
         framing: Framing::HDLC { fec: FEC {} },
         crc: CRC::CCITT { initial: 0xFFFF },
+        datarate: 9_600,
     };
     configure_channel(radio, &board, &channel)?;
 
@@ -66,7 +67,6 @@ fn config(radio: &mut Registers, antenna: config::Antenna) -> io::Result<config:
             d: 0,
             e: 0,
         },
-        txrate: 60_000,
         plllock_gate: true,
         brownout_gate: true,
     };

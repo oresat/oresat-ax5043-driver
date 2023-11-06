@@ -690,7 +690,7 @@ pub struct ChannelParameters {
     pub encoding: Encoding,
     pub framing: Framing,
     pub crc: CRC,
-
+    pub datarate: u64,
     // TODO:pktaddrcfg
 }
 
@@ -709,7 +709,8 @@ pub fn configure_channel(radio: &mut Registers, board: &Board, parameters: &Chan
                 mode: ModulationMode::FSK,
                 halfspeed: false,
             })?;
-            // FSKDEV depends on bitrate, set in config_tx
+            // m = 0.5, fskdev = 0.5 * f_dev, 1/(0.5*0.5) = 4
+            radio.FSKDEV.write(((parameters.datarate / 4)  * 2_u64.pow(24) / board.xtal.freq).try_into().unwrap())?;
         }
         Modulation::ASK => {
             radio.MODULATION.write(registers::Modulation {
@@ -738,7 +739,6 @@ amplitude shaper and the predistortion is bypassed, and α1
 used.
 */
 pub struct TXParameters {
-    pub txrate: u64,
     pub amp: AmplitudeShaping,
     pub plllock_gate: bool,
     pub brownout_gate: bool,
@@ -765,12 +765,6 @@ pub fn configure_tx(radio: &mut Registers, board: &Board, channel: &ChannelParam
                   | if parameters.brownout_gate { ModCfgAFlags::BROWN_GATE } else { ModCfgAFlags::empty() }
             };
             radio.MODCFGA.write(cfga)?;
-
-            if let Modulation::GMSK { .. } = channel.modulation {
-                // m = 0.5, fskdev = 0.5 * f_dev, 1/(0.5*0.5) = 4
-                // FIXME copy of gfsk channel_config. Here because this depends on TXParameters::txrate
-                radio.FSKDEV.write(((parameters.txrate / 4)  * 2_u64.pow(24) / board.xtal.freq).try_into().unwrap())?;
-            }
         }
         Modulation::ASK => {
             let cfga = ModCfgA {
@@ -790,7 +784,7 @@ pub fn configure_tx(radio: &mut Registers, board: &Board, channel: &ChannelParam
         _ => unimplemented!()
     }
 
-    radio.TXRATE.write((parameters.txrate*2_u64.pow(24)/board.xtal.freq).try_into().unwrap())?;
+    radio.TXRATE.write((channel.datarate*2_u64.pow(24)/board.xtal.freq).try_into().unwrap())?;
     match parameters.amp {
         AmplitudeShaping::RaisedCosine{a, b, c, d, e} => {
             radio.TXPWRCOEFFA.write(a)?;
