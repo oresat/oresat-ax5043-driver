@@ -5,7 +5,7 @@ use ax5043::{
     registers::*
 };
 
-fn config(radio: &mut Registers, antenna: config::Antenna) -> io::Result<config::Board> {
+fn config(radio: &mut Registers, antenna: config::Antenna) -> io::Result<(Board, ChannelParameters)> {
     let board = Board {
         sysclk: Pin { mode: config::SysClk::Z,    pullup: true,  invert: false, },
         dclk:   Pin { mode: config::DClk::Z,      pullup: true,  invert: false, },
@@ -59,6 +59,14 @@ fn config(radio: &mut Registers, antenna: config::Antenna) -> io::Result<config:
     };
     configure_channel(radio, &board, &channel)?;
 
+    autorange(radio)?;
+
+    Ok((board, channel))
+}
+
+pub fn configure_radio_tx(radio: &mut Registers) -> io::Result<config::Board> {
+    let (board, channel) = config(radio, config::Antenna::SingleEnded)?;
+
     let txparams = TXParameters {
         amp: AmplitudeShaping::RaisedCosine {
             a: 0,
@@ -71,16 +79,6 @@ fn config(radio: &mut Registers, antenna: config::Antenna) -> io::Result<config:
         brownout_gate: true,
     };
     configure_tx(radio, &board, &channel, &txparams)?;
-
-    autorange(radio)?;
-
-    Ok(board)
-}
-
-
-
-pub fn configure_radio_tx(radio: &mut Registers) -> io::Result<config::Board> {
-    let board = config(radio, config::Antenna::SingleEnded)?;
 
     // As far as I can tell PLLUNLOCK and PLLRNGDONE have no way to clear/are level triggered
     // radio.IRQMASK.write(registers::IRQ::XTALREADY | registers::IRQ::RADIOCTRL)?;

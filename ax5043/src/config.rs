@@ -374,6 +374,17 @@ pub fn configure(radio: &mut Registers, board: &Board) -> io::Result<()> {
 
     // FIXME: Depends on register FRAIMING
     radio.PERF_F72.write(0x00)?;
+
+    // ModCfgA has TX Specific settings, but antenna is used in TX and RX. This sets
+    // the TX stuff to safe defaults.
+    radio.MODCFGA.write(ModCfgA {
+        slowramp: registers::SlowRamp::STARTUP_1b,
+        flags: match board.antenna {
+            Antenna::SingleEnded => ModCfgAFlags::TXSE,
+            Antenna::Differential => ModCfgAFlags::TXDIFF,
+        } | ModCfgAFlags::PLLLCK_GATE | ModCfgAFlags::BROWN_GATE,
+    })?;
+
     Ok(())
 }
 
