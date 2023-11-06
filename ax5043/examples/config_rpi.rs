@@ -203,8 +203,8 @@ fn rx_set_params(radio: &mut Registers, _board: &config::Board, params: &RXParam
 
 }
 
-pub fn configure_radio_rx(radio: &mut Registers) -> std::io::Result<config::Board> {
-    let board = config(radio, config::Antenna::Differential)?;
+pub fn configure_radio_rx(radio: &mut Registers) -> io::Result<(Board, ChannelParameters)> {
+    let (board, channel) = config(radio, config::Antenna::Differential)?;
 
     let params = RXParams {
         if_freq: 0x09A5,
@@ -223,6 +223,6 @@ pub fn configure_radio_rx(radio: &mut Registers) -> std::io::Result<config::Boar
     ))?;
 
 
-    Ok(board)
+    Ok((board, channel))
 }
 

@@ -249,7 +249,7 @@ struct RXState {
     phase: u16,
     fskdemod: i32,
     rffreq: i32,
-    freq: u16,
+    freq: u64,
     paramcurset: RxParamCurSet,
 }
 
@@ -274,7 +274,7 @@ impl Default for RXState {
     }
 }
 
-fn get_signal(radio: &mut Registers) -> io::Result<RXState> {
+fn get_signal(radio: &mut Registers, channel: &config::ChannelParameters) -> io::Result<RXState> {
     Ok(RXState {
         rssi: radio.RSSI.read()?,
         bgndrssi: radio.BGNDRSSI.read()?,
@@ -290,7 +290,7 @@ fn get_signal(radio: &mut Registers) -> io::Result<RXState> {
             demod
         },
         rffreq: radio.TRKRFFREQ.read()?.0,
-        freq: radio.TRKFREQ.read()?, // trkfreq / 2^16 * bitrate
+        freq: u64::from(radio.TRKFREQ.read()?) * channel.datarate / 2u64.pow(16),
         paramcurset: radio.RXPARAMCURSET.read()?,
     })
 }
@@ -367,7 +367,7 @@ fn main() -> Result<(), io::Error> {
         BEACON,
         Interest::READABLE)?;
 
-    let board = configure_radio_rx(&mut radio)?;
+    let (board, channel) = configure_radio_rx(&mut radio)?;
     radio.RADIOEVENTMASK.write(RadioEvent::all())?;
 
     state.borrow_mut().board = board.clone();
@@ -424,7 +424,7 @@ fn main() -> Result<(), io::Error> {
                     tfd.read();
                     // Example transmission from PM table 16
                     //ax5043_transmit(&mut radio_tx, &[0xAA, 0xAA, 0x1A])?;
-                    let signal = get_signal(&mut radio)?;
+                    let signal = get_signal(&mut radio, &channel)?;
                     state.borrow_mut().rx.push_back(signal);
                     if state.borrow().rx.len() > 100 {
                         state.borrow_mut().rx.pop_front();
