@@ -534,6 +534,7 @@ pub struct Registers<'a> {
     pub PERF_F34:       ReadWrite<'a, 0xF34, 1, PerfF34>,
     pub PERF_F35:       ReadWrite<'a, 0xF35, 1, PerfF35>,
     pub PERF_F44:       ReadWrite<'a, 0xF44, 1, u8>,
+    pub PERF_F72:       ReadWrite<'a, 0xF72, 1, u8>,
 }
 
 pub fn open<P: AsRef<Path>>(path: P) -> io::Result<Spidev> {
@@ -981,6 +982,7 @@ impl Registers<'_> {
             PERF_F34:       ReadWrite{ spi, on_status, value: PerfF34::Reset },
             PERF_F35:       ReadWrite{ spi, on_status, value: PerfF35::FreqLT24p8MHz },
             PERF_F44:       ReadWrite{ spi, on_status, value: 0 },
+            PERF_F72:       ReadWrite{ spi, on_status, value: 0 },
         }
     }
 

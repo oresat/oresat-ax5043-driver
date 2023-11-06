@@ -372,8 +372,8 @@ pub fn configure(radio: &mut Registers, board: &Board) -> io::Result<()> {
 
     // PERF 0x30-0x33 depend on WOR
 
-    // Depends on register FRAIMING
-    // radio.PERF_F72.write(0x00);
+    // FIXME: Depends on register FRAIMING
+    radio.PERF_F72.write(0x00)?;
     Ok(())
 }
 
