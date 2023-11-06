@@ -808,6 +808,6 @@ impl RadioState {
             ])
         ])
         .block(Block::default().borders(Borders::ALL).title("Radio State"))
-        .widths(&[Constraint::Max(10)])
+        .widths(&[Constraint::Max(13)])
     }
 }
