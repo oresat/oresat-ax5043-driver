@@ -354,7 +354,7 @@ pub struct Registers<'a> {
     pub DIVERSITY:      ReadWrite<'a, 0x042, 1, Diversity>, // Antenna Diversity Configuration
     pub AGCCOUNTER:     ReadWrite<'a, 0x043, 1, i8>,        // AGC Current Value
     /* Receiver Tracking */
-    pub TRKDATARATE:    ReadOnly <'a, 0x045, 3, u32>,       // Datarate Tracking
+    pub TRKDATARATE:    ReadOnly <'a, 0x045, 3, i32>,       // Datarate Tracking
     pub TRKAMPL:        ReadOnly <'a, 0x048, 2, u16>,       // Amplitude Tracking
     pub TRKPHASE:       ReadOnly <'a, 0x04A, 2, u16>,       // Phase Tracking
     pub TRKRFFREQ:      ReadWrite<'a, 0x04D, 3, TrkRFFreq>, // RF Frequency Tracking

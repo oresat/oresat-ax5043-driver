@@ -181,6 +181,7 @@ fn ui<B: Backend>(f: &mut Frame<B>, state: &UIState) {
     let max: i64 = *data.iter().max().unwrap_or(&0);
     let data = &data.iter().map(|x| u64::try_from(x - min).unwrap()).collect::<Vec<u64>>();
     f.render_widget(state.spark_signed("RSSI", "dB", data, min, max), sparks[0]);
+
     f.render_widget(state.sparkline("Background RSSI", "dB",  &state.rx.iter().map(|r| u64::from(r.bgndrssi)).collect::<Vec<u64>>()), sparks[1]);
 
     let data = &state.rx.iter().map(|r| i64::from(r.agccounter)).collect::<Vec<i64>>();
@@ -188,19 +189,28 @@ fn ui<B: Backend>(f: &mut Frame<B>, state: &UIState) {
     let max: i64 = *data.iter().max().unwrap_or(&0);
     let data = &data.iter().map(|x| u64::try_from(x - min).unwrap()).collect::<Vec<u64>>();
     f.render_widget(state.spark_signed("AGC Counter", "dB", data, min, max), sparks[2]);
-    f.render_widget(state.sparkline("Data Rate", "bits/s", &state.rx.iter().map(|r| u64::from(r.datarate)).collect::<Vec<u64>>()), sparks[3]);
+
+    let data = &state.rx.iter().map(|r| i64::from(r.datarate)).collect::<Vec<i64>>();
+    let min: i64 = *data.iter().min().unwrap_or(&0);
+    let max: i64 = *data.iter().max().unwrap_or(&0);
+    let data = &data.iter().map(|x| u64::try_from(x - min).unwrap()).collect::<Vec<u64>>();
+    f.render_widget(state.spark_signed("Δ Data Rate", "bits/s", data, min, max), sparks[3]);
+
     f.render_widget(state.sparkline("Amplitude", "", &state.rx.iter().map(|r| u64::from(r.ampl)).collect::<Vec<u64>>()), sparks[4]);
     f.render_widget(state.sparkline("Phase", "", &state.rx.iter().map(|r| u64::from(r.phase)).collect::<Vec<u64>>()), sparks[5]);
+
     let data = &state.rx.iter().map(|r| i64::from(r.fskdemod)).collect::<Vec<i64>>();
     let min: i64 = *data.iter().min().unwrap_or(&0);
     let max: i64 = *data.iter().max().unwrap_or(&0);
     let data = &data.iter().map(|x| u64::try_from(x - min).unwrap()).collect::<Vec<u64>>();
     f.render_widget(state.spark_signed("FSK Demodulation", "", data, min, max), sparks[6]);
+
     let data = &state.rx.iter().map(|r| i64::from(r.rffreq)).collect::<Vec<i64>>();
     let min: i64 = *data.iter().min().unwrap_or(&0);
     let max: i64 = *data.iter().max().unwrap_or(&0);
     let data = &data.iter().map(|x| u64::try_from(x - min).unwrap()).collect::<Vec<u64>>();
     f.render_widget(state.spark_signed("RF Frequency", "Hz", data, min, max), sparks[7]);
+
     f.render_widget(state.sparkline("Frequency", "Hz", &state.rx.iter().map(|r| u64::from(r.freq)).collect::<Vec<u64>>()), sparks[8]);
     f.render_widget(state.rx_params(&state.rx.iter().map(|r| u64::from(r.paramcurset.index)).collect::<Vec<u64>>(), state.rx.back().unwrap_or(&RXState::default()).paramcurset), sparks[9]);
     f.render_widget(state.status.widget(), chunks[2]);
@@ -234,7 +244,7 @@ struct RXState {
     rssi: i8,
     bgndrssi: u8,
     agccounter: i32,
-    datarate: u32,
+    datarate: i32,
     ampl: u16,
     phase: u16,
     fskdemod: i32,
