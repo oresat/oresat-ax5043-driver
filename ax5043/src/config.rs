@@ -523,6 +523,7 @@ fn to_freq(carrier: u64, xtal: u64) -> u32 {
     (((carrier << 24) / xtal) | 0x01).try_into().unwrap()
 }
 
+
 pub fn configure_synth(radio: &mut Registers, board: &Board, synth: &Synthesizer) -> io::Result<()> {
     // TODO
     // - FREQA
@@ -838,6 +839,10 @@ pub struct RXParameterGain {
     pub baseband: RXParameterFreq,
     pub rf: RXParameterFreq,
     pub amplitude: u8,
+    pub deviation_update: bool, // FIXME below decay?
+    pub ampl_agc_jump_correction: bool,
+    pub ampl_averaging: bool,
+
 }
 
 pub struct RXParameterBasebandOffset {
@@ -891,12 +896,13 @@ impl RXParameterSet {
         })?;
         radio.AMPLGAIN0.write(AmplGain {
             gain: self.gain.amplitude,
-            flags: AmplGainFlags::AGC,
+            flags: if self.gain.ampl_agc_jump_correction { AmplGainFlags::AGC } else { AmplGainFlags::empty() }
+                 | if self.gain.ampl_averaging { AmplGainFlags::AVG } else { AmplGainFlags::empty() },
         })?;
         radio.FREQDEV0.write(self.freq_dev)?;
         radio.FOURFSK0.write(FourFSK {
             decay: self.decay,
-            update: true,
+            update: self.gain.deviation_update,
         })?;
         radio.BBOFFSRES0.write(BBOffsRes {
             res_int_a: self.baseband_offset.a,
@@ -904,6 +910,109 @@ impl RXParameterSet {
         })?;
         Ok(())
     }
+
+    pub fn write1(&self, radio: &mut Registers) -> io::Result<()> {
+        radio.AGCGAIN1.write(AGCGain {
+            attack: self.agc.attack,
+            decay: self.agc.decay,
+        })?;
+        radio.AGCTARGET1.write(self.agc.target)?;
+        radio.AGCAHYST1.write(AGCHyst {
+            hyst: self.agc.ahyst,
+        })?;
+        radio.AGCMINMAX1.write(AGCMinMax {
+            min: self.agc.min,
+            max: self.agc.max,
+        })?;
+        radio.TIMEGAIN1.write(self.gain.time)?;
+        radio.DRGAIN1.write(self.gain.datarate)?;
+        radio.PHASEGAIN1.write(PhaseGain {
+            gain: self.gain.phase,
+            filter: self.gain.filter,
+        })?;
+        radio.FREQGAINA1.write(FreqGainA {
+            gain: self.gain.baseband.phase,
+            flags: FreqGainAFlags::empty(),
+        })?;
+        radio.FREQGAINB1.write(FreqGainB {
+            gain: self.gain.baseband.freq,
+            flags: FreqGainBFlags::empty(),
+        })?;
+        radio.FREQGAINC1.write(FreqGainC {
+            gain: self.gain.rf.phase,
+        })?;
+        radio.FREQGAIND1.write(FreqGainD {
+            gain: self.gain.rf.freq,
+            freeze: false,
+        })?;
+        radio.AMPLGAIN1.write(AmplGain {
+            gain: self.gain.amplitude,
+            flags: if self.gain.ampl_agc_jump_correction { AmplGainFlags::AGC } else { AmplGainFlags::empty() }
+                 | if self.gain.ampl_averaging { AmplGainFlags::AVG } else { AmplGainFlags::empty() },
+        })?;
+        radio.FREQDEV1.write(self.freq_dev)?;
+        radio.FOURFSK1.write(FourFSK {
+            decay: self.decay,
+            update: self.gain.deviation_update,
+        })?;
+        radio.BBOFFSRES1.write(BBOffsRes {
+            res_int_a: self.baseband_offset.a,
+            res_int_b: self.baseband_offset.b,
+        })?;
+        Ok(())
+    }
+
+    pub fn write3(&self, radio: &mut Registers) -> io::Result<()> {
+        radio.AGCGAIN3.write(AGCGain {
+            attack: self.agc.attack,
+            decay: self.agc.decay,
+        })?;
+        radio.AGCTARGET3.write(self.agc.target)?;
+        radio.AGCAHYST3.write(AGCHyst {
+            hyst: self.agc.ahyst,
+        })?;
+        radio.AGCMINMAX3.write(AGCMinMax {
+            min: self.agc.min,
+            max: self.agc.max,
+        })?;
+        radio.TIMEGAIN3.write(self.gain.time)?;
+        radio.DRGAIN3.write(self.gain.datarate)?;
+        radio.PHASEGAIN3.write(PhaseGain {
+            gain: self.gain.phase,
+            filter: self.gain.filter,
+        })?;
+        radio.FREQGAINA3.write(FreqGainA {
+            gain: self.gain.baseband.phase,
+            flags: FreqGainAFlags::empty(),
+        })?;
+        radio.FREQGAINB3.write(FreqGainB {
+            gain: self.gain.baseband.freq,
+            flags: FreqGainBFlags::empty(),
+        })?;
+        radio.FREQGAINC3.write(FreqGainC {
+            gain: self.gain.rf.phase,
+        })?;
+        radio.FREQGAIND3.write(FreqGainD {
+            gain: self.gain.rf.freq,
+            freeze: false,
+        })?;
+        radio.AMPLGAIN3.write(AmplGain {
+            gain: self.gain.amplitude,
+            flags: if self.gain.ampl_agc_jump_correction { AmplGainFlags::AGC } else { AmplGainFlags::empty() }
+                 | if self.gain.ampl_averaging { AmplGainFlags::AVG } else { AmplGainFlags::empty() },
+        })?;
+        radio.FREQDEV3.write(self.freq_dev)?;
+        radio.FOURFSK3.write(FourFSK {
+            decay: self.decay,
+            update: self.gain.deviation_update,
+        })?;
+        radio.BBOFFSRES3.write(BBOffsRes {
+            res_int_a: self.baseband_offset.a,
+            res_int_b: self.baseband_offset.b,
+        })?;
+        Ok(())
+    }
+
 }
 
 
