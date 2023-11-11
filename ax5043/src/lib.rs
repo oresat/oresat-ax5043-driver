@@ -3,7 +3,7 @@ use bitflags::bitflags;
 use spidev::{SpiModeFlags, Spidev, SpidevOptions, SpidevTransfer};
 use std::convert::TryFrom;
 use std::path::Path;
-use std::{fmt, fmt::Debug, io};
+use std::{fmt, fmt::Debug, io, collections::VecDeque};
 
 use registers::*;
 
@@ -204,7 +204,7 @@ impl<const ADDR: u16, const S: usize, R: TryFrom<Vec<u8>> + Debug> Debug
 }
 
 impl<const ADDR: u16, const S: usize, R: TryFrom<Vec<u8>>> ReadFIFO<'_, ADDR, S, R> {
-    pub fn read(&mut self) -> io::Result<&R>
+    pub fn read(&mut self, len: usize) -> io::Result<Vec<R>>
     where
         <R as TryFrom<Vec<u8>>>::Error: Debug,
     {
@@ -213,14 +213,14 @@ impl<const ADDR: u16, const S: usize, R: TryFrom<Vec<u8>>> ReadFIFO<'_, ADDR, S,
 
         // All RX chunks are either a fixed length of at least 2 bytes or
         // a variable length with the length in the second byte.
-        let mut tx = vec![0; 2];
-        let mut rx = vec![0; 2];
+        let mut tx = vec![0; len];
+        let mut rx = vec![0; len];
 
         self.spi.transfer_multiple(&mut [
             SpidevTransfer::read_write(&addr, &mut stat),
             SpidevTransfer::read_write(&tx, &mut rx),
         ])?;
-
+/*
         let len: usize = match FIFOChunkHeaderRX::try_from(rx[0]) {
             Ok(FIFOChunkHeaderRX::RSSI)       => 0,
             Ok(FIFOChunkHeaderRX::FREQOFFS)   => 1,
@@ -238,10 +238,30 @@ impl<const ADDR: u16, const S: usize, R: TryFrom<Vec<u8>>> ReadFIFO<'_, ADDR, S,
         self.spi.transfer_multiple(&mut [
             SpidevTransfer::read_write(&tx[2..], &mut rx[2..]),
         ])?;
+*/
+        let mut chunks: Vec<R> = Vec::new();
+        let mut bytes = VecDeque::from(rx);
+        while bytes.len() > 0 {
+            let len: usize = match FIFOChunkHeaderRX::try_from(bytes[0]) {
+                Ok(FIFOChunkHeaderRX::RSSI)       => 2,
+                Ok(FIFOChunkHeaderRX::FREQOFFS)   => 3,
+                Ok(FIFOChunkHeaderRX::ANTRSSI2)   => 3,
+                Ok(FIFOChunkHeaderRX::TIMER)      => 4,
+                Ok(FIFOChunkHeaderRX::RFFREQOFFS) => 4,
+                Ok(FIFOChunkHeaderRX::DATARATE)   => 4,
+                Ok(FIFOChunkHeaderRX::ANTRSSI3)   => 4,
+                Ok(FIFOChunkHeaderRX::DATA)       => (bytes[1] + 2).into(),
+                Err(_) => todo!()
+            };
 
-        self.value = rx.try_into().unwrap();
+            let remaining = bytes.split_off(len);
+            let chunk:Vec<u8> = bytes.into();
+            chunks.push(chunk.try_into().unwrap());
+            bytes = remaining;
+        }
+        //self.value = rx.try_into().unwrap();
         (self.on_status)(Status::from_bits(u16::from_be_bytes(stat)).unwrap());
-        Ok(&self.value)
+        Ok(chunks)
     }
 }
 
@@ -358,7 +378,7 @@ pub struct Registers<'a> {
     pub TRKAMPL:        ReadOnly <'a, 0x048, 2, u16>,       // Amplitude Tracking
     pub TRKPHASE:       ReadOnly <'a, 0x04A, 2, u16>,       // Phase Tracking
     pub TRKRFFREQ:      ReadWrite<'a, 0x04D, 3, TrkRFFreq>, // RF Frequency Tracking
-    pub TRKFREQ:        ReadWrite<'a, 0x050, 2, u16>,       // Frequency Tracking
+    pub TRKFREQ:        ReadWrite<'a, 0x050, 2, i16>,       // Frequency Tracking
     pub TRKFSKDEMOD:    ReadOnly <'a, 0x052, 2, u16>,       // FSK Demodulator Tracking
     /* Timer */
     pub TIMER2:         ReadOnly <'a, 0x059, 3, u32>, // 1 MHz Timer
@@ -496,7 +516,7 @@ pub struct Registers<'a> {
     pub TMGRXPREAMBLE1: ReadWrite<'a, 0x229, 1, TMG>,            // Receiver Preamble 1 Timeout
     pub TMGRXPREAMBLE2: ReadWrite<'a, 0x22A, 1, TMG>,            // Receiver Preamble 2 Timeout
     pub TMGRXPREAMBLE3: ReadWrite<'a, 0x22B, 1, TMG>,            // Receiver Preamble 3 Timeout
-    pub RSSIREFERENCE:  ReadWrite<'a, 0x22C, 1, u8>,             // RSSI Offset
+    pub RSSIREFERENCE:  ReadWrite<'a, 0x22C, 1, i8>,             // RSSI Offset
     pub RSSIABSTHR:     ReadWrite<'a, 0x22D, 1, u8>,             // RSSI Absolute Threshold
     pub BGNDRSSIGAIN:   ReadWrite<'a, 0x22E, 1, u8>,             // Background RSSI Averaging Time Constant
     pub BGNDRSSITHR:    ReadWrite<'a, 0x22F, 1, u8>,             // Background RSSI Relative Threshold
