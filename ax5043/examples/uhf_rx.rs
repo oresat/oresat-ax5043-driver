@@ -55,6 +55,7 @@ fn configure_radio(radio: &mut Registers) -> io::Result<(Board, ChannelParameter
 
     let channel = ChannelParameters {
         modulation: config::Modulation::GMSK {
+            //deviation: 24_000,
             ramp: config::SlowRamp::Bits1,
             bt: BT(0.5),
         },
@@ -63,7 +64,8 @@ fn configure_radio(radio: &mut Registers) -> io::Result<(Board, ChannelParameter
             fec: config::FEC {},
         },
         crc: CRC::CCITT { initial: 0xFFFF },
-        datarate: 9_600,
+        //crc: CRC::None,
+        datarate: 96_000,
     };
 
     configure(radio, &board)?;
@@ -95,16 +97,18 @@ impl RXParameters {
                 //let fcoeff = 0.25; // FIXME PHASEGAIN::FILTERIDX but translated through table 116
                 //let fcoeff_inv = 4; // 1/fcoeff
 
-                let if_freq = 12_000; // From radiolab
-                radio.IFFREQ.write((if_freq * board.xtal.div() * 2_u64.pow(20) / board.xtal.freq).try_into().unwrap())?;
+                //let if_freq = 12_000; // From radiolab
+                //radio.IFFREQ.write((if_freq * board.xtal.div() * 2_u64.pow(20) / board.xtal.freq).try_into().unwrap())?;
+                radio.IFFREQ.write(0x1058)?;
 
                 //let fbaseband = bandwidth * (1+fcoeff_inv);
-                let fbaseband = 75000; // From radiolab
-                let decimation = board.xtal.freq / (fbaseband * 2u64.pow(4) * board.xtal.div());
-                radio.DECIMATION.write(decimation.try_into().unwrap())?; // TODO: 7bits max
-
+                //let fbaseband = 75000; // From radiolab
+                //let decimation = board.xtal.freq / (fbaseband * 2u64.pow(4) * board.xtal.div());
+                //radio.DECIMATION.write(decimation.try_into().unwrap())?; // TODO: 7bits max
+                radio.DECIMATION.write(1)?;
                 // TODO: see note table 96
-                radio.RXDATARATE.write((2u64.pow(7) * board.xtal.freq / (channel.datarate * board.xtal.div() * decimation)).try_into().unwrap())?;
+                //radio.RXDATARATE.write((2u64.pow(7) * board.xtal.freq / (channel.datarate * board.xtal.div() * decimation)).try_into().unwrap())?;
+                radio.RXDATARATE.write(0x5355)?;
 
                 //let droff = (2u64.pow(7) * board.xtal.freq * *max_dr_offset) / (board.xtal.div() * channel.datarate.pow(2) * decimation);
                 //radio.MAXDROFFSET.write(droff.try_into().unwrap())?;
@@ -181,8 +185,8 @@ pub fn configure_radio_rx(radio: &mut Registers) -> io::Result<(Board, ChannelPa
 
     let set0 = RXParameterSet {
         agc: RXParameterAGC {
-            attack: 0x5,
-            decay: 0xC,
+            attack: 0x3,
+            decay: 0x8,
             target: 0x84,
             ahyst: 0,
             min: 0,
@@ -190,22 +194,22 @@ pub fn configure_radio_rx(radio: &mut Registers) -> io::Result<(Board, ChannelPa
         },
         gain: RXParameterGain {
             time: TimeGain {
-                mantissa: 0xF,
-                exponent: 8,
+                mantissa: 0xA,
+                exponent: 9,
             },
             datarate: DRGain {
-                mantissa: 0xF,
-                exponent: 2,
+                mantissa: 0xA,
+                exponent: 3,
             },
             phase: 0b0011,
-            filter: 0b11,
+            filter: 0b10,
             baseband: RXParameterFreq {
                 phase: 0b1111,
                 freq: 0b1_1111,
             },
             rf: RXParameterFreq {
-                phase: 0b0_1010,
-                freq: 0b0_1010,
+                phase: 0b0_0101,
+                freq: 0b0_0101,
             },
             amplitude: 0b0110,
             deviation_update: true,
@@ -223,8 +227,8 @@ pub fn configure_radio_rx(radio: &mut Registers) -> io::Result<(Board, ChannelPa
 
     let set1 = RXParameterSet {
         agc: RXParameterAGC {
-            attack: 0x5,
-            decay: 0xC,
+            attack: 0x3,
+            decay: 0x8,
             target: 0x84,
             ahyst: 0,
             min: 0,
@@ -232,15 +236,15 @@ pub fn configure_radio_rx(radio: &mut Registers) -> io::Result<(Board, ChannelPa
         },
         gain: RXParameterGain {
             time: TimeGain {
-                mantissa: 0xF,
-                exponent: 6,
+                mantissa: 0xA,
+                exponent: 7,
             },
             datarate: DRGain {
-                mantissa: 0xF,
-                exponent: 1,
+                mantissa: 0xA,
+                exponent: 2,
             },
             phase: 0b0011,
-            filter: 0b11,
+            filter: 0b10,
             baseband: RXParameterFreq {
                 phase: 0b1111,
                 freq: 0b1_1111,
@@ -274,22 +278,22 @@ pub fn configure_radio_rx(radio: &mut Registers) -> io::Result<(Board, ChannelPa
         },
         gain: RXParameterGain {
             time: TimeGain {
-                mantissa: 0xF,
-                exponent: 5,
+                mantissa: 0xA,
+                exponent: 6,
             },
             datarate: DRGain {
-                mantissa: 0xF,
-                exponent: 0,
+                mantissa: 0xA,
+                exponent: 1,
             },
             phase: 0b0011,
-            filter: 0b11,
+            filter: 0b10,
             baseband: RXParameterFreq {
                 phase: 0b1111,
                 freq: 0b1_1111,
             },
             rf: RXParameterFreq {
-                phase: 0b0_1101,
-                freq: 0b0_1101,
+                phase: 0b0_1001,
+                freq: 0b0_1001,
             },
             amplitude: 0b0110,
             deviation_update: true,
@@ -312,7 +316,7 @@ pub fn configure_radio_rx(radio: &mut Registers) -> io::Result<(Board, ChannelPa
         RxParamSet::Set3,
     ))?;
 
-    radio.MATCH1PAT.write(0x1111)?;
+    radio.MATCH1PAT.write(0x7E)?;
     radio.MATCH1LEN.write(MatchLen { len: 0xA, raw: false, })?;
     radio.MATCH1MAX.write(0xA)?;
     radio.TMGRXPREAMBLE2.write(TMG { m: 0x17, e: 0, })?;
@@ -326,6 +330,12 @@ pub fn configure_radio_rx(radio: &mut Registers) -> io::Result<(Board, ChannelPa
 
     radio.PKTCHUNKSIZE.write(0x0D)?;
     radio.PKTACCEPTFLAGS.write(PktAcceptFlags::LRGP)?;
+
+    radio.PKTADDRCFG.write(PktAddrCfg {
+        addr_pos: 0,
+        flags: PktAddrCfgFlags::MSB_FIRST | PktAddrCfgFlags::FEC_SYNC_DIS,
+    })?;
+
 
     radio.RSSIREFERENCE.write(64)?;
 
@@ -417,7 +427,7 @@ fn main() -> io::Result<()> {
                     _ = radio.PLLRANGINGA.read()?; // sticky lock bit ~ IRQPLLUNLIOCK, gate
                     _ = radio.POWSTICKYSTAT.read()?; // clear sticky power flags for PWR_GOOD
 
-                    //println!("RSSI {}", radio.RSSI.read()?);
+                    //println!("RSSI {} {:?}", radio.RSSI.read()?, radio.RADIOSTATE.read()?);
                     let len  = radio.FIFOCOUNT.read()?;
                     if len > 0 {
                         let data = radio.FIFODATARX.read(len.into())?;
