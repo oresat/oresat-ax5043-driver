@@ -87,7 +87,7 @@ pub struct PacketController {
     tmg_rx_preamble1: TMG,
     tmg_rx_preamble2: TMG,
     tmg_rx_preamble3: TMG,
-    rssi_reference: u8,
+    rssi_reference: i8,
     rssi_abs_thr: u8,
     bgnd_rssi_gain: u8,
     bgnd_rssi_thr: u8,
@@ -644,7 +644,7 @@ impl RXParams {
         })
     }
 
-    pub fn receiver_parameters<'a>(&self) -> Table<'a> {
+    pub fn widget<'a>(&self) -> Table<'a> {
         Table::new(vec![
             Row::new(vec![
                 "IF Freq", "Max Δ", "Baseband", "Bitrate", "Max Δ"
@@ -809,5 +809,125 @@ impl RadioState {
         ])
         .block(Block::default().borders(Borders::ALL).title("Radio State"))
         .widths(&[Constraint::Max(13)])
+    }
+}
+
+
+pub struct TXParameters {
+    pub modcfgf: ModCfgF,
+    pub fskdev: u64,
+    pub modcfga: ModCfgA,
+    pub txrate: u64,
+    pub a: u16,
+    pub b: u16,
+    pub c: u16,
+    pub d: u16,
+    pub e: u16,
+}
+
+impl TXParameters {
+    pub fn new(radio: &mut Registers, board: &config::Board) -> io::Result<Self> {
+        Ok(Self {
+            modcfgf: radio.MODCFGF.read()?,
+            fskdev: u64::from(radio.FSKDEV.read()?) * board.xtal.freq / 2u64.pow(24),
+            modcfga: radio.MODCFGA.read()?,
+            txrate: u64::from(radio.TXRATE.read()?) * board.xtal.freq / 2u64.pow(24),
+            a: radio.TXPWRCOEFFA.read()?,
+            b: radio.TXPWRCOEFFB.read()?,
+            c: radio.TXPWRCOEFFC.read()?,
+            d: radio.TXPWRCOEFFD.read()?,
+            e: radio.TXPWRCOEFFE.read()?,
+        })
+    }
+    pub fn widget<'a>(&self) -> Table<'a> {
+        Table::new(vec![
+            Row::new([
+                Cell::from(format!("{:?}", self.modcfgf)),
+                Cell::from(format!("Deviation {:?} Hz", self.fskdev)),
+            ]),
+            Row::new([
+                Cell::from(format!("{:?}", self.modcfga)),
+                Cell::from(format!("{:?} bits/s", self.txrate )),
+            ]),
+            Row::new([
+                Cell::from(format!("tx power coef b:")),
+                Cell::from(format!("{:X?}", self.b)),
+            ]),
+
+        ])
+        .block(Block::default().borders(Borders::ALL).title("TX Parameters"))
+        .widths(&[Constraint::Max(100), Constraint::Max(60)])
+    }
+}
+
+impl Default for TXParameters {
+    fn default() -> Self {
+        Self {
+            modcfgf: ModCfgF::UNSHAPED,
+            fskdev: 0,
+            modcfga: ModCfgA {
+                slowramp: SlowRamp::STARTUP_1b,
+                flags: ModCfgAFlags::empty(),
+            },
+            txrate: 0,
+            a: 0,
+            b: 0,
+            c: 0,
+            d: 0,
+            e: 0,
+        }
+    }
+}
+
+pub struct ChannelParameters {
+    pub modulation: Modulation ,
+    pub encoding: Encoding,
+    pub framing: Framing,
+    pub crcinit: u32,
+}
+
+impl ChannelParameters {
+    pub fn new(radio: &mut Registers) -> io::Result<Self> {
+        Ok(Self {
+            modulation: radio.MODULATION.read()?,
+            encoding: radio.ENCODING.read()?,
+            framing: radio.FRAMING.read()?,
+            crcinit: radio.CRCINIT.read()?,
+        })
+    }
+
+    pub fn widget<'a>(&self) -> Table<'a> {
+        Table::new(vec![
+            Row::new([
+                Cell::from(format!("{:?}", self.modulation)),
+                Cell::from(format!("{:?}", self.encoding)),
+            ]),
+            Row::new([
+                Cell::from(format!("{:?}", self.framing)),
+                Cell::from(format!("{:X?}", self.crcinit)),
+            ]),
+
+        ])
+        .block(Block::default().borders(Borders::ALL).title("Channel Parameters"))
+        .widths(&[Constraint::Max(100), Constraint::Max(60)])
+
+    }
+}
+
+impl Default for ChannelParameters {
+    fn default() -> Self {
+        Self {
+            modulation: Modulation {
+                mode: ModulationMode::ASK,
+                halfspeed: false,
+            },
+            encoding: Encoding::empty(),
+            framing: Framing {
+                frmmode: FrameMode::RAW,
+                crcmode: CRCMode::OFF,
+                flags: FramingFlags::empty(),
+            },
+            crcinit: 0,
+        }
     }
 }
