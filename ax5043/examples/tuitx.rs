@@ -27,6 +27,8 @@ struct UIState {
     radio_event: RadioEvent,
     radio_state: RadioState,
     synthesizer: Synthesizer,
+    tx: TXParameters,
+    chan: ChannelParameters,
 }
 
 impl Default for UIState {
@@ -43,6 +45,8 @@ impl Default for UIState {
             radio_event: RadioEvent::empty(),
             radio_state: RadioState::IDLE,
             synthesizer: Synthesizer::default(),
+            tx: TXParameters::default(),
+            chan: ChannelParameters::default(),
         }
     }
 }
@@ -77,8 +81,21 @@ fn ui<B: Backend>(f: &mut Frame<B>, state: &UIState) {
     f.render_widget(state.irq.widget(), power[2]);
     f.render_widget(state.radio_event.widget(), power[3]);
     f.render_widget(state.radio_state.widget(), power[4]);
+    let parameters = Layout::default()
+        .direction(Direction::Vertical)
+        .margin(1)
+        .constraints([
+            Constraint::Percentage(20),
+            Constraint::Percentage(20),
+            Constraint::Percentage(20),
+            Constraint::Percentage(20),
+            Constraint::Percentage(20),
+        ].as_ref())
+        .split(chunks[1]);
 
-    f.render_widget(state.synthesizer.widget(), chunks[1]);
+    f.render_widget(state.synthesizer.widget(), parameters[0]);
+    f.render_widget(state.tx.widget(), parameters[1]);
+    f.render_widget(state.chan.widget(), parameters[2]);
 /*
     let rx = Layout::default()
         .direction(Direction::Horizontal)
@@ -210,7 +227,7 @@ fn main() -> Result<(), io::Error> {
         Interest::READABLE)?;
 
     let mut tfd = TimerFd::new_custom(timerfd::ClockId::Monotonic, true, false).unwrap();
-    tfd.set_state(TimerState::Periodic{current: Duration::new(1, 0), interval: Duration::from_millis(200)}, SetTimeFlags::Default);
+    tfd.set_state(TimerState::Periodic{current: Duration::new(1, 0), interval: Duration::from_millis(500)}, SetTimeFlags::Default);
     const BEACON: Token = Token(2);
     registry.register(
         &mut SourceFd(&tfd.as_raw_fd()),
@@ -242,6 +259,8 @@ fn main() -> Result<(), io::Error> {
     });
 
     state.borrow_mut().synthesizer = Synthesizer::new(&mut radio, &board)?;
+    state.borrow_mut().tx = TXParameters::new(&mut radio, &board)?;
+    state.borrow_mut().chan = ChannelParameters::new(&mut radio)?;
 
     _ = radio.PLLRANGINGA.read()?; // sticky lock bit ~ IRQPLLUNLIOCK, gate
     _ = radio.POWSTICKYSTAT.read()?; // clear sticky power flags for PWR_GOOD
@@ -274,25 +293,20 @@ fn main() -> Result<(), io::Error> {
 
 
                     // Preamble - see PM p16
-                    let preamble = FIFOChunkTX::DATA {
-                        flags: FIFODataTXFlags::RAW,
-                        data: vec![0x11; 4],
+                    let preamble = FIFOChunkTX::REPEATDATA {
+                        flags: FIFODataTXFlags::RAW | FIFODataTXFlags::NOCRC,
+                        count: 4,
+                        data: 0x11,
+                    };
+                    let packet = FIFOChunkTX::REPEATDATA {
+                        flags: FIFODataTXFlags::PKTSTART | FIFODataTXFlags::PKTEND,
+                        count: 10,
+                        data: 0x3,
                     };
 
-                    let packet = FIFOChunkTX::DATA {
-                        flags: FIFODataTXFlags::PKTSTART | FIFODataTXFlags::PKTEND,
-                        data: vec![0xAA; 200]
-                    };
                     radio.FIFODATATX.write(preamble)?;
                     radio.FIFODATATX.write(packet)?;
 
-                    /*
-                    let carrier = FIFOChunkTX::DATA {
-                        flags: FIFODataTXFlags::UNENC,
-                        data: vec![0xFF; 200]
-                    };
-                    radio.FIFODATATX.write(carrier)?;
-                    */
                     radio.FIFOCMD.write(FIFOCmd {
                         mode: FIFOCmds::COMMIT,
                         auto_commit: false,

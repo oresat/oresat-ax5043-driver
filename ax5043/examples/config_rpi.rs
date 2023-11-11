@@ -87,147 +87,260 @@ pub fn configure_radio_tx(radio: &mut Registers) -> io::Result<config::Board> {
     Ok(board)
 }
 
-struct RXParams {
-    if_freq: u16,         // 16bit
-    decimation: u8,       // 7bit
-    rx_data_rate: u32,    // 24bit
-    max_dr_offset: u32,   // 24bit
-    max_rf_offset: u32,   // 20bit
-    freq_offs_corr: bool, // flag
 
-    fsk_dev_max: u16, // 16bit
-    fsk_dev_min: i16, // 16bit
-
-    afsk_space: u16, // 16bit
-    afsk_mark: u16,  // 16bit
-    afsk_shift: u8,  // 5bit
-
-    ampl_filter: u8,    // 4bit
-    frequency_leak: u8, // 4bit
-}
-
-impl Default for RXParams {
-    fn default() -> Self {
-        Self {
-            if_freq: 0x1327,
-            decimation: 0x0D,
-            rx_data_rate: 0x3D8A,
-            max_dr_offset: 0x9E,
-            max_rf_offset: 0x1687,
-            freq_offs_corr: false,
-
-            fsk_dev_max: 0x80,
-            fsk_dev_min: 0x80, // 0xFF80 but twos complement
-
-            afsk_space: 0x40,
-            afsk_mark: 0x75,
-            afsk_shift: 0x4,
-
-            ampl_filter: 0x0,
-            frequency_leak: 0x0,
-        }
+enum RXParameters {
+    MSK {
+        max_dr_offset: u64,
+        freq_offs_corr: bool,
+        ampl_filter: u8,
+        frequency_leak: u8,
     }
 }
 
+impl RXParameters {
+    fn write(&self, radio: &mut Registers, board: &config::Board, channel: &config::ChannelParameters) -> io::Result<()> {
+        match self {
+            Self::MSK { max_dr_offset, freq_offs_corr, ampl_filter, frequency_leak } => {
+                // m = 0.5;
+                // bandwidth  = (1+m) * bitrate; // Carson's rule
+                let bandwidth = 3 * channel.datarate / 2;
+                //let fcoeff = 0.25; // FIXME PHASEGAIN::FILTERIDX but translated through table 116
+                let fcoeff_inv = 4; // 1/fcoeff
+
+                let if_freq = bandwidth * 4 / 5;
+                //radio.IFFREQ.write((if_freq * board.xtal.div() * 2_u64.pow(20) / board.xtal.freq).try_into().unwrap())?;
+                radio.IFFREQ.write(0x20C)?;
+
+                let fbaseband = bandwidth * (1+fcoeff_inv);
+                let decimation = board.xtal.freq / (fbaseband * 2u64.pow(4) * board.xtal.div());
+                //radio.DECIMATION.write(decimation.try_into().unwrap())?; // TODO: 7bits max
+                radio.DECIMATION.write(0x14)?;
+
+                // TODO: see note table 96
+                //radio.RXDATARATE.write((2u64.pow(7) * board.xtal.freq / (channel.datarate * board.xtal.div() * decimation)).try_into().unwrap())?;
+                radio.RXDATARATE.write(0x3E80)?;
+
+                let droff = (2u64.pow(7) * board.xtal.freq * *max_dr_offset) / (board.xtal.div() * channel.datarate.pow(2) * decimation);
+                //radio.MAXDROFFSET.write(droff.try_into().unwrap())?;
+
+                radio.MAXDROFFSET.write(0)?;
+
+                let max_rf_offset = bandwidth/4 ; // bw/4 Upper bound - difference between tx and rx fcarriers. see note pm table 98
+                //radio.MAXRFOFFSET.write(MaxRFOffset {
+                //    offset: (max_rf_offset * 2u64.pow(24) / board.xtal.freq).try_into().unwrap(),
+                //    correction: *freq_offs_corr,
+                //})?;
+
+                radio.MAXRFOFFSET.write(MaxRFOffset {
+                    offset: 0x131,
+                    correction: true,
+
+                })?;
+                radio.AMPLFILTER.write(*ampl_filter)?;
+                radio.FREQUENCYLEAK.write(*frequency_leak)?;
+
+            }
+            _ => unimplemented!()
+        }
+        Ok(())
+    }
 }
+
+/*
+first SYNTHBOOST SYNTHSETTLE
+second IFINIT COARSEAGC AGC RSSI
+
+preamble1: PS0
+    TMGRXPREAMBLE1 to reset to second?
+
+preamble2: PS1
+    MATCH1
+    TMGRXPREAMBLE2
+
+preamble3: PS2
+    MATCH0
+    TMGRXPREAMBLE3
+
+packet: PS3
+    SFD
 */
-/* Max RF Offset
- * FSK Dev Max
- * FSK Dev Min
- * AFSK Space
- * AFSK Mark
- * AFSK Ctrl
- * Ampl Filt
- * Freq Leak
- *
- * RX Param Set
- * RX Param Cur
- */
 
 
-fn rx_set_params(radio: &mut Registers, _board: &config::Board, params: &RXParams) -> std::io::Result<()> {
-    // General RX parameters
-    //radio.IFFREQ.write((params.if_freq * 2) / board.xtal.freq * 2_i32.pow(20))?; // FIXME fxtaldiv instead of 2
-    radio.IFFREQ.write(params.if_freq)?;
-    radio.DECIMATION.write(params.decimation)?;
-    radio.RXDATARATE.write(params.rx_data_rate)?;
-    radio.MAXDROFFSET.write(params.max_dr_offset)?;
-    radio.MAXRFOFFSET.write(MaxRFOffset {
-        offset: params.max_rf_offset,
-        correction: params.freq_offs_corr,
-    })?;
-    radio.FSKDMAX.write(params.fsk_dev_max)?;
-    radio.FSKDMIN.write(params.fsk_dev_min)?;
-    radio.AFSKSPACE.write(params.afsk_space)?;
-    radio.AFSKMARK.write(params.afsk_mark)?;
-    radio.AFSKCTRL.write(params.afsk_shift)?;
-    radio.AMPLFILTER.write(params.ampl_filter)?;
-    radio.FREQUENCYLEAK.write(params.frequency_leak)?;
 
-
-    Ok(())
-
-}
+// FIXME need to know:
+// h/m?
+// fbaseband
+// fif/bandwidth?
 
 pub fn configure_radio_rx(radio: &mut Registers) -> io::Result<(Board, ChannelParameters)> {
     let (board, channel) = config(radio, config::Antenna::Differential)?;
 
-    let params = RXParams {
-        if_freq: 0x09A5,
-        decimation: 0x03,
-        rx_data_rate: 0x0042AA,
-        max_dr_offset: 0x00,
-        max_rf_offset: 0x800161,
-        ..Default::default()
+    radio.PERF_F18.write(0x02)?; // TODO set by radiolab during RX
+    radio.PERF_F26.write(0x96)?;
+    radio.PLLLOOP.write(PLLLoop {
+        filter: FLT::INTERNAL_x5,
+        flags: PLLLoopFlags::DIRECT,
+        freqsel: FreqSel::A,
+    })?;
+    radio.PLLCPI.write(0x10)?;
+
+    let params = RXParameters::MSK {
+        max_dr_offset: 0, // TODO derived from what?
+        freq_offs_corr: true,
+        ampl_filter: 0,
+        frequency_leak: 0,
     };
-    rx_set_params(radio, &board, &params)?;
+    params.write(radio, &board, &channel)?;
 
     let set0 = RXParameterSet {
         agc: RXParameterAGC {
-            attack: 4,
-            decay: 7,
-            target: 0x89,
+            attack: 0x5,
+            decay: 0xC,
+            target: 0x84,
             ahyst: 0,
             min: 0,
             max: 0,
         },
         gain: RXParameterGain {
             time: TimeGain {
-                mantissa: 9,
+                mantissa: 0xF,
                 exponent: 8,
             },
             datarate: DRGain {
-                mantissa: 9,
-                exponent: 4,
+                mantissa: 0xF,
+                exponent: 2,
             },
             phase: 0b0011,
             filter: 0b11,
             baseband: RXParameterFreq {
                 phase: 0b1111,
-                freq: 0b0_1111,
+                freq: 0b1_1111,
             },
             rf: RXParameterFreq {
                 phase: 0b0_1010,
                 freq: 0b0_1010,
             },
-            amplitude: 0b0010,
+            amplitude: 0b0110,
+            deviation_update: true,
+            ampl_agc_jump_correction: false,
+            ampl_averaging: false,
         },
-        freq_dev: 0, //0x020,
+        freq_dev: 0,
         decay: 0b0110,
         baseband_offset: RXParameterBasebandOffset {
-            a: 0b1000,
-            b: 0b1000,
+            a: 0,
+            b: 0,
         },
     };
     set0.write0(radio)?;
 
+    let set1 = RXParameterSet {
+        agc: RXParameterAGC {
+            attack: 0x5,
+            decay: 0xC,
+            target: 0x84,
+            ahyst: 0,
+            min: 0,
+            max: 0,
+        },
+        gain: RXParameterGain {
+            time: TimeGain {
+                mantissa: 0xF,
+                exponent: 6,
+            },
+            datarate: DRGain {
+                mantissa: 0xF,
+                exponent: 1,
+            },
+            phase: 0b0011,
+            filter: 0b11,
+            baseband: RXParameterFreq {
+                phase: 0b1111,
+                freq: 0b1_1111,
+            },
+            rf: RXParameterFreq {
+                phase: 0b0_1010,
+                freq: 0b0_1010,
+            },
+            amplitude: 0b0110,
+            deviation_update: true,
+            ampl_agc_jump_correction: false,
+            ampl_averaging: false,
+        },
+        freq_dev: 0x32,
+        decay: 0b0110,
+        baseband_offset: RXParameterBasebandOffset {
+            a: 0,
+            b: 0,
+        },
+    };
+    set1.write1(radio)?;
+
+    let set3 = RXParameterSet {
+        agc: RXParameterAGC {
+            attack: 0xF,
+            decay: 0xF,
+            target: 0x84,
+            ahyst: 0,
+            min: 0,
+            max: 0,
+        },
+        gain: RXParameterGain {
+            time: TimeGain {
+                mantissa: 0xF,
+                exponent: 5,
+            },
+            datarate: DRGain {
+                mantissa: 0xF,
+                exponent: 0,
+            },
+            phase: 0b0011,
+            filter: 0b11,
+            baseband: RXParameterFreq {
+                phase: 0b1111,
+                freq: 0b1_1111,
+            },
+            rf: RXParameterFreq {
+                phase: 0b0_1101,
+                freq: 0b0_1101,
+            },
+            amplitude: 0b0110,
+            deviation_update: true,
+            ampl_agc_jump_correction: false,
+            ampl_averaging: false,
+        },
+        freq_dev: 0x32,
+        decay: 0b0110,
+        baseband_offset: RXParameterBasebandOffset {
+            a: 0,
+            b: 0,
+        },
+    };
+    set3.write3(radio)?;
+
     radio.RXPARAMSETS.write(RxParamSets(
         RxParamSet::Set0,
-        RxParamSet::Set0,
-        RxParamSet::Set0,
-        RxParamSet::Set0,
+        RxParamSet::Set1,
+        RxParamSet::Set3,
+        RxParamSet::Set3,
     ))?;
 
+    radio.MATCH1PAT.write(0x7E7E)?;
+    radio.MATCH1LEN.write(MatchLen { len: 0xA, raw: false, })?;
+    radio.MATCH1MAX.write(0xA)?;
+    radio.TMGRXPREAMBLE2.write(TMG { m: 0x17, e: 0, })?;
+
+    radio.PKTMAXLEN.write(0xC8)?;
+    radio.PKTLENCFG.write(PktLenCfg {
+        pos: 0,
+        bits: 0x0
+    })?;
+    radio.PKTLENOFFSET.write(0x09)?;
+
+    radio.PKTCHUNKSIZE.write(0x0D)?;
+    radio.PKTACCEPTFLAGS.write(PktAcceptFlags::LRGP)?;
+
+    radio.RSSIREFERENCE.write(64)?;
 
     Ok((board, channel))
 }

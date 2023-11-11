@@ -10,6 +10,7 @@ use mio::{Events, Poll, unix::SourceFd, Token, Interest};
 use mio_signals::{Signal, Signals};
 
 use ax5043::*;
+use ax5043::registers::*;
 mod config_rpi;
 use crate::config_rpi::configure_radio_rx;
 
@@ -38,19 +39,19 @@ fn print_state(radio: &mut Registers, step: &str) -> io::Result<()> {
 pub fn ax5043_listen(radio: &mut Registers) -> io::Result<()> {
 
     // pll not locked
-    print_state(radio, "pre-synthrx")?;
     radio.PWRMODE.write(PwrMode {
         flags: PwrFlags::XOEN | PwrFlags::REFEN,
         mode: PwrModes::SYNTHRX,
     })?;
-    print_state(radio, "post-synthrx")?;
-    let mut fifo = fifo::FIFO {
-        threshold: 0,
-        autocommit: false,
-        radio,
-    };
-    fifo.reset()?;
-    print_state(radio, "post-fifo-clear")?;
+
+    radio.FIFOCMD.write(FIFOCmd {
+        mode: FIFOCmds::CLEAR_ERROR,
+        auto_commit: false,
+    })?;
+    radio.FIFOCMD.write(FIFOCmd {
+        mode: FIFOCmds::CLEAR_DATA,
+        auto_commit: false,
+    })?;
 
     radio.PWRMODE.write(PwrMode {
         flags: PwrFlags::XOEN | PwrFlags::REFEN,
@@ -59,12 +60,13 @@ pub fn ax5043_listen(radio: &mut Registers) -> io::Result<()> {
     Ok(())
 }
 
+
 fn print_signal(radio: &mut Registers) -> io::Result<()> {
     println!(
         "RSSI:{}dB BGNDRSSI:{}dB AGCCOUNTER:{}dB",
         radio.RSSI.read()?,
         radio.BGNDRSSI.read()?,
-        (radio.AGCCOUNTER.read()? as u32 * 4) / 3
+        (i32::from(radio.AGCCOUNTER.read()?)  * 4) / 3
     );
     println!(
         "RATE:{} AMPL:{} PHASE:{}",
@@ -78,7 +80,7 @@ fn print_signal(radio: &mut Registers) -> io::Result<()> {
         demod = demod - 2_i32.pow(14)
     }
     println!(
-        "RFFREQ:{} FREQ:{} DEMOD:{}",
+        "RFFREQ:{:?} FREQ:{:?} DEMOD:{:?}",
         radio.TRKRFFREQ.read()?,
         radio.TRKFREQ.read()?,
         demod
@@ -88,22 +90,15 @@ fn print_signal(radio: &mut Registers) -> io::Result<()> {
 }
 
 pub fn ax5043_receive(radio: &mut Registers) -> io::Result<()> {
-    print_signal(radio)?;
-    //print_state(radio, "pre-receive")?;
 
-    //let timeout = time::Instant::now() + time::Duration::new(1, 0);
-    //while radio.FIFOSTAT.read()?.contains(FIFOStat::EMPTY) || time::Instant::now() <= timeout {}
     print_signal(radio)?;
 
-    //print_state(radio, "receive")?;
+    if !radio.FIFOSTAT.read()?.contains(FIFOStat::EMPTY) {
+        let len  = radio.FIFOCOUNT.read()?;
+        let data = radio.FIFODATARX.read(len.into())?;
+        println!("{:X?}", data);
+    }
 
-    //let mut fifo = fifo::FIFO {
-    //    threshold: 0,
-    //    autocommit: false,
-    //    radio: radio,
-    //};
-    //fifo.read()?;
-    // TODO: figure out if we need to read more or if it's multiple
     Ok(())
 }
 
@@ -124,7 +119,7 @@ fn main() -> io::Result<()> {
             status.set(s);
         }
     };
-    let mut radio_rx = ax5043::registers(&spi1, &callback);
+    let mut radio_rx = ax5043::Registers::new(&spi1, &callback);
 
     radio_rx.reset()?;
 
