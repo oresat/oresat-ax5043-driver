@@ -1,21 +1,17 @@
-use std::{io, cell, time::Duration, os::fd::AsRawFd, panic, backtrace::Backtrace};
-use mio::{Events, Poll, unix::SourceFd, Token, Interest};
-use mio_signals::{Signal, Signals};
-use timerfd::{TimerFd, TimerState, SetTimeFlags};
-use ratatui::{
-    prelude::*,
-    backend::CrosstermBackend,
-    Terminal
-};
+use anyhow::Result;
 use crossterm::{
-    event::{Event, KeyEvent, KeyCode},
+    event::{Event, KeyCode, KeyEvent},
     execute,
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
 };
-use anyhow::Result;
+use mio::{unix::SourceFd, Events, Interest, Poll, Token};
+use mio_signals::{Signal, Signals};
+use ratatui::{backend::CrosstermBackend, prelude::*, Terminal};
+use std::{backtrace::Backtrace, cell, io, os::fd::AsRawFd, panic, time::Duration};
+use timerfd::{SetTimeFlags, TimerFd, TimerState};
 
-use ax5043::{*, registers::*, tui::*,};
 use ax5043::config_rpi::configure_radio_tx;
+use ax5043::{registers::*, tui::*, *};
 
 struct UIState {
     board: config::Board,
@@ -59,20 +55,23 @@ fn ui<B: Backend>(f: &mut Frame<B>, state: &UIState) {
                 Constraint::Percentage(10),
                 Constraint::Percentage(80),
                 Constraint::Percentage(10),
-            ].as_ref()
+            ]
+            .as_ref(),
         )
         .split(f.size());
 
-
     let power = Layout::default()
         .direction(Direction::Horizontal)
-        .constraints([
-            Constraint::Min(21),
-            Constraint::Min(46),
-            Constraint::Min(85),
-            Constraint::Min(40),
-            Constraint::Min(0),
-        ].as_ref())
+        .constraints(
+            [
+                Constraint::Min(21),
+                Constraint::Min(46),
+                Constraint::Min(85),
+                Constraint::Min(40),
+                Constraint::Min(0),
+            ]
+            .as_ref(),
+        )
         .split(chunks[0]);
 
     f.render_widget(state.pwrmode.widget(), power[0]);
@@ -83,81 +82,84 @@ fn ui<B: Backend>(f: &mut Frame<B>, state: &UIState) {
     let parameters = Layout::default()
         .direction(Direction::Vertical)
         .margin(1)
-        .constraints([
-            Constraint::Percentage(20),
-            Constraint::Percentage(20),
-            Constraint::Percentage(20),
-            Constraint::Percentage(20),
-            Constraint::Percentage(20),
-        ].as_ref())
+        .constraints(
+            [
+                Constraint::Percentage(20),
+                Constraint::Percentage(20),
+                Constraint::Percentage(20),
+                Constraint::Percentage(20),
+                Constraint::Percentage(20),
+            ]
+            .as_ref(),
+        )
         .split(chunks[1]);
 
     f.render_widget(state.synthesizer.widget(), parameters[0]);
     f.render_widget(state.tx.widget(), parameters[1]);
     f.render_widget(state.chan.widget(), parameters[2]);
-/*
-    let rx = Layout::default()
-        .direction(Direction::Horizontal)
-        .margin(1)
-        .constraints([
-            Constraint::Percentage(50),
-            Constraint::Percentage(50),
-        ].as_ref())
-        .split(chunks[1]);
+    /*
+        let rx = Layout::default()
+            .direction(Direction::Horizontal)
+            .margin(1)
+            .constraints([
+                Constraint::Percentage(50),
+                Constraint::Percentage(50),
+            ].as_ref())
+            .split(chunks[1]);
 
-    let parameters = Layout::default()
-        .direction(Direction::Vertical)
-        .margin(1)
-        .constraints([
-            Constraint::Percentage(20),
-            Constraint::Percentage(20),
-            Constraint::Percentage(20),
-            Constraint::Percentage(20),
-            Constraint::Percentage(20),
-        ].as_ref())
-        .split(rx[1]);
+        let parameters = Layout::default()
+            .direction(Direction::Vertical)
+            .margin(1)
+            .constraints([
+                Constraint::Percentage(20),
+                Constraint::Percentage(20),
+                Constraint::Percentage(20),
+                Constraint::Percentage(20),
+                Constraint::Percentage(20),
+            ].as_ref())
+            .split(rx[1]);
 
-    f.render_widget(state.receiver_parameters(), parameters[0]);
-    f.render_widget(state.receiver_parameter_set(&state.set0, state.rx.back().unwrap_or(&RXState::default()).paramcurset.number == RxParamSet::Set0), parameters[1]);
-    f.render_widget(state.receiver_parameter_set(&state.set1, state.rx.back().unwrap_or(&RXState::default()).paramcurset.number == RxParamSet::Set1), parameters[2]);
-    f.render_widget(state.receiver_parameter_set(&state.set2, state.rx.back().unwrap_or(&RXState::default()).paramcurset.number == RxParamSet::Set2), parameters[3]);
-    f.render_widget(state.receiver_parameter_set(&state.set3, state.rx.back().unwrap_or(&RXState::default()).paramcurset.number == RxParamSet::Set3), parameters[4]);
+        f.render_widget(state.receiver_parameters(), parameters[0]);
+        f.render_widget(state.receiver_parameter_set(&state.set0, state.rx.back().unwrap_or(&RXState::default()).paramcurset.number == RxParamSet::Set0), parameters[1]);
+        f.render_widget(state.receiver_parameter_set(&state.set1, state.rx.back().unwrap_or(&RXState::default()).paramcurset.number == RxParamSet::Set1), parameters[2]);
+        f.render_widget(state.receiver_parameter_set(&state.set2, state.rx.back().unwrap_or(&RXState::default()).paramcurset.number == RxParamSet::Set2), parameters[3]);
+        f.render_widget(state.receiver_parameter_set(&state.set3, state.rx.back().unwrap_or(&RXState::default()).paramcurset.number == RxParamSet::Set3), parameters[4]);
 
-    let sparks = Layout::default()
-        .direction(Direction::Vertical)
-        .margin(1)
-        .constraints([
-            Constraint::Percentage(10),
-            Constraint::Percentage(10),
-            Constraint::Percentage(10),
-            Constraint::Percentage(10),
-            Constraint::Percentage(10),
-            Constraint::Percentage(10),
-            Constraint::Percentage(10),
-            Constraint::Percentage(10),
-            Constraint::Percentage(10),
-            Constraint::Min(0),
-        ].as_ref())
-        .split(rx[0]);
-    f.render_widget(state.sparkline("RSSI", "dB", &state.rx.iter().map(|r| u64::from(r.rssi)).collect::<Vec<u64>>()), sparks[0]);
-    f.render_widget(state.sparkline("Background RSSI", "dB",  &state.rx.iter().map(|r| u64::from(r.bgndrssi)).collect::<Vec<u64>>()), sparks[1]);
-    f.render_widget(state.sparkline("AGC Counter", "dB", &state.rx.iter().map(|r| u64::from(r.agccounter)).collect::<Vec<u64>>()), sparks[2]);
-    f.render_widget(state.sparkline("Data Rate", "bits/s", &state.rx.iter().map(|r| u64::from(r.datarate)).collect::<Vec<u64>>()), sparks[3]);
-    f.render_widget(state.sparkline("Amplitude", "", &state.rx.iter().map(|r| u64::from(r.ampl)).collect::<Vec<u64>>()), sparks[4]);
-    f.render_widget(state.sparkline("Phase", "", &state.rx.iter().map(|r| u64::from(r.phase)).collect::<Vec<u64>>()), sparks[5]);
-    let data = &state.rx.iter().map(|r| i64::from(r.fskdemod)).collect::<Vec<i64>>();
-    let min: i64 = *data.iter().min().unwrap_or(&0);
-    let max: i64 = *data.iter().max().unwrap_or(&0);
-    let data = &data.iter().map(|x| u64::try_from(x - min).unwrap()).collect::<Vec<u64>>();
-    f.render_widget(state.spark_signed("FSK Demodulation", "", data, min, max), sparks[6]);
-    let data = &state.rx.iter().map(|r| i64::from(r.rffreq)).collect::<Vec<i64>>();
-    let min: i64 = *data.iter().min().unwrap_or(&0);
-    let max: i64 = *data.iter().max().unwrap_or(&0);
-    let data = &data.iter().map(|x| u64::try_from(x - min).unwrap()).collect::<Vec<u64>>();
-    f.render_widget(state.spark_signed("RF Frequency", "Hz", data, min, max), sparks[7]);
-    f.render_widget(state.sparkline("Frequency", "Hz", &state.rx.iter().map(|r| u64::from(r.freq)).collect::<Vec<u64>>()), sparks[8]);
-    f.render_widget(state.rx_params(&state.rx.iter().map(|r| u64::from(r.paramcurset.index)).collect::<Vec<u64>>(), state.rx.back().unwrap_or(&RXState::default()).paramcurset), sparks[9]);
-*/
+        let sparks = Layout::default()
+            .direction(Direction::Vertical)
+            .margin(1)
+            .constraints([
+                Constraint::Percentage(10),
+                Constraint::Percentage(10),
+                Constraint::Percentage(10),
+                Constraint::Percentage(10),
+                Constraint::Percentage(10),
+                Constraint::Percentage(10),
+                Constraint::Percentage(10),
+                Constraint::Percentage(10),
+                Constraint::Percentage(10),
+                Constraint::Min(0),
+            ].as_ref())
+            .split(rx[0]);
+        f.render_widget(state.sparkline("RSSI", "dB", &state.rx.iter().map(|r| u64::from(r.rssi)).collect::<Vec<u64>>()), sparks[0]);
+        f.render_widget(state.sparkline("Background RSSI", "dB",  &state.rx.iter().map(|r| u64::from(r.bgndrssi)).collect::<Vec<u64>>()), sparks[1]);
+        f.render_widget(state.sparkline("AGC Counter", "dB", &state.rx.iter().map(|r| u64::from(r.agccounter)).collect::<Vec<u64>>()), sparks[2]);
+        f.render_widget(state.sparkline("Data Rate", "bits/s", &state.rx.iter().map(|r| u64::from(r.datarate)).collect::<Vec<u64>>()), sparks[3]);
+        f.render_widget(state.sparkline("Amplitude", "", &state.rx.iter().map(|r| u64::from(r.ampl)).collect::<Vec<u64>>()), sparks[4]);
+        f.render_widget(state.sparkline("Phase", "", &state.rx.iter().map(|r| u64::from(r.phase)).collect::<Vec<u64>>()), sparks[5]);
+        let data = &state.rx.iter().map(|r| i64::from(r.fskdemod)).collect::<Vec<i64>>();
+        let min: i64 = *data.iter().min().unwrap_or(&0);
+        let max: i64 = *data.iter().max().unwrap_or(&0);
+        let data = &data.iter().map(|x| u64::try_from(x - min).unwrap()).collect::<Vec<u64>>();
+        f.render_widget(state.spark_signed("FSK Demodulation", "", data, min, max), sparks[6]);
+        let data = &state.rx.iter().map(|r| i64::from(r.rffreq)).collect::<Vec<i64>>();
+        let min: i64 = *data.iter().min().unwrap_or(&0);
+        let max: i64 = *data.iter().max().unwrap_or(&0);
+        let data = &data.iter().map(|x| u64::try_from(x - min).unwrap()).collect::<Vec<u64>>();
+        f.render_widget(state.spark_signed("RF Frequency", "Hz", data, min, max), sparks[7]);
+        f.render_widget(state.sparkline("Frequency", "Hz", &state.rx.iter().map(|r| u64::from(r.freq)).collect::<Vec<u64>>()), sparks[8]);
+        f.render_widget(state.rx_params(&state.rx.iter().map(|r| u64::from(r.paramcurset.index)).collect::<Vec<u64>>(), state.rx.back().unwrap_or(&RXState::default()).paramcurset), sparks[9]);
+    */
 
     f.render_widget(state.status.widget(), chunks[2]);
 }
@@ -165,10 +167,7 @@ fn ui<B: Backend>(f: &mut Frame<B>, state: &UIState) {
 fn main() -> Result<()> {
     panic::set_hook(Box::new(|panic| {
         disable_raw_mode().unwrap();
-        execute!(
-            io::stdout(),
-            LeaveAlternateScreen,
-        ).unwrap();
+        execute!(io::stdout(), LeaveAlternateScreen,).unwrap();
 
         println!("{}", panic);
         println!("{}", Backtrace::capture());
@@ -176,10 +175,7 @@ fn main() -> Result<()> {
 
     enable_raw_mode()?;
     let mut stdout = io::stdout();
-    execute!(
-        stdout,
-        EnterAlternateScreen,
-    )?;
+    execute!(stdout, EnterAlternateScreen,)?;
     let backend = CrosstermBackend::new(stdout);
     let mut terminal = Terminal::new(backend)?;
 
@@ -193,7 +189,7 @@ fn main() -> Result<()> {
     let term = cell::RefCell::new(&mut terminal);
     let mut callback = |_: &_, _, new, _: &_| {
         if new == state.borrow().status {
-            return
+            return;
         }
         state.borrow_mut().status = new;
         let _ = term.borrow_mut().draw(|f| {
@@ -211,7 +207,6 @@ fn main() -> Result<()> {
         ui(f, &state.borrow());
     });
 
-
     let mut poll = Poll::new()?;
     let registry = poll.registry();
 
@@ -223,15 +218,19 @@ fn main() -> Result<()> {
     registry.register(
         &mut SourceFd(&io::stdin().as_raw_fd()),
         STDIN,
-        Interest::READABLE)?;
+        Interest::READABLE,
+    )?;
 
     let mut tfd = TimerFd::new_custom(timerfd::ClockId::Monotonic, true, false).unwrap();
-    tfd.set_state(TimerState::Periodic{current: Duration::new(1, 0), interval: Duration::from_millis(500)}, SetTimeFlags::Default);
+    tfd.set_state(
+        TimerState::Periodic {
+            current: Duration::new(1, 0),
+            interval: Duration::from_millis(500),
+        },
+        SetTimeFlags::Default,
+    );
     const BEACON: Token = Token(2);
-    registry.register(
-        &mut SourceFd(&tfd.as_raw_fd()),
-        BEACON,
-        Interest::READABLE)?;
+    registry.register(&mut SourceFd(&tfd.as_raw_fd()), BEACON, Interest::READABLE)?;
 
     let board = configure_radio_tx(&mut radio)?;
     radio.RADIOEVENTMASK().write(RadioEvent::all())?;
@@ -243,7 +242,6 @@ fn main() -> Result<()> {
     let _ = term.borrow_mut().draw(|f| {
         ui(f, &state.borrow());
     });
-
 
     radio.PWRMODE().write(PwrMode {
         flags: PwrFlags::XOEN | PwrFlags::REFEN,
@@ -289,8 +287,6 @@ fn main() -> Result<()> {
                         auto_commit: false,
                     })?;
 
-
-
                     // Preamble - see PM p16
                     let preamble = FIFOChunkTX::REPEATDATA {
                         flags: FIFODataTXFlags::RAW | FIFODataTXFlags::NOCRC,
@@ -313,7 +309,8 @@ fn main() -> Result<()> {
 
                     // FIXME: FIFOSTAT CLEAR?
 
-                    loop  { // TODO: Interrupt of some sort
+                    loop {
+                        // TODO: Interrupt of some sort
 
                         _ = radio.PLLRANGINGA().read()?; // sticky lock bit ~ IRQPLLUNLIOCK, gate
                         state.borrow_mut().pwrmode = radio.PWRMODE().read()?;
@@ -327,7 +324,7 @@ fn main() -> Result<()> {
                         });
 
                         if radiostate == RadioState::IDLE {
-                            break
+                            break;
                         }
                     }
                     _ = radio.PLLRANGINGA().read()?; // sticky lock bit ~ IRQPLLUNLIOCK, gate
@@ -336,13 +333,15 @@ fn main() -> Result<()> {
                         flags: PwrFlags::XOEN | PwrFlags::REFEN,
                         mode: PwrModes::POWEROFF,
                     })?;
-
-                },
+                }
                 //IRQ => service_irq(&mut radio_tx, &mut irqstate)?,
                 STDIN => match crossterm::event::read()? {
-                    Event::Key(KeyEvent{ code: KeyCode::Char('c'), ..}) => break 'outer,
+                    Event::Key(KeyEvent {
+                        code: KeyCode::Char('c'),
+                        ..
+                    }) => break 'outer,
                     _ => continue,
-                }
+                },
                 CTRLC => break 'outer,
                 _ => unreachable!(),
             }
@@ -352,10 +351,7 @@ fn main() -> Result<()> {
     radio.reset()?;
 
     disable_raw_mode()?;
-    execute!(
-        terminal.backend_mut(),
-        LeaveAlternateScreen,
-    )?;
+    execute!(terminal.backend_mut(), LeaveAlternateScreen,)?;
     terminal.show_cursor()?;
 
     Ok(())

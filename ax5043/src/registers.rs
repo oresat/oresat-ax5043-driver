@@ -1820,7 +1820,6 @@ impl From<PktLenCfg> for Reg8 {
     }
 }
 
-
 #[derive(Clone, Copy, Debug)]
 pub struct MatchLen {
     pub len: u8, // FIXME 4bit/5bit
@@ -1842,7 +1841,6 @@ impl From<MatchLen> for Reg8 {
         (item.len | if item.raw { 0x80 } else { 0 }).into()
     }
 }
-
 
 // FIXME: merge with TimeGain, parameterize over m width
 #[derive(Clone, Copy, Debug)]

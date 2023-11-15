@@ -1,7 +1,7 @@
 extern crate ax5043;
+use anyhow::Result;
 use clap::Parser;
 use std::path::PathBuf;
-use anyhow::Result;
 
 #[derive(Parser, Debug)]
 struct Args {

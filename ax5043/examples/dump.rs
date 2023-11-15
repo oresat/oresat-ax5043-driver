@@ -1,6 +1,6 @@
 extern crate ax5043;
-use ax5043::*;
 use anyhow::Result;
+use ax5043::*;
 
 fn main() -> Result<()> {
     let spi = ax5043::open("/dev/spidev0.0")?;

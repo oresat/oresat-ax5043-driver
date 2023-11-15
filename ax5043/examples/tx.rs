@@ -1,22 +1,26 @@
 extern crate ax5043;
+use anyhow::Result;
+use ax5043::{registers::*, *};
+use bitflags::Flags;
+use gpiod::{Chip, EdgeDetect, Options};
+use mio::{unix::SourceFd, Events, Interest, Poll, Token, Waker};
+use mio_signals::{Signal, Signals};
 use std::{
+    fmt::{Debug, Display},
+    os::fd::AsRawFd,
     sync::Arc,
     thread,
     time::Duration,
-    os::fd::AsRawFd,
-    fmt::{Debug, Display},
 };
-use bitflags::Flags;
-use gpiod::{Chip, Options, EdgeDetect};
-use timerfd::{TimerFd, TimerState, SetTimeFlags};
-use mio::{Events, Poll, Waker, unix::SourceFd, Token, Interest};
-use mio_signals::{Signal, Signals};
-use ax5043::{*, registers::*};
-use anyhow::Result;
+use timerfd::{SetTimeFlags, TimerFd, TimerState};
 
 use ax5043::config_rpi::configure_radio_tx;
 
-fn print_diff<S: AsRef<str> + Display, T: Flags + PartialEq + Debug + Copy>(name: S, new: T, old: T) -> T {
+fn print_diff<S: AsRef<str> + Display, T: Flags + PartialEq + Debug + Copy>(
+    name: S,
+    new: T,
+    old: T,
+) -> T {
     if new != old {
         print!("{:14}: ", name);
         let added = new.difference(old);
@@ -45,6 +49,7 @@ struct AXState {
     powsstat: PowStat,
 }
 
+#[rustfmt::skip]
 fn print_state(radio: &mut Registers, step: &str, state: &mut AXState) -> Result<()> {
     println!("\nstep: {}", step);
     state.irq        = print_diff("IRQREQ    ", radio.IRQREQUEST().read()?, state.irq);
@@ -139,12 +144,12 @@ fn ax5043_transmit(radio: &mut Registers, data: &[u8], state: &mut AXState) -> R
     while radio.RADIOSTATE().read()? as u8 != RadioState::IDLE as u8 {} // TODO: Interrupt of some sort
     print_state(radio, "tx complete", state)?;
     /*
-    radio.PWRMODE.write(PwrMode {
-        flags: PwrFlags::XOEN | PwrFlags::REFEN,
-        mode: PwrModes::XOEN,
-    })?;
-    print_state(radio, "idle mode", state)?;
-*/
+        radio.PWRMODE.write(PwrMode {
+            flags: PwrFlags::XOEN | PwrFlags::REFEN,
+            mode: PwrModes::XOEN,
+        })?;
+        print_state(radio, "idle mode", state)?;
+    */
     Ok(())
 }
 
@@ -159,10 +164,9 @@ fn ax5043_transmit(radio: &mut Registers, data: &[u8], state: &mut AXState) -> R
 // TODO: Action
 // - FRAMING::FABORT
 
-
 #[derive(Debug)]
 struct IRQState {
-    irq: IRQ
+    irq: IRQ,
 }
 
 fn service_irq(radio: &mut Registers, state: &mut IRQState) -> Result<()> {
@@ -206,16 +210,17 @@ fn main() -> Result<()> {
     configure_radio_tx(&mut radio_tx)?;
 
     let mut tfd = TimerFd::new().unwrap();
-    tfd.set_state(TimerState::Periodic{current: Duration::new(1, 0), interval: Duration::from_millis(100)}, SetTimeFlags::Default);
+    tfd.set_state(
+        TimerState::Periodic {
+            current: Duration::new(1, 0),
+            interval: Duration::from_millis(100),
+        },
+        SetTimeFlags::Default,
+    );
     const BEACON: Token = Token(2);
-    registry.register(
-        &mut SourceFd(&tfd.as_raw_fd()),
-        BEACON,
-        Interest::READABLE)?;
+    registry.register(&mut SourceFd(&tfd.as_raw_fd()), BEACON, Interest::READABLE)?;
 
-    let mut irqstate = IRQState {
-        irq: IRQ::empty(),
-    };
+    let mut irqstate = IRQState { irq: IRQ::empty() };
     let mut state = AXState {
         irq: IRQ::empty(),
         xtal: XtalStatus::empty(),
@@ -232,9 +237,9 @@ fn main() -> Result<()> {
             match event.token() {
                 BEACON => {
                     tfd.read();
-                     // Example transmission from PM table 16
+                    // Example transmission from PM table 16
                     ax5043_transmit(&mut radio_tx, &[0xAA, 0xAA, 0x1A], &mut state)?;
-                },
+                }
                 IRQ => service_irq(&mut radio_tx, &mut irqstate)?,
                 CTRLC => break 'outer,
                 _ => unreachable!(),

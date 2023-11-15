@@ -1,6 +1,6 @@
-use ax5043::{ *, registers::*};
-use std::time;
 use anyhow::Result;
+use ax5043::{registers::*, *};
+use std::time;
 
 struct State {
     stat: PowStat,

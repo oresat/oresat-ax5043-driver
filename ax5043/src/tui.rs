@@ -1,16 +1,9 @@
+use crate::{config, registers::*, Registers, Result, Status, RX};
+use bitflags::Flags;
 use ratatui::{
     prelude::*,
-    widgets::{Block, Borders, Table, Row, Cell},
     style::Style,
-};
-use bitflags::Flags;
-use crate::{
-    config,
-    Registers,
-    registers::*,
-    Status,
-    RX,
-    Result
+    widgets::{Block, Borders, Cell, Row, Table},
 };
 
 pub struct PacketFormat {
@@ -25,8 +18,11 @@ pub struct PacketFormat {
 impl Default for PacketFormat {
     fn default() -> Self {
         Self {
-            addrcfg: PktAddrCfg { addr_pos: 0, flags: PktAddrCfgFlags::empty()},
-            lencfg: PktLenCfg {pos: 0, bits: 0},
+            addrcfg: PktAddrCfg {
+                addr_pos: 0,
+                flags: PktAddrCfgFlags::empty(),
+            },
+            lencfg: PktLenCfg { pos: 0, bits: 0 },
             lenoffset: 0,
             maxlen: 0,
             addr: 0,
@@ -74,8 +70,17 @@ impl PacketFormat {
                 Cell::from(self.maxlen.to_string()),
             ]),
         ])
-        .block(Block::default().borders(Borders::ALL).title("Packet Format"))
-        .widths(&[Constraint::Max(10), Constraint::Min(30), Constraint::Min(10), Constraint::Min(10)])
+        .block(
+            Block::default()
+                .borders(Borders::ALL)
+                .title("Packet Format"),
+        )
+        .widths(&[
+            Constraint::Max(10),
+            Constraint::Min(30),
+            Constraint::Min(10),
+            Constraint::Min(10),
+        ])
     }
 }
 
@@ -104,17 +109,17 @@ pub struct PacketController {
 impl Default for PacketController {
     fn default() -> Self {
         Self {
-            tmg_tx_boost: TMG{ e: 0, m: 0 },
-            tmg_tx_settle: TMG{ e: 0, m: 0 },
-            tmg_rx_boost: TMG{ e: 0, m: 0 },
-            tmg_rx_settle: TMG{ e: 0, m: 0 },
-            tmg_rx_offsacq: TMG{ e: 0, m: 0 },
-            tmg_rx_coarseagc: TMG{ e: 0, m: 0 },
-            tmg_rx_agc: TMG{ e: 0, m: 0 },
-            tmg_rx_rssi: TMG{ e: 0, m: 0 },
-            tmg_rx_preamble1: TMG{ e: 0, m: 0 },
-            tmg_rx_preamble2: TMG{ e: 0, m: 0 },
-            tmg_rx_preamble3: TMG{ e: 0, m: 0 },
+            tmg_tx_boost: TMG { e: 0, m: 0 },
+            tmg_tx_settle: TMG { e: 0, m: 0 },
+            tmg_rx_boost: TMG { e: 0, m: 0 },
+            tmg_rx_settle: TMG { e: 0, m: 0 },
+            tmg_rx_offsacq: TMG { e: 0, m: 0 },
+            tmg_rx_coarseagc: TMG { e: 0, m: 0 },
+            tmg_rx_agc: TMG { e: 0, m: 0 },
+            tmg_rx_rssi: TMG { e: 0, m: 0 },
+            tmg_rx_preamble1: TMG { e: 0, m: 0 },
+            tmg_rx_preamble2: TMG { e: 0, m: 0 },
+            tmg_rx_preamble3: TMG { e: 0, m: 0 },
             rssi_reference: 0,
             rssi_abs_thr: 0,
             bgnd_rssi_gain: 0,
@@ -195,10 +200,24 @@ impl PacketController {
                 Cell::from(self.pkt_chunk_size.to_string()),
             ]),
         ])
-        .block(Block::default().borders(Borders::ALL).title("Packet Controller"))
-        .widths(&[Constraint::Max(10), Constraint::Max(10), Constraint::Max(10), Constraint::Max(10),
-            Constraint::Max(10), Constraint::Max(10), Constraint::Max(10), Constraint::Max(10),
-            Constraint::Max(10), Constraint::Max(10), Constraint::Max(10), Constraint::Max(10),
+        .block(
+            Block::default()
+                .borders(Borders::ALL)
+                .title("Packet Controller"),
+        )
+        .widths(&[
+            Constraint::Max(10),
+            Constraint::Max(10),
+            Constraint::Max(10),
+            Constraint::Max(10),
+            Constraint::Max(10),
+            Constraint::Max(10),
+            Constraint::Max(10),
+            Constraint::Max(10),
+            Constraint::Max(10),
+            Constraint::Max(10),
+            Constraint::Max(10),
+            Constraint::Max(10),
         ])
     }
 
@@ -213,9 +232,13 @@ impl PacketController {
                 Cell::from(format!("{:?}", self.pkt_misc_flags)),
                 Cell::from(format!("{:?}", self.pkt_store_flags)),
                 Cell::from(format!("{:?}", self.pkt_accept_flags)),
-           ]),
+            ]),
         ])
-        .widths(&[Constraint::Max(30), Constraint::Max(30), Constraint::Max(50)])
+        .widths(&[
+            Constraint::Max(30),
+            Constraint::Max(30),
+            Constraint::Max(50),
+        ])
     }
 }
 
@@ -250,7 +273,7 @@ impl Default for Synthesizer {
             cpiboost: 0,
             vcodiv: PLLVCODiv {
                 mode: PLLVCORefDiv::F_XTAL,
-                flags: PLLVCODivFlags::empty()
+                flags: PLLVCODivFlags::empty(),
             },
             ranginga: PLLRanging {
                 vcor: 0,
@@ -297,18 +320,13 @@ impl Synthesizer {
                 Cell::from("A"),
                 Cell::from(format!("{} Hz", self.freqa)),
                 Cell::from(format!("{:?}", self.ranginga)),
-
             ]),
             Row::new(vec![
                 Cell::from("B"),
                 Cell::from(format!("{} Hz", self.freqb)),
                 Cell::from(format!("{:?}", self.rangingb)),
             ]),
-            Row::new(vec![
-                Cell::from(""),
-                Cell::from("CPI"),
-                Cell::from("Loop"),
-            ]),
+            Row::new(vec![Cell::from(""), Cell::from("CPI"), Cell::from("Loop")]),
             Row::new(vec![
                 Cell::from("PLL"),
                 Cell::from(format!("{:?}", self.cpi)),
@@ -319,7 +337,6 @@ impl Synthesizer {
                 Cell::from(format!("{:?}", self.cpiboost)),
                 Cell::from(format!("{:?}", self.pllloopboost)),
             ]),
-
             Row::new(vec![
                 Cell::from(""),
                 Cell::from(""),
@@ -361,7 +378,7 @@ struct RXParameterGain {
 #[derive(Default)]
 struct RXParameterBasebandOffset {
     a: u8,
-    b: u8
+    b: u8,
 }
 
 #[derive(Default)]
@@ -549,23 +566,30 @@ impl RXParameterSet {
                 Cell::from(self.agc.max.to_string()),
             ]),
             Row::new(vec![
-                "Gain", "time", "rate", "phase", "filt", "BB gain phase", "BB gain freq", "RF gain freq", "RF gain phase", "ampl",
+                "Gain",
+                "time",
+                "rate",
+                "phase",
+                "filt",
+                "BB gain phase",
+                "BB gain freq",
+                "RF gain freq",
+                "RF gain phase",
+                "ampl",
             ]),
             Row::new(vec![
-                 Cell::from(""),
-                 Cell::from(self.gain.time.to_string()),
-                 Cell::from(self.gain.rate.to_string()),
-                 Cell::from(self.gain.phase.to_string()),
-                 Cell::from(self.gain.filter.to_string()),
-                 Cell::from(self.gain.baseband.freq.to_string()),
-                 Cell::from(self.gain.baseband.phase.to_string()),
-                 Cell::from(self.gain.rf.freq.to_string()),
-                 Cell::from(self.gain.rf.phase.to_string()),
-                 Cell::from(self.gain.amplitude.to_string()),
+                Cell::from(""),
+                Cell::from(self.gain.time.to_string()),
+                Cell::from(self.gain.rate.to_string()),
+                Cell::from(self.gain.phase.to_string()),
+                Cell::from(self.gain.filter.to_string()),
+                Cell::from(self.gain.baseband.freq.to_string()),
+                Cell::from(self.gain.baseband.phase.to_string()),
+                Cell::from(self.gain.rf.freq.to_string()),
+                Cell::from(self.gain.rf.phase.to_string()),
+                Cell::from(self.gain.amplitude.to_string()),
             ]),
-            Row::new(vec![
-                "", "freq dev", "decay", "BBR block A", "BBR block B",
-            ]),
+            Row::new(vec!["", "freq dev", "decay", "BBR block A", "BBR block B"]),
             Row::new(vec![
                 Cell::from(""),
                 Cell::from(self.freq_dev.to_string()),
@@ -574,14 +598,30 @@ impl RXParameterSet {
                 Cell::from(self.baseband_offset.b.to_string()),
             ]),
         ])
-        .block(Block::default().borders(Borders::ALL).title("RX Parameter Set"))
-        .widths(&[Constraint::Max(5), Constraint::Max(8), Constraint::Max(9), Constraint::Max(10),
-               Constraint::Max(14), Constraint::Max(15), Constraint::Max(9), Constraint::Max(10),
-               Constraint::Max(8), Constraint::Max(13), Constraint::Max(11), Constraint::Max(16),
-               Constraint::Max(16), Constraint::Max(15), Constraint::Max(15)])
+        .block(
+            Block::default()
+                .borders(Borders::ALL)
+                .title("RX Parameter Set"),
+        )
+        .widths(&[
+            Constraint::Max(5),
+            Constraint::Max(8),
+            Constraint::Max(9),
+            Constraint::Max(10),
+            Constraint::Max(14),
+            Constraint::Max(15),
+            Constraint::Max(9),
+            Constraint::Max(10),
+            Constraint::Max(8),
+            Constraint::Max(13),
+            Constraint::Max(11),
+            Constraint::Max(16),
+            Constraint::Max(16),
+            Constraint::Max(15),
+            Constraint::Max(15),
+        ])
         .style(*active)
     }
-
 }
 
 pub struct RXParams {
@@ -632,13 +672,22 @@ impl RXParams {
         let bitrate = board.xtal.freq * 2_u64.pow(7) / (rxdatarate * decimation * board.xtal.div());
 
         Ok(RXParams {
-            iffreq: u64::from(radio.IFFREQ().read()?) * board.xtal.freq / board.xtal.div() / 2_u64.pow(20) ,
+            iffreq: u64::from(radio.IFFREQ().read()?) * board.xtal.freq
+                / board.xtal.div()
+                / 2_u64.pow(20),
             baseband: board.xtal.freq / (2_u64.pow(4) * board.xtal.div() * decimation),
             bitrate: bitrate,
-            maxdroffset: u64::from(radio.MAXDROFFSET().read()?) * board.xtal.div() * bitrate * bitrate * decimation / (2_u64.pow(7) * board.xtal.freq),
-            maxrfoffset: u64::from(radio.MAXRFOFFSET().read()?.offset) * board.xtal.freq / 2_u64.pow(24), // TODO: xtal.div not part of this?
-            fskdevmax: u64::from(radio.FSKDMAX().read()?) * bitrate / (3 * 512),  // TODO baudrate?
-            fskdevmin: i64::from(radio.FSKDMIN().read()?) * i64::try_from(bitrate).unwrap() / (-3 * 512), // TODO baudrate?
+            maxdroffset: u64::from(radio.MAXDROFFSET().read()?)
+                * board.xtal.div()
+                * bitrate
+                * bitrate
+                * decimation
+                / (2_u64.pow(7) * board.xtal.freq),
+            maxrfoffset: u64::from(radio.MAXRFOFFSET().read()?.offset) * board.xtal.freq
+                / 2_u64.pow(24), // TODO: xtal.div not part of this?
+            fskdevmax: u64::from(radio.FSKDMAX().read()?) * bitrate / (3 * 512), // TODO baudrate?
+            fskdevmin: i64::from(radio.FSKDMIN().read()?) * i64::try_from(bitrate).unwrap()
+                / (-3 * 512), // TODO baudrate?
             afskspace: radio.AFSKSPACE().read()?,
             afskmark: radio.AFSKMARK().read()?,
             afskctrl: radio.AFSKCTRL().read()?,
@@ -650,9 +699,7 @@ impl RXParams {
 
     pub fn widget<'a>(&self) -> Table<'a> {
         Table::new(vec![
-            Row::new(vec![
-                "IF Freq", "Max Δ", "Baseband", "Bitrate", "Max Δ"
-            ]),
+            Row::new(vec!["IF Freq", "Max Δ", "Baseband", "Bitrate", "Max Δ"]),
             Row::new(vec![
                 Cell::from(format!("{} Hz", self.iffreq)),
                 Cell::from(format!("{} Hz", self.maxrfoffset)),
@@ -660,9 +707,7 @@ impl RXParams {
                 Cell::from(format!("{} bit/s", self.bitrate)),
                 Cell::from(format!("{} bit/s", self.maxdroffset)),
             ]),
-            Row::new(vec![
-                "FSK Dev Max", "Min", "AFSK Space", "Mark", "Ctrl"
-            ]),
+            Row::new(vec!["FSK Dev Max", "Min", "AFSK Space", "Mark", "Ctrl"]),
             Row::new(vec![
                 Cell::from(format!("{} Hz", self.fskdevmax)),
                 Cell::from(format!("{} Hz", self.fskdevmin)),
@@ -671,7 +716,12 @@ impl RXParams {
                 Cell::from(self.afskctrl.to_string()),
             ]),
             Row::new(vec![
-                "Ampl Filt", "Freq Leak", "RX 0", "RX 1", "RX 2", "RX 3"
+                "Ampl Filt",
+                "Freq Leak",
+                "RX 0",
+                "RX 1",
+                "RX 2",
+                "RX 3",
             ]),
             Row::new(vec![
                 Cell::from(self.amplfilt.to_string()),
@@ -682,9 +732,19 @@ impl RXParams {
                 Cell::from(format!("{:?}", self.rxparamset.3)),
             ]),
         ])
-        .block(Block::default().borders(Borders::ALL).title("RX Parameters"))
-        .widths(&[Constraint::Max(11), Constraint::Max(10), Constraint::Max(11), Constraint::Max(10),
-               Constraint::Max(14), Constraint::Max(15)])
+        .block(
+            Block::default()
+                .borders(Borders::ALL)
+                .title("RX Parameters"),
+        )
+        .widths(&[
+            Constraint::Max(11),
+            Constraint::Max(10),
+            Constraint::Max(11),
+            Constraint::Max(10),
+            Constraint::Max(14),
+            Constraint::Max(15),
+        ])
     }
 }
 
@@ -698,21 +758,27 @@ fn onoff<F: Flags>(field: F, flag: F) -> Style {
 }
 
 impl PwrMode {
+    #[rustfmt::skip]
     pub fn widget<'a>(&self) -> Table<'a> {
         Table::new(vec![
             Row::new(vec![
                 Cell::from(format!("{:?}", self.mode)),
                 Cell::from("REFEN").style(onoff(self.flags, PwrFlags::REFEN)),
                 Cell::from("XOEN" ).style(onoff(self.flags, PwrFlags::XOEN)),
-            ])
+            ]),
         ])
         .block(Block::default().borders(Borders::ALL).title("PWRMODE"))
-        .widths(&[Constraint::Length(8), Constraint::Length(5), Constraint::Length(4)])
+        .widths(&[
+            Constraint::Length(8),
+            Constraint::Length(5),
+            Constraint::Length(4),
+        ])
         .style(Style::default().fg(Color::White))
     }
 }
 
 impl PowStat {
+    #[rustfmt::skip]
     pub fn widget<'a>(&self) -> Table<'a> {
         Table::new(vec![
             Row::new(vec![
@@ -724,15 +790,24 @@ impl PowStat {
                 Cell::from("vREF"    ).style(onoff(*self, PowStat::VREF)),
                 Cell::from("REF"     ).style(onoff(*self, PowStat::REF)),
                 Cell::from("SUM"     ).style(onoff(*self, PowStat::SUM))
-            ])
+            ]),
         ])
         .block(Block::default().borders(Borders::ALL).title("POWSTAT"))
-        .widths(&[Constraint::Max(3), Constraint::Max(8), Constraint::Max(6), Constraint::Max(6),
-                Constraint::Max(4), Constraint::Max(4), Constraint::Max(3), Constraint::Max(3)])
+        .widths(&[
+            Constraint::Max(3),
+            Constraint::Max(8),
+            Constraint::Max(6),
+            Constraint::Max(6),
+            Constraint::Max(4),
+            Constraint::Max(4),
+            Constraint::Max(3),
+            Constraint::Max(3),
+        ])
     }
 }
 
 impl IRQ {
+    #[rustfmt::skip]
     pub fn widget<'a>(&self) -> Table<'a> {
         Table::new(vec![
             Row::new(vec![
@@ -751,15 +826,24 @@ impl IRQ {
                 Cell::from("FIFOTHRCNT"  ).style(onoff(*self, IRQ::FIFOTHRCNT)),
                 Cell::from("FIFOTHRFREE" ).style(onoff(*self, IRQ::FIFOTHRFREE)),
                 Cell::from("FIFOERROR"   ).style(onoff(*self, IRQ::FIFOERROR)),
-            ])
+            ]),
         ])
         .block(Block::default().borders(Borders::ALL).title("IRQ"))
-        .widths(&[Constraint::Max(12), Constraint::Max(11), Constraint::Max(10), Constraint::Max(11),
-                Constraint::Max(11), Constraint::Max(5), Constraint::Max(5), Constraint::Max(10)])
+        .widths(&[
+            Constraint::Max(12),
+            Constraint::Max(11),
+            Constraint::Max(10),
+            Constraint::Max(11),
+            Constraint::Max(11),
+            Constraint::Max(5),
+            Constraint::Max(5),
+            Constraint::Max(10),
+        ])
     }
 }
 
 impl Status {
+    #[rustfmt::skip]
     pub fn widget<'a>(&self) -> Table<'a> {
         Table::new(vec![
             Row::new(vec![
@@ -778,17 +862,31 @@ impl Status {
                 Cell::from("WAKEUP_INTERRUPT").style(onoff(*self, Status::WAKEUP_INTERRUPT)),
                 Cell::from("LPOSC_INTERRUPT" ).style(onoff(*self, Status::LPOSC_INTERRUPT)),
                 Cell::from("GPADC_INTERRUPT" ).style(onoff(*self, Status::GPADC_INTERRUPT)),
-            ])
+            ]),
         ])
         .block(Block::default().borders(Borders::ALL).title("STATUS"))
-        .widths(&[Constraint::Max(5), Constraint::Max(8), Constraint::Max(9), Constraint::Max(10),
-                  Constraint::Max(14), Constraint::Max(15), Constraint::Max(9), Constraint::Max(10),
-                  Constraint::Max(8), Constraint::Max(13), Constraint::Max(11), Constraint::Max(16),
-                  Constraint::Max(16), Constraint::Max(15), Constraint::Max(15)])
+        .widths(&[
+            Constraint::Max(5),
+            Constraint::Max(8),
+            Constraint::Max(9),
+            Constraint::Max(10),
+            Constraint::Max(14),
+            Constraint::Max(15),
+            Constraint::Max(9),
+            Constraint::Max(10),
+            Constraint::Max(8),
+            Constraint::Max(13),
+            Constraint::Max(11),
+            Constraint::Max(16),
+            Constraint::Max(16),
+            Constraint::Max(15),
+            Constraint::Max(15),
+        ])
     }
 }
 
 impl RadioEvent {
+    #[rustfmt::skip]
     pub fn widget<'a>(&self) -> Table<'a> {
         Table::new(vec![
             Row::new(vec![
@@ -797,25 +895,26 @@ impl RadioEvent {
                 Cell::from("STATE"   ).style(onoff(*self, RadioEvent::RADIOSTATECHG)),
                 Cell::from("PARAMSET").style(onoff(*self, RadioEvent::RXPARAMSETCHG)),
                 Cell::from("FRAMECLK").style(onoff(*self, RadioEvent::FRAMECLK)),
-            ])
+            ]),
         ])
         .block(Block::default().borders(Borders::ALL).title("Radio Event"))
-        .widths(&[Constraint::Max(4), Constraint::Max(7), Constraint::Max(5), Constraint::Max(8), Constraint::Max(8)])
+        .widths(&[
+            Constraint::Max(4),
+            Constraint::Max(7),
+            Constraint::Max(5),
+            Constraint::Max(8),
+            Constraint::Max(8),
+        ])
     }
 }
 
 impl RadioState {
     pub fn widget<'a>(&self) -> Table<'a> {
-        Table::new(vec![
-            Row::new([
-                Cell::from(format!("{:?}", self)),
-            ])
-        ])
-        .block(Block::default().borders(Borders::ALL).title("Radio State"))
-        .widths(&[Constraint::Max(13)])
+        Table::new(vec![Row::new([Cell::from(format!("{:?}", self))])])
+            .block(Block::default().borders(Borders::ALL).title("Radio State"))
+            .widths(&[Constraint::Max(13)])
     }
 }
-
 
 pub struct TXParameters {
     pub modcfgf: ModCfgF,
@@ -851,15 +950,18 @@ impl TXParameters {
             ]),
             Row::new([
                 Cell::from(format!("{:?}", self.modcfga)),
-                Cell::from(format!("{:?} bits/s", self.txrate )),
+                Cell::from(format!("{:?} bits/s", self.txrate)),
             ]),
             Row::new([
                 Cell::from(format!("tx power coef b:")),
                 Cell::from(format!("{:X?}", self.b)),
             ]),
-
         ])
-        .block(Block::default().borders(Borders::ALL).title("TX Parameters"))
+        .block(
+            Block::default()
+                .borders(Borders::ALL)
+                .title("TX Parameters"),
+        )
         .widths(&[Constraint::Max(100), Constraint::Max(60)])
     }
 }
@@ -910,11 +1012,13 @@ impl ChannelParameters {
                 Cell::from(format!("{:?}", self.framing)),
                 Cell::from(format!("{:X?}", self.crcinit)),
             ]),
-
         ])
-        .block(Block::default().borders(Borders::ALL).title("Channel Parameters"))
+        .block(
+            Block::default()
+                .borders(Borders::ALL)
+                .title("Channel Parameters"),
+        )
         .widths(&[Constraint::Max(100), Constraint::Max(60)])
-
     }
 }
 

@@ -1,5 +1,5 @@
 use anyhow::Result;
-use ax5043::{Registers, RX, TX, Status};
+use ax5043::{Registers, Status, RX, TX};
 
 fn main() -> Result<()> {
     let spi = ax5043::open("/dev/spidev0.0")?;

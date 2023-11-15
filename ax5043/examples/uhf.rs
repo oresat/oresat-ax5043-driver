@@ -1,5 +1,6 @@
 // Intended to be run on the C3v6, takes data from UDP port 10015
 // and transmits it through the UHF AX5043
+use anyhow::Result;
 use ax5043::{config, config::PwrAmp, config::IRQ, config::*, Status};
 use ax5043::{registers, registers::*, Registers, RX, TX};
 use clap::{Parser, ValueEnum};
@@ -13,7 +14,6 @@ use std::{
     time::Duration,
 };
 use timerfd::{SetTimeFlags, TimerFd, TimerState};
-use anyhow::Result;
 
 fn configure_radio(radio: &mut Registers, mode: &Mode, power: u16) -> Result<()> {
     #[rustfmt::skip]

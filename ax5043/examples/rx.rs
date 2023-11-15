@@ -1,17 +1,13 @@
 extern crate ax5043;
-use std::{
-    time::Duration,
-    os::fd::AsRawFd,
-};
-use timerfd::{TimerFd, TimerState, SetTimeFlags};
-use mio::{Events, Poll, unix::SourceFd, Token, Interest};
-use mio_signals::{Signal, Signals};
 use anyhow::Result;
+use mio::{unix::SourceFd, Events, Interest, Poll, Token};
+use mio_signals::{Signal, Signals};
+use std::{os::fd::AsRawFd, time::Duration};
+use timerfd::{SetTimeFlags, TimerFd, TimerState};
 
-use ax5043::*;
-use ax5043::registers::*;
 use ax5043::config_rpi::configure_radio_rx;
-
+use ax5043::registers::*;
+use ax5043::*;
 
 fn print_state(radio: &mut Registers, step: &str) -> Result<()> {
     println!("\nstep: {}", step);
@@ -33,9 +29,7 @@ fn print_state(radio: &mut Registers, step: &str) -> Result<()> {
     Ok(())
 }
 
-
 pub fn ax5043_listen(radio: &mut Registers) -> Result<()> {
-
     // pll not locked
     radio.PWRMODE().write(PwrMode {
         flags: PwrFlags::XOEN | PwrFlags::REFEN,
@@ -58,13 +52,12 @@ pub fn ax5043_listen(radio: &mut Registers) -> Result<()> {
     Ok(())
 }
 
-
 fn print_signal(radio: &mut Registers) -> Result<()> {
     println!(
         "RSSI:{}dB BGNDRSSI:{}dB AGCCOUNTER:{}dB",
         radio.RSSI().read()?,
         radio.BGNDRSSI().read()?,
-        (i32::from(radio.AGCCOUNTER().read()?)  * 4) / 3
+        (i32::from(radio.AGCCOUNTER().read()?) * 4) / 3
     );
     println!(
         "RATE:{} AMPL:{} PHASE:{}",
@@ -88,11 +81,10 @@ fn print_signal(radio: &mut Registers) -> Result<()> {
 }
 
 pub fn ax5043_receive(radio: &mut Registers) -> Result<()> {
-
     print_signal(radio)?;
 
     if !radio.FIFOSTAT().read()?.contains(FIFOStat::EMPTY) {
-        let len  = radio.FIFOCOUNT().read()?;
+        let len = radio.FIFOCOUNT().read()?;
         let data = radio.FIFODATARX().read(len.into())?;
         println!("{:X?}", data);
     }
@@ -123,16 +115,18 @@ fn main() -> Result<()> {
     configure_radio_rx(&mut radio_rx)?;
 
     let mut tfd = TimerFd::new().unwrap();
-    tfd.set_state(TimerState::Periodic{current: Duration::from_millis(100), interval: Duration::from_millis(100)}, SetTimeFlags::Default);
+    tfd.set_state(
+        TimerState::Periodic {
+            current: Duration::from_millis(100),
+            interval: Duration::from_millis(100),
+        },
+        SetTimeFlags::Default,
+    );
     const BEACON: Token = Token(2);
-    registry.register(
-        &mut SourceFd(&tfd.as_raw_fd()),
-        BEACON,
-        Interest::READABLE)?;
+    registry.register(&mut SourceFd(&tfd.as_raw_fd()), BEACON, Interest::READABLE)?;
 
     //let mut irqstate = IRQState::default();
     //let mut state = AXState::default();
-
 
     ax5043_listen(&mut radio_rx)?;
 
@@ -144,7 +138,7 @@ fn main() -> Result<()> {
                 BEACON => {
                     tfd.read();
                     ax5043_receive(&mut radio_rx)?;
-                },
+                }
                 //IRQ => service_irq(&mut radio_tx, &mut irqstate)?,
                 CTRLC => break 'outer,
                 _ => unreachable!(),

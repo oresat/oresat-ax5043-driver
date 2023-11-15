@@ -1,16 +1,12 @@
+use anyhow::Result;
 use ax5043::{config, config::PwrAmp, config::IRQ, config::*, Status};
-use ax5043::{registers::*, Registers, TX, RX};
+use ax5043::{registers::*, Registers, RX, TX};
 use clap::Parser;
 use gpiod::{Chip, Options};
 use mio::{unix::SourceFd, Events, Interest, Poll, Token};
 use mio_signals::{Signal, Signals};
-use std::{
-    os::fd::AsRawFd,
-    time::Duration,
-};
+use std::{os::fd::AsRawFd, time::Duration};
 use timerfd::{SetTimeFlags, TimerFd, TimerState};
-use anyhow::Result;
-
 
 fn configure_radio(radio: &mut Registers) -> Result<(Board, ChannelParameters)> {
     #[rustfmt::skip]
@@ -82,13 +78,23 @@ enum RXParameters {
         freq_offs_corr: bool,
         ampl_filter: u8,
         frequency_leak: u8,
-    }
+    },
 }
 
 impl RXParameters {
-    fn write(&self, radio: &mut Registers, board: &config::Board, channel: &config::ChannelParameters) -> Result<()> {
+    fn write(
+        &self,
+        radio: &mut Registers,
+        board: &config::Board,
+        channel: &config::ChannelParameters,
+    ) -> Result<()> {
         match self {
-            Self::MSK {freq_offs_corr, ampl_filter, frequency_leak, .. } => {
+            Self::MSK {
+                freq_offs_corr,
+                ampl_filter,
+                frequency_leak,
+                ..
+            } => {
                 // m = 0.5;
                 // bandwidth  = (1+m) * bitrate; // Carson's rule
                 //let bandwidth = 3 * channel.datarate / 2;
@@ -116,18 +122,18 @@ impl RXParameters {
                 //let max_rf_offset = bandwidth/4 ; // bw/4 Upper bound - difference between tx and rx fcarriers. see note pm table 98
                 let max_rf_offset = 873; // From radiolab
                 radio.MAXRFOFFSET().write(MaxRFOffset {
-                    offset: (max_rf_offset * 2u64.pow(24) / board.xtal.freq).try_into().unwrap(),
+                    offset: (max_rf_offset * 2u64.pow(24) / board.xtal.freq)
+                        .try_into()
+                        .unwrap(),
                     correction: *freq_offs_corr,
                 })?;
 
                 radio.MAXRFOFFSET().write(MaxRFOffset {
                     offset: 0x131,
                     correction: true,
-
                 })?;
                 radio.AMPLFILTER().write(*ampl_filter)?;
                 radio.FREQUENCYLEAK().write(*frequency_leak)?;
-
             }
         }
         Ok(())
@@ -152,8 +158,6 @@ preamble3: PS2
 packet: PS3
     SFD
 */
-
-
 
 // FIXME need to know:
 // h/m?
@@ -215,10 +219,7 @@ pub fn configure_radio_rx(radio: &mut Registers) -> Result<(Board, ChannelParame
         },
         freq_dev: 0,
         decay: 0b0110,
-        baseband_offset: RXParameterBasebandOffset {
-            a: 0,
-            b: 0,
-        },
+        baseband_offset: RXParameterBasebandOffset { a: 0, b: 0 },
     };
     set0.write0(radio)?;
 
@@ -257,10 +258,7 @@ pub fn configure_radio_rx(radio: &mut Registers) -> Result<(Board, ChannelParame
         },
         freq_dev: 0x32,
         decay: 0b0110,
-        baseband_offset: RXParameterBasebandOffset {
-            a: 0,
-            b: 0,
-        },
+        baseband_offset: RXParameterBasebandOffset { a: 0, b: 0 },
     };
     set1.write1(radio)?;
 
@@ -299,10 +297,7 @@ pub fn configure_radio_rx(radio: &mut Registers) -> Result<(Board, ChannelParame
         },
         freq_dev: 0x32,
         decay: 0b0110,
-        baseband_offset: RXParameterBasebandOffset {
-            a: 0,
-            b: 0,
-        },
+        baseband_offset: RXParameterBasebandOffset { a: 0, b: 0 },
     };
     set3.write3(radio)?;
 
@@ -314,15 +309,15 @@ pub fn configure_radio_rx(radio: &mut Registers) -> Result<(Board, ChannelParame
     ))?;
 
     radio.MATCH1PAT().write(0x7E)?;
-    radio.MATCH1LEN().write(MatchLen { len: 0xA, raw: false, })?;
+    radio.MATCH1LEN().write(MatchLen {
+        len: 0xA,
+        raw: false,
+    })?;
     radio.MATCH1MAX().write(0xA)?;
-    radio.TMGRXPREAMBLE2().write(TMG { m: 0x17, e: 0, })?;
+    radio.TMGRXPREAMBLE2().write(TMG { m: 0x17, e: 0 })?;
 
     radio.PKTMAXLEN().write(0xC8)?;
-    radio.PKTLENCFG().write(PktLenCfg {
-        pos: 0,
-        bits: 0x0
-    })?;
+    radio.PKTLENCFG().write(PktLenCfg { pos: 0, bits: 0x0 })?;
     radio.PKTLENOFFSET().write(0x09)?;
 
     radio.PKTCHUNKSIZE().write(0x0D)?;
@@ -333,16 +328,10 @@ pub fn configure_radio_rx(radio: &mut Registers) -> Result<(Board, ChannelParame
         flags: PktAddrCfgFlags::MSB_FIRST | PktAddrCfgFlags::FEC_SYNC_DIS,
     })?;
 
-
     radio.RSSIREFERENCE().write(64)?;
 
     Ok((board, channel))
 }
-
-
-
-
-
 
 #[derive(Parser, Debug)]
 /// Try it out: `socat STDIO UDP:localhost:10015`
@@ -413,8 +402,6 @@ fn main() -> Result<()> {
         auto_commit: false,
     })?;
 
-
-
     'outer: loop {
         poll.poll(&mut events, None)?;
         for event in events.iter() {
@@ -425,12 +412,11 @@ fn main() -> Result<()> {
                     _ = radio.POWSTICKYSTAT().read()?; // clear sticky power flags for PWR_GOOD
 
                     //println!("RSSI {} {:?}", radio.RSSI.read()?, radio.RADIOSTATE.read()?);
-                    let len  = radio.FIFOCOUNT().read()?;
+                    let len = radio.FIFOCOUNT().read()?;
                     if len > 0 {
                         let data = radio.FIFODATARX().read(len.into())?;
                         println!("{:02X?}", data);
                     }
-
                 }
                 CTRLC => break 'outer,
                 _ => unreachable!(),
