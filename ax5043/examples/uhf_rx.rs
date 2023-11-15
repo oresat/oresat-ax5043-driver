@@ -1,20 +1,18 @@
 use ax5043::{config, config::PwrAmp, config::IRQ, config::*, Status};
-use ax5043::{registers::*, Registers};
+use ax5043::{registers::*, Registers, TX, RX};
 use clap::Parser;
 use gpiod::{Chip, Options};
 use mio::{unix::SourceFd, Events, Interest, Poll, Token};
 use mio_signals::{Signal, Signals};
 use std::{
-    cell::Cell,
-    io,
     os::fd::AsRawFd,
     time::Duration,
 };
 use timerfd::{SetTimeFlags, TimerFd, TimerState};
+use anyhow::Result;
 
 
-
-fn configure_radio(radio: &mut Registers) -> io::Result<(Board, ChannelParameters)> {
+fn configure_radio(radio: &mut Registers) -> Result<(Board, ChannelParameters)> {
     #[rustfmt::skip]
     let board = Board {
         sysclk: Pin { mode: SysClk::Z,      pullup: true,  invert: false, },
@@ -72,7 +70,7 @@ fn configure_radio(radio: &mut Registers) -> io::Result<(Board, ChannelParameter
     configure_synth(radio, &board, &synth)?;
     configure_channel(radio, &board, &channel)?;
 
-    radio.FIFOTHRESH.write(128)?; // Half the FIFO size
+    radio.FIFOTHRESH().write(128)?; // Half the FIFO size
 
     autorange(radio)?;
     Ok((board, channel))
@@ -88,7 +86,7 @@ enum RXParameters {
 }
 
 impl RXParameters {
-    fn write(&self, radio: &mut Registers, board: &config::Board, channel: &config::ChannelParameters) -> io::Result<()> {
+    fn write(&self, radio: &mut Registers, board: &config::Board, channel: &config::ChannelParameters) -> Result<()> {
         match self {
             Self::MSK {freq_offs_corr, ampl_filter, frequency_leak, .. } => {
                 // m = 0.5;
@@ -99,39 +97,38 @@ impl RXParameters {
 
                 //let if_freq = 12_000; // From radiolab
                 //radio.IFFREQ.write((if_freq * board.xtal.div() * 2_u64.pow(20) / board.xtal.freq).try_into().unwrap())?;
-                radio.IFFREQ.write(0x1058)?;
+                radio.IFFREQ().write(0x1058)?;
 
                 //let fbaseband = bandwidth * (1+fcoeff_inv);
                 //let fbaseband = 75000; // From radiolab
                 //let decimation = board.xtal.freq / (fbaseband * 2u64.pow(4) * board.xtal.div());
                 //radio.DECIMATION.write(decimation.try_into().unwrap())?; // TODO: 7bits max
-                radio.DECIMATION.write(1)?;
+                radio.DECIMATION().write(1)?;
                 // TODO: see note table 96
                 //radio.RXDATARATE.write((2u64.pow(7) * board.xtal.freq / (channel.datarate * board.xtal.div() * decimation)).try_into().unwrap())?;
-                radio.RXDATARATE.write(0x5355)?;
+                radio.RXDATARATE().write(0x5355)?;
 
                 //let droff = (2u64.pow(7) * board.xtal.freq * *max_dr_offset) / (board.xtal.div() * channel.datarate.pow(2) * decimation);
                 //radio.MAXDROFFSET.write(droff.try_into().unwrap())?;
 
-                radio.MAXDROFFSET.write(0)?;
+                radio.MAXDROFFSET().write(0)?;
 
                 //let max_rf_offset = bandwidth/4 ; // bw/4 Upper bound - difference between tx and rx fcarriers. see note pm table 98
                 let max_rf_offset = 873; // From radiolab
-                radio.MAXRFOFFSET.write(MaxRFOffset {
+                radio.MAXRFOFFSET().write(MaxRFOffset {
                     offset: (max_rf_offset * 2u64.pow(24) / board.xtal.freq).try_into().unwrap(),
                     correction: *freq_offs_corr,
                 })?;
 
-                radio.MAXRFOFFSET.write(MaxRFOffset {
+                radio.MAXRFOFFSET().write(MaxRFOffset {
                     offset: 0x131,
                     correction: true,
 
                 })?;
-                radio.AMPLFILTER.write(*ampl_filter)?;
-                radio.FREQUENCYLEAK.write(*frequency_leak)?;
+                radio.AMPLFILTER().write(*ampl_filter)?;
+                radio.FREQUENCYLEAK().write(*frequency_leak)?;
 
             }
-            _ => unimplemented!()
         }
         Ok(())
     }
@@ -163,17 +160,17 @@ packet: PS3
 // fbaseband
 // fif/bandwidth?
 
-pub fn configure_radio_rx(radio: &mut Registers) -> io::Result<(Board, ChannelParameters)> {
+pub fn configure_radio_rx(radio: &mut Registers) -> Result<(Board, ChannelParameters)> {
     let (board, channel) = configure_radio(radio)?;
 
-    radio.PERF_F18.write(0x02)?; // TODO set by radiolab during RX
-    radio.PERF_F26.write(0x96)?;
-    radio.PLLLOOP.write(PLLLoop {
+    radio.PERF_F18().write(0x02)?; // TODO set by radiolab during RX
+    radio.PERF_F26().write(0x96)?;
+    radio.PLLLOOP().write(PLLLoop {
         filter: FLT::INTERNAL_x5,
         flags: PLLLoopFlags::DIRECT,
         freqsel: FreqSel::A,
     })?;
-    radio.PLLCPI.write(0x10)?;
+    radio.PLLCPI().write(0x10)?;
 
     let params = RXParameters::MSK {
         max_dr_offset: 0, // TODO derived from what?
@@ -309,35 +306,35 @@ pub fn configure_radio_rx(radio: &mut Registers) -> io::Result<(Board, ChannelPa
     };
     set3.write3(radio)?;
 
-    radio.RXPARAMSETS.write(RxParamSets(
+    radio.RXPARAMSETS().write(RxParamSets(
         RxParamSet::Set0,
         RxParamSet::Set1,
         RxParamSet::Set3,
         RxParamSet::Set3,
     ))?;
 
-    radio.MATCH1PAT.write(0x7E)?;
-    radio.MATCH1LEN.write(MatchLen { len: 0xA, raw: false, })?;
-    radio.MATCH1MAX.write(0xA)?;
-    radio.TMGRXPREAMBLE2.write(TMG { m: 0x17, e: 0, })?;
+    radio.MATCH1PAT().write(0x7E)?;
+    radio.MATCH1LEN().write(MatchLen { len: 0xA, raw: false, })?;
+    radio.MATCH1MAX().write(0xA)?;
+    radio.TMGRXPREAMBLE2().write(TMG { m: 0x17, e: 0, })?;
 
-    radio.PKTMAXLEN.write(0xC8)?;
-    radio.PKTLENCFG.write(PktLenCfg {
+    radio.PKTMAXLEN().write(0xC8)?;
+    radio.PKTLENCFG().write(PktLenCfg {
         pos: 0,
         bits: 0x0
     })?;
-    radio.PKTLENOFFSET.write(0x09)?;
+    radio.PKTLENOFFSET().write(0x09)?;
 
-    radio.PKTCHUNKSIZE.write(0x0D)?;
-    radio.PKTACCEPTFLAGS.write(PktAcceptFlags::LRGP)?;
+    radio.PKTCHUNKSIZE().write(0x0D)?;
+    radio.PKTACCEPTFLAGS().write(PktAcceptFlags::LRGP)?;
 
-    radio.PKTADDRCFG.write(PktAddrCfg {
+    radio.PKTADDRCFG().write(PktAddrCfg {
         addr_pos: 0,
         flags: PktAddrCfgFlags::MSB_FIRST | PktAddrCfgFlags::FEC_SYNC_DIS,
     })?;
 
 
-    radio.RSSIREFERENCE.write(64)?;
+    radio.RSSIREFERENCE().write(64)?;
 
     Ok((board, channel))
 }
@@ -356,7 +353,7 @@ struct Args {
     spi: String,
 }
 
-fn main() -> io::Result<()> {
+fn main() -> Result<()> {
     let args = Args::parse();
 
     let mut poll = Poll::new()?;
@@ -383,17 +380,17 @@ fn main() -> io::Result<()> {
     let pa_enable = chip.request_lines(opts)?;
 
     let spi0 = ax5043::open(args.spi)?;
-    let status = Cell::new(Status::empty());
-    let callback = |s| {
-        if s != status.get() {
+    let mut status = Status::empty();
+    let mut callback = |_: &_, _, s, _: &_| {
+        if s != status {
             println!("RX Status change: {:?}", s);
-            status.set(s);
+            status = s;
         }
     };
-    let mut radio = ax5043::Registers::new(&spi0, &callback);
+    let mut radio = ax5043::Registers::new(spi0, &mut callback);
     radio.reset()?;
 
-    let rev = radio.REVISION.read()?;
+    let rev = radio.REVISION().read()?;
     if rev != 0x51 {
         println!("Unexpected revision {}, expected {}", rev, 0x51);
         return Ok(());
@@ -402,16 +399,16 @@ fn main() -> io::Result<()> {
     configure_radio_rx(&mut radio)?;
     pa_enable.set_values([true])?;
 
-    radio.PWRMODE.write(PwrMode {
+    radio.PWRMODE().write(PwrMode {
         flags: PwrFlags::XOEN | PwrFlags::REFEN,
         mode: PwrModes::RX,
     })?;
 
-    radio.FIFOCMD.write(FIFOCmd {
+    radio.FIFOCMD().write(FIFOCmd {
         mode: FIFOCmds::CLEAR_ERROR,
         auto_commit: false,
     })?;
-    radio.FIFOCMD.write(FIFOCmd {
+    radio.FIFOCMD().write(FIFOCmd {
         mode: FIFOCmds::CLEAR_DATA,
         auto_commit: false,
     })?;
@@ -424,13 +421,13 @@ fn main() -> io::Result<()> {
             match event.token() {
                 TIMER => {
                     tfd.read();
-                    _ = radio.PLLRANGINGA.read()?; // sticky lock bit ~ IRQPLLUNLIOCK, gate
-                    _ = radio.POWSTICKYSTAT.read()?; // clear sticky power flags for PWR_GOOD
+                    _ = radio.PLLRANGINGA().read()?; // sticky lock bit ~ IRQPLLUNLIOCK, gate
+                    _ = radio.POWSTICKYSTAT().read()?; // clear sticky power flags for PWR_GOOD
 
                     //println!("RSSI {} {:?}", radio.RSSI.read()?, radio.RADIOSTATE.read()?);
-                    let len  = radio.FIFOCOUNT.read()?;
+                    let len  = radio.FIFOCOUNT().read()?;
                     if len > 0 {
-                        let data = radio.FIFODATARX.read(len.into())?;
+                        let data = radio.FIFODATARX().read(len.into())?;
                         println!("{:02X?}", data);
                     }
 
@@ -442,5 +439,6 @@ fn main() -> io::Result<()> {
     }
 
     pa_enable.set_values([false])?;
-    radio.reset()
+    radio.reset()?;
+    Ok(())
 }

@@ -1,13 +1,17 @@
-use std::io;
-
 use ratatui::{
     prelude::*,
-    widgets::{Block, Borders, Table, Row, Cell, Sparkline},
+    widgets::{Block, Borders, Table, Row, Cell},
     style::Style,
 };
 use bitflags::Flags;
-use crate::config;
-use crate::{Registers, registers::*, Status};
+use crate::{
+    config,
+    Registers,
+    registers::*,
+    Status,
+    RX,
+    Result
+};
 
 pub struct PacketFormat {
     addrcfg: PktAddrCfg,
@@ -32,14 +36,14 @@ impl Default for PacketFormat {
 }
 
 impl PacketFormat {
-    pub fn new(radio: &mut Registers) -> io::Result<PacketFormat> {
+    pub fn new(radio: &mut Registers) -> Result<PacketFormat> {
         Ok(PacketFormat {
-            addrcfg: radio.PKTADDRCFG.read()?,
-            lencfg: radio.PKTLENCFG.read()?,
-            lenoffset: radio.PKTLENOFFSET.read()?,
-            maxlen: radio.PKTMAXLEN.read()?,
-            addr: radio.PKTADDR.read()?,
-            addrmask: radio.PKTADDRMASK.read()?,
+            addrcfg: radio.PKTADDRCFG().read()?,
+            lencfg: radio.PKTLENCFG().read()?,
+            lenoffset: radio.PKTLENOFFSET().read()?,
+            maxlen: radio.PKTMAXLEN().read()?,
+            addr: radio.PKTADDR().read()?,
+            addrmask: radio.PKTADDRMASK().read()?,
         })
     }
 
@@ -124,27 +128,27 @@ impl Default for PacketController {
 }
 
 impl PacketController {
-    pub fn new(radio: &mut Registers) -> io::Result<PacketController> {
+    pub fn new(radio: &mut Registers) -> Result<PacketController> {
         Ok(PacketController {
-            tmg_tx_boost: radio.TMGTXBOOST.read()?,
-            tmg_tx_settle: radio.TMGTXSETTLE.read()?,
-            tmg_rx_boost: radio.TMGRXBOOST.read()?,
-            tmg_rx_settle: radio.TMGRXSETTLE.read()?,
-            tmg_rx_offsacq: radio.TMGRXOFFSACQ.read()?,
-            tmg_rx_coarseagc: radio.TMGRXCOARSEAGC.read()?,
-            tmg_rx_agc: radio.TMGRXAGC.read()?,
-            tmg_rx_rssi: radio.TMGRXRSSI.read()?,
-            tmg_rx_preamble1: radio.TMGRXPREAMBLE1.read()?,
-            tmg_rx_preamble2: radio.TMGRXPREAMBLE2.read()?,
-            tmg_rx_preamble3: radio.TMGRXPREAMBLE3.read()?,
-            rssi_reference: radio.RSSIREFERENCE.read()?,
-            rssi_abs_thr: radio.RSSIABSTHR.read()?,
-            bgnd_rssi_gain: radio.BGNDRSSIGAIN.read()?,
-            bgnd_rssi_thr: radio.BGNDRSSITHR.read()?,
-            pkt_chunk_size: radio.PKTCHUNKSIZE.read()?,
-            pkt_misc_flags: radio.PKTMISCFLAGS.read()?,
-            pkt_store_flags: radio.PKTSTOREFLAGS.read()?,
-            pkt_accept_flags: radio.PKTACCEPTFLAGS.read()?,
+            tmg_tx_boost: radio.TMGTXBOOST().read()?,
+            tmg_tx_settle: radio.TMGTXSETTLE().read()?,
+            tmg_rx_boost: radio.TMGRXBOOST().read()?,
+            tmg_rx_settle: radio.TMGRXSETTLE().read()?,
+            tmg_rx_offsacq: radio.TMGRXOFFSACQ().read()?,
+            tmg_rx_coarseagc: radio.TMGRXCOARSEAGC().read()?,
+            tmg_rx_agc: radio.TMGRXAGC().read()?,
+            tmg_rx_rssi: radio.TMGRXRSSI().read()?,
+            tmg_rx_preamble1: radio.TMGRXPREAMBLE1().read()?,
+            tmg_rx_preamble2: radio.TMGRXPREAMBLE2().read()?,
+            tmg_rx_preamble3: radio.TMGRXPREAMBLE3().read()?,
+            rssi_reference: radio.RSSIREFERENCE().read()?,
+            rssi_abs_thr: radio.RSSIABSTHR().read()?,
+            bgnd_rssi_gain: radio.BGNDRSSIGAIN().read()?,
+            bgnd_rssi_thr: radio.BGNDRSSITHR().read()?,
+            pkt_chunk_size: radio.PKTCHUNKSIZE().read()?,
+            pkt_misc_flags: radio.PKTMISCFLAGS().read()?,
+            pkt_store_flags: radio.PKTSTOREFLAGS().read()?,
+            pkt_accept_flags: radio.PKTACCEPTFLAGS().read()?,
         })
     }
 
@@ -261,17 +265,17 @@ impl Default for Synthesizer {
 }
 
 impl Synthesizer {
-    pub fn new(radio: &mut Registers, board: &config::Board) -> io::Result<Synthesizer> {
+    pub fn new(radio: &mut Registers, board: &config::Board) -> Result<Synthesizer> {
         Ok(Synthesizer {
-            pllloop: radio.PLLLOOP.read()?,
-            pllloopboost: radio.PLLLOOPBOOST.read()?,
-            cpi: radio.PLLCPI.read()?,
-            cpiboost: radio.PLLCPIBOOST.read()?,
-            vcodiv: radio.PLLVCODIV.read()?,
-            ranginga: radio.PLLRANGINGA.read()?,
-            rangingb: radio.PLLRANGINGB.read()?,
-            freqa: u64::from(radio.FREQA.read()?) * board.xtal.freq / 2_u64.pow(24),
-            freqb: u64::from(radio.FREQB.read()?) * board.xtal.freq / 2_u64.pow(24),
+            pllloop: radio.PLLLOOP().read()?,
+            pllloopboost: radio.PLLLOOPBOOST().read()?,
+            cpi: radio.PLLCPI().read()?,
+            cpiboost: radio.PLLCPIBOOST().read()?,
+            vcodiv: radio.PLLVCODIV().read()?,
+            ranginga: radio.PLLRANGINGA().read()?,
+            rangingb: radio.PLLRANGINGB().read()?,
+            freqa: u64::from(radio.FREQA().read()?) * board.xtal.freq / 2_u64.pow(24),
+            freqb: u64::from(radio.FREQB().read()?) * board.xtal.freq / 2_u64.pow(24),
         })
     }
 
@@ -370,19 +374,19 @@ pub struct RXParameterSet {
 }
 
 impl RXParameterSet {
-    pub fn set0(radio: &mut Registers) -> io::Result<RXParameterSet> {
-        let agcgain = radio.AGCGAIN0.read()?;
-        let agcmina = radio.AGCMINMAX0.read()?;
-        let timegan = radio.TIMEGAIN0.read()?;
-        let dargain = radio.DRGAIN0.read()?;
-        let phasegn = radio.PHASEGAIN0.read()?;
-        let bboffsr = radio.BBOFFSRES0.read()?;
+    pub fn set0(radio: &mut Registers) -> Result<RXParameterSet> {
+        let agcgain = radio.AGCGAIN0().read()?;
+        let agcmina = radio.AGCMINMAX0().read()?;
+        let timegan = radio.TIMEGAIN0().read()?;
+        let dargain = radio.DRGAIN0().read()?;
+        let phasegn = radio.PHASEGAIN0().read()?;
+        let bboffsr = radio.BBOFFSRES0().read()?;
         Ok(RXParameterSet {
             agc: RXParameterAGC {
                 attack: agcgain.attack,
                 decay: agcgain.decay,
-                target: radio.AGCTARGET0.read()?,
-                ahyst: radio.AGCAHYST0.read()?.hyst,
+                target: radio.AGCTARGET0().read()?,
+                ahyst: radio.AGCAHYST0().read()?.hyst,
                 min: agcmina.min,
                 max: agcmina.max,
             },
@@ -392,17 +396,17 @@ impl RXParameterSet {
                 phase: phasegn.gain,
                 filter: phasegn.filter,
                 baseband: RXParameterFreq {
-                    phase: radio.FREQGAINA0.read()?.gain,
-                    freq: radio.FREQGAINB0.read()?.gain,
+                    phase: radio.FREQGAINA0().read()?.gain,
+                    freq: radio.FREQGAINB0().read()?.gain,
                 },
                 rf: RXParameterFreq {
-                    phase: radio.FREQGAINC0.read()?.gain,
-                    freq: radio.FREQGAIND0.read()?.gain,
+                    phase: radio.FREQGAINC0().read()?.gain,
+                    freq: radio.FREQGAIND0().read()?.gain,
                 },
-                amplitude: radio.AMPLGAIN0.read()?.gain,
+                amplitude: radio.AMPLGAIN0().read()?.gain,
             },
-            freq_dev: radio.FREQDEV0.read()?,
-            decay: radio.FOURFSK0.read()?.decay,
+            freq_dev: radio.FREQDEV0().read()?,
+            decay: radio.FOURFSK0().read()?.decay,
             baseband_offset: RXParameterBasebandOffset {
                 a: bboffsr.res_int_a,
                 b: bboffsr.res_int_b,
@@ -410,19 +414,19 @@ impl RXParameterSet {
         })
     }
 
-    pub fn set1(radio: &mut Registers) -> io::Result<RXParameterSet> {
-        let agcgain = radio.AGCGAIN1.read()?;
-        let agcmina = radio.AGCMINMAX1.read()?;
-        let timegan = radio.TIMEGAIN1.read()?;
-        let dargain = radio.DRGAIN1.read()?;
-        let phasegn = radio.PHASEGAIN1.read()?;
-        let bboffsr = radio.BBOFFSRES1.read()?;
+    pub fn set1(radio: &mut Registers) -> Result<RXParameterSet> {
+        let agcgain = radio.AGCGAIN1().read()?;
+        let agcmina = radio.AGCMINMAX1().read()?;
+        let timegan = radio.TIMEGAIN1().read()?;
+        let dargain = radio.DRGAIN1().read()?;
+        let phasegn = radio.PHASEGAIN1().read()?;
+        let bboffsr = radio.BBOFFSRES1().read()?;
         Ok(RXParameterSet {
             agc: RXParameterAGC {
                 attack: agcgain.attack,
                 decay: agcgain.decay,
-                target: radio.AGCTARGET1.read()?,
-                ahyst: radio.AGCAHYST1.read()?.hyst,
+                target: radio.AGCTARGET1().read()?,
+                ahyst: radio.AGCAHYST1().read()?.hyst,
                 min: agcmina.min,
                 max: agcmina.max,
             },
@@ -432,17 +436,17 @@ impl RXParameterSet {
                 phase: phasegn.gain,
                 filter: phasegn.filter,
                 baseband: RXParameterFreq {
-                    phase: radio.FREQGAINA1.read()?.gain,
-                    freq: radio.FREQGAINB1.read()?.gain,
+                    phase: radio.FREQGAINA1().read()?.gain,
+                    freq: radio.FREQGAINB1().read()?.gain,
                 },
                 rf: RXParameterFreq {
-                    phase: radio.FREQGAINC1.read()?.gain,
-                    freq: radio.FREQGAIND1.read()?.gain,
+                    phase: radio.FREQGAINC1().read()?.gain,
+                    freq: radio.FREQGAIND1().read()?.gain,
                 },
-                amplitude: radio.AMPLGAIN1.read()?.gain,
+                amplitude: radio.AMPLGAIN1().read()?.gain,
             },
-            freq_dev: radio.FREQDEV1.read()?,
-            decay: radio.FOURFSK1.read()?.decay,
+            freq_dev: radio.FREQDEV1().read()?,
+            decay: radio.FOURFSK1().read()?.decay,
             baseband_offset: RXParameterBasebandOffset {
                 a: bboffsr.res_int_a,
                 b: bboffsr.res_int_b,
@@ -450,19 +454,19 @@ impl RXParameterSet {
         })
     }
 
-    pub fn set2(radio: &mut Registers) -> io::Result<RXParameterSet> {
-        let agcgain = radio.AGCGAIN2.read()?;
-        let agcmina = radio.AGCMINMAX2.read()?;
-        let timegan = radio.TIMEGAIN2.read()?;
-        let dargain = radio.DRGAIN2.read()?;
-        let phasegn = radio.PHASEGAIN2.read()?;
-        let bboffsr = radio.BBOFFSRES2.read()?;
+    pub fn set2(radio: &mut Registers) -> Result<RXParameterSet> {
+        let agcgain = radio.AGCGAIN2().read()?;
+        let agcmina = radio.AGCMINMAX2().read()?;
+        let timegan = radio.TIMEGAIN2().read()?;
+        let dargain = radio.DRGAIN2().read()?;
+        let phasegn = radio.PHASEGAIN2().read()?;
+        let bboffsr = radio.BBOFFSRES2().read()?;
         Ok(RXParameterSet {
             agc: RXParameterAGC {
                 attack: agcgain.attack,
                 decay: agcgain.decay,
-                target: radio.AGCTARGET2.read()?,
-                ahyst: radio.AGCAHYST2.read()?.hyst,
+                target: radio.AGCTARGET2().read()?,
+                ahyst: radio.AGCAHYST2().read()?.hyst,
                 min: agcmina.min,
                 max: agcmina.max,
             },
@@ -472,17 +476,17 @@ impl RXParameterSet {
                 phase: phasegn.gain,
                 filter: phasegn.filter,
                 baseband: RXParameterFreq {
-                    phase: radio.FREQGAINA2.read()?.gain,
-                    freq: radio.FREQGAINB2.read()?.gain,
+                    phase: radio.FREQGAINA2().read()?.gain,
+                    freq: radio.FREQGAINB2().read()?.gain,
                 },
                 rf: RXParameterFreq {
-                    phase: radio.FREQGAINC2.read()?.gain,
-                    freq: radio.FREQGAIND2.read()?.gain,
+                    phase: radio.FREQGAINC2().read()?.gain,
+                    freq: radio.FREQGAIND2().read()?.gain,
                 },
-                amplitude: radio.AMPLGAIN2.read()?.gain,
+                amplitude: radio.AMPLGAIN2().read()?.gain,
             },
-            freq_dev: radio.FREQDEV2.read()?,
-            decay: radio.FOURFSK2.read()?.decay,
+            freq_dev: radio.FREQDEV2().read()?,
+            decay: radio.FOURFSK2().read()?.decay,
             baseband_offset: RXParameterBasebandOffset {
                 a: bboffsr.res_int_a,
                 b: bboffsr.res_int_b,
@@ -490,19 +494,19 @@ impl RXParameterSet {
         })
     }
 
-    pub fn set3(radio: &mut Registers) -> io::Result<RXParameterSet> {
-        let agcgain = radio.AGCGAIN3.read()?;
-        let agcmina = radio.AGCMINMAX3.read()?;
-        let timegan = radio.TIMEGAIN3.read()?;
-        let dargain = radio.DRGAIN3.read()?;
-        let phasegn = radio.PHASEGAIN3.read()?;
-        let bboffsr = radio.BBOFFSRES3.read()?;
+    pub fn set3(radio: &mut Registers) -> Result<RXParameterSet> {
+        let agcgain = radio.AGCGAIN3().read()?;
+        let agcmina = radio.AGCMINMAX3().read()?;
+        let timegan = radio.TIMEGAIN3().read()?;
+        let dargain = radio.DRGAIN3().read()?;
+        let phasegn = radio.PHASEGAIN3().read()?;
+        let bboffsr = radio.BBOFFSRES3().read()?;
         Ok(RXParameterSet {
             agc: RXParameterAGC {
                 attack: agcgain.attack,
                 decay: agcgain.decay,
-                target: radio.AGCTARGET3.read()?,
-                ahyst: radio.AGCAHYST3.read()?.hyst,
+                target: radio.AGCTARGET3().read()?,
+                ahyst: radio.AGCAHYST3().read()?.hyst,
                 min: agcmina.min,
                 max: agcmina.max,
             },
@@ -512,17 +516,17 @@ impl RXParameterSet {
                 phase: phasegn.gain,
                 filter: phasegn.filter,
                 baseband: RXParameterFreq {
-                    phase: radio.FREQGAINA3.read()?.gain,
-                    freq: radio.FREQGAINB3.read()?.gain,
+                    phase: radio.FREQGAINA3().read()?.gain,
+                    freq: radio.FREQGAINB3().read()?.gain,
                 },
                 rf: RXParameterFreq {
-                    phase: radio.FREQGAINC3.read()?.gain,
-                    freq: radio.FREQGAIND3.read()?.gain,
+                    phase: radio.FREQGAINC3().read()?.gain,
+                    freq: radio.FREQGAIND3().read()?.gain,
                 },
-                amplitude: radio.AMPLGAIN3.read()?.gain,
+                amplitude: radio.AMPLGAIN3().read()?.gain,
             },
-            freq_dev: radio.FREQDEV3.read()?,
-            decay: radio.FOURFSK3.read()?.decay,
+            freq_dev: radio.FREQDEV3().read()?,
+            decay: radio.FOURFSK3().read()?.decay,
             baseband_offset: RXParameterBasebandOffset {
                 a: bboffsr.res_int_a,
                 b: bboffsr.res_int_b,
@@ -622,25 +626,25 @@ impl Default for RXParams {
 }
 
 impl RXParams {
-    pub fn new(radio: &mut Registers, board: &config::Board) -> io::Result<RXParams> {
-        let decimation = u64::from(radio.DECIMATION.read()?);
-        let rxdatarate = u64::from(radio.RXDATARATE.read()?);
+    pub fn new(radio: &mut Registers, board: &config::Board) -> Result<RXParams> {
+        let decimation = u64::from(radio.DECIMATION().read()?);
+        let rxdatarate = u64::from(radio.RXDATARATE().read()?);
         let bitrate = board.xtal.freq * 2_u64.pow(7) / (rxdatarate * decimation * board.xtal.div());
 
         Ok(RXParams {
-            iffreq: u64::from(radio.IFFREQ.read()?) * board.xtal.freq / board.xtal.div() / 2_u64.pow(20) ,
+            iffreq: u64::from(radio.IFFREQ().read()?) * board.xtal.freq / board.xtal.div() / 2_u64.pow(20) ,
             baseband: board.xtal.freq / (2_u64.pow(4) * board.xtal.div() * decimation),
             bitrate: bitrate,
-            maxdroffset: u64::from(radio.MAXDROFFSET.read()?) * board.xtal.div() * bitrate * bitrate * decimation / (2_u64.pow(7) * board.xtal.freq),
-            maxrfoffset: u64::from(radio.MAXRFOFFSET.read()?.offset) * board.xtal.freq / 2_u64.pow(24), // TODO: xtal.div not part of this?
-            fskdevmax: u64::from(radio.FSKDMAX.read()?) * bitrate / (3 * 512),  // TODO baudrate?
-            fskdevmin: i64::from(radio.FSKDMIN.read()?) * i64::try_from(bitrate).unwrap() / (-3 * 512), // TODO baudrate?
-            afskspace: radio.AFSKSPACE.read()?,
-            afskmark: radio.AFSKMARK.read()?,
-            afskctrl: radio.AFSKCTRL.read()?,
-            amplfilt: radio.AMPLFILTER.read()?,
-            freqleak: radio.FREQUENCYLEAK.read()?,
-            rxparamset: radio.RXPARAMSETS.read()?,
+            maxdroffset: u64::from(radio.MAXDROFFSET().read()?) * board.xtal.div() * bitrate * bitrate * decimation / (2_u64.pow(7) * board.xtal.freq),
+            maxrfoffset: u64::from(radio.MAXRFOFFSET().read()?.offset) * board.xtal.freq / 2_u64.pow(24), // TODO: xtal.div not part of this?
+            fskdevmax: u64::from(radio.FSKDMAX().read()?) * bitrate / (3 * 512),  // TODO baudrate?
+            fskdevmin: i64::from(radio.FSKDMIN().read()?) * i64::try_from(bitrate).unwrap() / (-3 * 512), // TODO baudrate?
+            afskspace: radio.AFSKSPACE().read()?,
+            afskmark: radio.AFSKMARK().read()?,
+            afskctrl: radio.AFSKCTRL().read()?,
+            amplfilt: radio.AMPLFILTER().read()?,
+            freqleak: radio.FREQUENCYLEAK().read()?,
+            rxparamset: radio.RXPARAMSETS().read()?,
         })
     }
 
@@ -826,17 +830,17 @@ pub struct TXParameters {
 }
 
 impl TXParameters {
-    pub fn new(radio: &mut Registers, board: &config::Board) -> io::Result<Self> {
+    pub fn new(radio: &mut Registers, board: &config::Board) -> Result<Self> {
         Ok(Self {
-            modcfgf: radio.MODCFGF.read()?,
-            fskdev: u64::from(radio.FSKDEV.read()?) * board.xtal.freq / 2u64.pow(24),
-            modcfga: radio.MODCFGA.read()?,
-            txrate: u64::from(radio.TXRATE.read()?) * board.xtal.freq / 2u64.pow(24),
-            a: radio.TXPWRCOEFFA.read()?,
-            b: radio.TXPWRCOEFFB.read()?,
-            c: radio.TXPWRCOEFFC.read()?,
-            d: radio.TXPWRCOEFFD.read()?,
-            e: radio.TXPWRCOEFFE.read()?,
+            modcfgf: radio.MODCFGF().read()?,
+            fskdev: u64::from(radio.FSKDEV().read()?) * board.xtal.freq / 2u64.pow(24),
+            modcfga: radio.MODCFGA().read()?,
+            txrate: u64::from(radio.TXRATE().read()?) * board.xtal.freq / 2u64.pow(24),
+            a: radio.TXPWRCOEFFA().read()?,
+            b: radio.TXPWRCOEFFB().read()?,
+            c: radio.TXPWRCOEFFC().read()?,
+            d: radio.TXPWRCOEFFD().read()?,
+            e: radio.TXPWRCOEFFE().read()?,
         })
     }
     pub fn widget<'a>(&self) -> Table<'a> {
@@ -880,19 +884,19 @@ impl Default for TXParameters {
 }
 
 pub struct ChannelParameters {
-    pub modulation: Modulation ,
+    pub modulation: Modulation,
     pub encoding: Encoding,
     pub framing: Framing,
     pub crcinit: u32,
 }
 
 impl ChannelParameters {
-    pub fn new(radio: &mut Registers) -> io::Result<Self> {
+    pub fn new(radio: &mut Registers) -> Result<Self> {
         Ok(Self {
-            modulation: radio.MODULATION.read()?,
-            encoding: radio.ENCODING.read()?,
-            framing: radio.FRAMING.read()?,
-            crcinit: radio.CRCINIT.read()?,
+            modulation: radio.MODULATION().read()?,
+            encoding: radio.ENCODING().read()?,
+            framing: radio.FRAMING().read()?,
+            crcinit: radio.CRCINIT().read()?,
         })
     }
 

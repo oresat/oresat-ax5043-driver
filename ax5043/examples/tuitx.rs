@@ -5,7 +5,6 @@ use timerfd::{TimerFd, TimerState, SetTimeFlags};
 use ratatui::{
     prelude::*,
     backend::CrosstermBackend,
-    widgets::{Block, Borders, Table, Row, Cell, Sparkline},
     Terminal
 };
 use crossterm::{
@@ -13,6 +12,7 @@ use crossterm::{
     execute,
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
 };
+use anyhow::Result;
 
 use ax5043::{*, registers::*, tui::*,};
 mod config_rpi;
@@ -163,7 +163,7 @@ fn ui<B: Backend>(f: &mut Frame<B>, state: &UIState) {
     f.render_widget(state.status.widget(), chunks[2]);
 }
 
-fn main() -> Result<(), io::Error> {
+fn main() -> Result<()> {
     panic::set_hook(Box::new(|panic| {
         disable_raw_mode().unwrap();
         execute!(
@@ -192,7 +192,7 @@ fn main() -> Result<(), io::Error> {
     let spi0 = ax5043::open("/dev/spidev0.0")?;
     let state = cell::RefCell::new(&mut uistate);
     let term = cell::RefCell::new(&mut terminal);
-    let callback = |new: Status| {
+    let mut callback = |_: &_, _, new, _: &_| {
         if new == state.borrow().status {
             return
         }
@@ -201,13 +201,13 @@ fn main() -> Result<(), io::Error> {
             ui(f, &state.borrow());
         });
     };
-    let mut radio = ax5043::Registers::new(&spi0, &callback);
+    let mut radio = ax5043::Registers::new(spi0, &mut callback);
 
     radio.reset()?;
 
-    state.borrow_mut().pwrmode = radio.PWRMODE.read()?;
-    state.borrow_mut().powstat = radio.POWSTAT.read()?;
-    state.borrow_mut().irq = radio.IRQREQUEST.read()?;
+    state.borrow_mut().pwrmode = radio.PWRMODE().read()?;
+    state.borrow_mut().powstat = radio.POWSTAT().read()?;
+    state.borrow_mut().irq = radio.IRQREQUEST().read()?;
     let _ = term.borrow_mut().draw(|f| {
         ui(f, &state.borrow());
     });
@@ -235,25 +235,25 @@ fn main() -> Result<(), io::Error> {
         Interest::READABLE)?;
 
     let board = configure_radio_tx(&mut radio)?;
-    radio.RADIOEVENTMASK.write(RadioEvent::all())?;
+    radio.RADIOEVENTMASK().write(RadioEvent::all())?;
 
     state.borrow_mut().board = board.clone();
-    state.borrow_mut().pwrmode = radio.PWRMODE.read()?;
-    state.borrow_mut().powstat = radio.POWSTAT.read()?;
-    state.borrow_mut().irq = radio.IRQREQUEST.read()?;
+    state.borrow_mut().pwrmode = radio.PWRMODE().read()?;
+    state.borrow_mut().powstat = radio.POWSTAT().read()?;
+    state.borrow_mut().irq = radio.IRQREQUEST().read()?;
     let _ = term.borrow_mut().draw(|f| {
         ui(f, &state.borrow());
     });
 
 
-    radio.PWRMODE.write(PwrMode {
+    radio.PWRMODE().write(PwrMode {
         flags: PwrFlags::XOEN | PwrFlags::REFEN,
         mode: PwrModes::TX,
     })?;
 
-    state.borrow_mut().pwrmode = radio.PWRMODE.read()?;
-    state.borrow_mut().powstat = radio.POWSTAT.read()?;
-    state.borrow_mut().irq = radio.IRQREQUEST.read()?;
+    state.borrow_mut().pwrmode = radio.PWRMODE().read()?;
+    state.borrow_mut().powstat = radio.POWSTAT().read()?;
+    state.borrow_mut().irq = radio.IRQREQUEST().read()?;
     let _ = term.borrow_mut().draw(|f| {
         ui(f, &state.borrow());
     });
@@ -262,8 +262,8 @@ fn main() -> Result<(), io::Error> {
     state.borrow_mut().tx = TXParameters::new(&mut radio, &board)?;
     state.borrow_mut().chan = ChannelParameters::new(&mut radio)?;
 
-    _ = radio.PLLRANGINGA.read()?; // sticky lock bit ~ IRQPLLUNLIOCK, gate
-    _ = radio.POWSTICKYSTAT.read()?; // clear sticky power flags for PWR_GOOD
+    _ = radio.PLLRANGINGA().read()?; // sticky lock bit ~ IRQPLLUNLIOCK, gate
+    _ = radio.POWSTICKYSTAT().read()?; // clear sticky power flags for PWR_GOOD
 
     let mut events = Events::with_capacity(128);
     'outer: loop {
@@ -273,19 +273,19 @@ fn main() -> Result<(), io::Error> {
                 BEACON => {
                     tfd.read();
 
-                    radio.PWRMODE.write(PwrMode {
+                    radio.PWRMODE().write(PwrMode {
                         flags: PwrFlags::XOEN | PwrFlags::REFEN,
                         mode: PwrModes::TX,
                     })?;
 
-                    _ = radio.PLLRANGINGA.read()?; // sticky lock bit ~ IRQPLLUNLIOCK, gate
-                    _ = radio.POWSTICKYSTAT.read()?; // clear sticky power flags for PWR_GOOD
+                    _ = radio.PLLRANGINGA().read()?; // sticky lock bit ~ IRQPLLUNLIOCK, gate
+                    _ = radio.POWSTICKYSTAT().read()?; // clear sticky power flags for PWR_GOOD
 
-                    radio.FIFOCMD.write(FIFOCmd {
+                    radio.FIFOCMD().write(FIFOCmd {
                         mode: FIFOCmds::CLEAR_ERROR,
                         auto_commit: false,
                     })?;
-                    radio.FIFOCMD.write(FIFOCmd {
+                    radio.FIFOCMD().write(FIFOCmd {
                         mode: FIFOCmds::CLEAR_DATA,
                         auto_commit: false,
                     })?;
@@ -304,10 +304,10 @@ fn main() -> Result<(), io::Error> {
                         data: 0x3,
                     };
 
-                    radio.FIFODATATX.write(preamble)?;
-                    radio.FIFODATATX.write(packet)?;
+                    radio.FIFODATATX().write(preamble)?;
+                    radio.FIFODATATX().write(packet)?;
 
-                    radio.FIFOCMD.write(FIFOCmd {
+                    radio.FIFOCMD().write(FIFOCmd {
                         mode: FIFOCmds::COMMIT,
                         auto_commit: false,
                     })?;
@@ -316,12 +316,12 @@ fn main() -> Result<(), io::Error> {
 
                     loop  { // TODO: Interrupt of some sort
 
-                        _ = radio.PLLRANGINGA.read()?; // sticky lock bit ~ IRQPLLUNLIOCK, gate
-                        state.borrow_mut().pwrmode = radio.PWRMODE.read()?;
-                        state.borrow_mut().powstat = radio.POWSTAT.read()?;
-                        state.borrow_mut().irq = radio.IRQREQUEST.read()?;
-                        state.borrow_mut().radio_event = radio.RADIOEVENTREQ.read()?;
-                        let radiostate = radio.RADIOSTATE.read()?;
+                        _ = radio.PLLRANGINGA().read()?; // sticky lock bit ~ IRQPLLUNLIOCK, gate
+                        state.borrow_mut().pwrmode = radio.PWRMODE().read()?;
+                        state.borrow_mut().powstat = radio.POWSTAT().read()?;
+                        state.borrow_mut().irq = radio.IRQREQUEST().read()?;
+                        state.borrow_mut().radio_event = radio.RADIOEVENTREQ().read()?;
+                        let radiostate = radio.RADIOSTATE().read()?;
                         state.borrow_mut().radio_state = radiostate;
                         let _ = term.borrow_mut().draw(|f| {
                             ui(f, &state.borrow());
@@ -331,9 +331,9 @@ fn main() -> Result<(), io::Error> {
                             break
                         }
                     }
-                    _ = radio.PLLRANGINGA.read()?; // sticky lock bit ~ IRQPLLUNLIOCK, gate
-                    _ = radio.POWSTICKYSTAT.read()?; // clear sticky power flags for PWR_GOOD
-                    radio.PWRMODE.write(PwrMode {
+                    _ = radio.PLLRANGINGA().read()?; // sticky lock bit ~ IRQPLLUNLIOCK, gate
+                    _ = radio.POWSTICKYSTAT().read()?; // clear sticky power flags for PWR_GOOD
+                    radio.PWRMODE().write(PwrMode {
                         flags: PwrFlags::XOEN | PwrFlags::REFEN,
                         mode: PwrModes::POWEROFF,
                     })?;

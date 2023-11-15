@@ -1,11 +1,12 @@
-use std::io;
 use ax5043::{
     config::{Framing, Modulation, SlowRamp, FEC, *},
     *,
     registers::*
 };
 
-fn config(radio: &mut Registers, antenna: config::Antenna) -> io::Result<(Board, ChannelParameters)> {
+use anyhow::Result;
+
+fn config(radio: &mut Registers, antenna: config::Antenna) -> Result<(Board, ChannelParameters)> {
     let board = Board {
         sysclk: Pin { mode: config::SysClk::Z,    pullup: true,  invert: false, },
         dclk:   Pin { mode: config::DClk::Z,      pullup: true,  invert: false, },
@@ -64,7 +65,7 @@ fn config(radio: &mut Registers, antenna: config::Antenna) -> io::Result<(Board,
     Ok((board, channel))
 }
 
-pub fn configure_radio_tx(radio: &mut Registers) -> io::Result<config::Board> {
+pub fn configure_radio_tx(radio: &mut Registers) -> Result<config::Board> {
     let (board, channel) = config(radio, config::Antenna::SingleEnded)?;
 
     let txparams = TXParameters {
@@ -98,7 +99,7 @@ enum RXParameters {
 }
 
 impl RXParameters {
-    fn write(&self, radio: &mut Registers, board: &config::Board, channel: &config::ChannelParameters) -> io::Result<()> {
+    fn write(&self, radio: &mut Registers, board: &config::Board, channel: &config::ChannelParameters) -> Result<()> {
         match self {
             Self::MSK { max_dr_offset, freq_offs_corr, ampl_filter, frequency_leak } => {
                 // m = 0.5;
@@ -109,21 +110,21 @@ impl RXParameters {
 
                 let if_freq = bandwidth * 4 / 5;
                 //radio.IFFREQ.write((if_freq * board.xtal.div() * 2_u64.pow(20) / board.xtal.freq).try_into().unwrap())?;
-                radio.IFFREQ.write(0x20C)?;
+                radio.IFFREQ().write(0x20C)?;
 
                 let fbaseband = bandwidth * (1+fcoeff_inv);
                 let decimation = board.xtal.freq / (fbaseband * 2u64.pow(4) * board.xtal.div());
                 //radio.DECIMATION.write(decimation.try_into().unwrap())?; // TODO: 7bits max
-                radio.DECIMATION.write(0x14)?;
+                radio.DECIMATION().write(0x14)?;
 
                 // TODO: see note table 96
                 //radio.RXDATARATE.write((2u64.pow(7) * board.xtal.freq / (channel.datarate * board.xtal.div() * decimation)).try_into().unwrap())?;
-                radio.RXDATARATE.write(0x3E80)?;
+                radio.RXDATARATE().write(0x3E80)?;
 
                 let droff = (2u64.pow(7) * board.xtal.freq * *max_dr_offset) / (board.xtal.div() * channel.datarate.pow(2) * decimation);
                 //radio.MAXDROFFSET.write(droff.try_into().unwrap())?;
 
-                radio.MAXDROFFSET.write(0)?;
+                radio.MAXDROFFSET().write(0)?;
 
                 let max_rf_offset = bandwidth/4 ; // bw/4 Upper bound - difference between tx and rx fcarriers. see note pm table 98
                 //radio.MAXRFOFFSET.write(MaxRFOffset {
@@ -131,16 +132,15 @@ impl RXParameters {
                 //    correction: *freq_offs_corr,
                 //})?;
 
-                radio.MAXRFOFFSET.write(MaxRFOffset {
+                radio.MAXRFOFFSET().write(MaxRFOffset {
                     offset: 0x131,
                     correction: true,
 
                 })?;
-                radio.AMPLFILTER.write(*ampl_filter)?;
-                radio.FREQUENCYLEAK.write(*frequency_leak)?;
+                radio.AMPLFILTER().write(*ampl_filter)?;
+                radio.FREQUENCYLEAK().write(*frequency_leak)?;
 
             }
-            _ => unimplemented!()
         }
         Ok(())
     }
@@ -172,17 +172,17 @@ packet: PS3
 // fbaseband
 // fif/bandwidth?
 
-pub fn configure_radio_rx(radio: &mut Registers) -> io::Result<(Board, ChannelParameters)> {
+pub fn configure_radio_rx(radio: &mut Registers) -> Result<(Board, ChannelParameters)> {
     let (board, channel) = config(radio, config::Antenna::Differential)?;
 
-    radio.PERF_F18.write(0x02)?; // TODO set by radiolab during RX
-    radio.PERF_F26.write(0x96)?;
-    radio.PLLLOOP.write(PLLLoop {
+    radio.PERF_F18().write(0x02)?; // TODO set by radiolab during RX
+    radio.PERF_F26().write(0x96)?;
+    radio.PLLLOOP().write(PLLLoop {
         filter: FLT::INTERNAL_x5,
         flags: PLLLoopFlags::DIRECT,
         freqsel: FreqSel::A,
     })?;
-    radio.PLLCPI.write(0x10)?;
+    radio.PLLCPI().write(0x10)?;
 
     let params = RXParameters::MSK {
         max_dr_offset: 0, // TODO derived from what?
@@ -318,29 +318,29 @@ pub fn configure_radio_rx(radio: &mut Registers) -> io::Result<(Board, ChannelPa
     };
     set3.write3(radio)?;
 
-    radio.RXPARAMSETS.write(RxParamSets(
+    radio.RXPARAMSETS().write(RxParamSets(
         RxParamSet::Set0,
         RxParamSet::Set1,
         RxParamSet::Set3,
         RxParamSet::Set3,
     ))?;
 
-    radio.MATCH1PAT.write(0x7E7E)?;
-    radio.MATCH1LEN.write(MatchLen { len: 0xA, raw: false, })?;
-    radio.MATCH1MAX.write(0xA)?;
-    radio.TMGRXPREAMBLE2.write(TMG { m: 0x17, e: 0, })?;
+    radio.MATCH1PAT().write(0x7E7E)?;
+    radio.MATCH1LEN().write(MatchLen { len: 0xA, raw: false, })?;
+    radio.MATCH1MAX().write(0xA)?;
+    radio.TMGRXPREAMBLE2().write(TMG { m: 0x17, e: 0, })?;
 
-    radio.PKTMAXLEN.write(0xC8)?;
-    radio.PKTLENCFG.write(PktLenCfg {
+    radio.PKTMAXLEN().write(0xC8)?;
+    radio.PKTLENCFG().write(PktLenCfg {
         pos: 0,
         bits: 0x0
     })?;
-    radio.PKTLENOFFSET.write(0x09)?;
+    radio.PKTLENOFFSET().write(0x09)?;
 
-    radio.PKTCHUNKSIZE.write(0x0D)?;
-    radio.PKTACCEPTFLAGS.write(PktAcceptFlags::LRGP)?;
+    radio.PKTCHUNKSIZE().write(0x0D)?;
+    radio.PKTACCEPTFLAGS().write(PktAcceptFlags::LRGP)?;
 
-    radio.RSSIREFERENCE.write(64)?;
+    radio.RSSIREFERENCE().write(64)?;
 
     Ok((board, channel))
 }

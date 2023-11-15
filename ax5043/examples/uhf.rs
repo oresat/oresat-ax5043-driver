@@ -1,22 +1,21 @@
 // Intended to be run on the C3v6, takes data from UDP port 10015
 // and transmits it through the UHF AX5043
 use ax5043::{config, config::PwrAmp, config::IRQ, config::*, Status};
-use ax5043::{registers, registers::*, Registers};
+use ax5043::{registers, registers::*, Registers, RX, TX};
 use clap::{Parser, ValueEnum};
 use gpiod::{Chip, Options};
 use mio::net::UdpSocket;
 use mio::{unix::SourceFd, Events, Interest, Poll, Token};
 use mio_signals::{Signal, Signals};
 use std::{
-    cell::Cell,
-    io,
     net::{IpAddr, Ipv6Addr, SocketAddr},
     os::fd::AsRawFd,
     time::Duration,
 };
 use timerfd::{SetTimeFlags, TimerFd, TimerState};
+use anyhow::Result;
 
-fn configure_radio(radio: &mut Registers, mode: &Mode, power: u16) -> io::Result<()> {
+fn configure_radio(radio: &mut Registers, mode: &Mode, power: u16) -> Result<()> {
     #[rustfmt::skip]
     let board = Board {
         sysclk: Pin { mode: SysClk::Z,      pullup: true,  invert: false, },
@@ -66,12 +65,14 @@ fn configure_radio(radio: &mut Registers, mode: &Mode, power: u16) -> io::Result
                 fec: config::FEC {},
             }, // FIXME PKTADDRCFG bit order
             crc: CRC::CCITT { initial: 0xFFFF },
+            datarate: 9_600,
         },
         Mode::Carrier => ChannelParameters {
             modulation: config::Modulation::ASK,
             encoding: Encoding::NRZ,
             framing: config::Framing::Raw,
             crc: CRC::None,
+            datarate: 9_600,
         },
     };
     let parameters = TXParameters {
@@ -82,7 +83,6 @@ fn configure_radio(radio: &mut Registers, mode: &Mode, power: u16) -> io::Result
             d: 0,
             e: 0,
         },
-        txrate: 9_600,
         plllock_gate: true,
         brownout_gate: true,
     };
@@ -92,20 +92,21 @@ fn configure_radio(radio: &mut Registers, mode: &Mode, power: u16) -> io::Result
     configure_channel(radio, &board, &channel)?;
     configure_tx(radio, &board, &channel, &parameters)?;
 
-    radio.FIFOTHRESH.write(128)?; // Half the FIFO size
+    radio.FIFOTHRESH().write(128)?; // Half the FIFO size
 
-    autorange(radio)
+    autorange(radio)?;
+    Ok(())
 }
 
-fn transmit(radio: &mut Registers, buf: &[u8], amt: usize) -> io::Result<()> {
-    radio.PWRMODE.write(PwrMode {
+fn transmit(radio: &mut Registers, buf: &[u8], amt: usize) -> Result<()> {
+    radio.PWRMODE().write(PwrMode {
         flags: PwrFlags::XOEN | PwrFlags::REFEN,
         mode: PwrModes::TX,
     })?;
 
-    _ = radio.PLLRANGINGA.read()?; // sticky lock bit ~ IRQPLLUNLIOCK, gate
-    _ = radio.POWSTICKYSTAT.read()?; // sticky lock bit ~ IRQPLLUNLIOCK, gate
-    let thresh = radio.FIFOTHRESH.read()?.into();
+    _ = radio.PLLRANGINGA().read()?; // sticky lock bit ~ IRQPLLUNLIOCK, gate
+    _ = radio.POWSTICKYSTAT().read()?; // sticky lock bit ~ IRQPLLUNLIOCK, gate
+    let thresh = radio.FIFOTHRESH().read()?.into();
 
     let pa_on = FIFOChunkTX::TXCTRL(TXCtrl::SETPA | TXCtrl::PASTATE);
     /* FIXME: this is the recommended preamble
@@ -145,49 +146,50 @@ fn transmit(radio: &mut Registers, buf: &[u8], amt: usize) -> io::Result<()> {
 
     let pa_off = FIFOChunkTX::TXCTRL(TXCtrl::SETPA);
 
-    radio.FIFODATATX.write(pa_on)?;
-    radio.FIFODATATX.write(preamble)?;
+    radio.FIFODATATX().write(pa_on)?;
+    radio.FIFODATATX().write(preamble)?;
 
     println!("sending {} chunks", packet.len());
     println!("{:X?}", packet);
 
     for chunk in packet {
         println!("chunk");
-        radio.FIFODATATX.write(chunk)?;
-        radio.FIFOCMD.write(FIFOCmd {
+        radio.FIFODATATX().write(chunk)?;
+        radio.FIFOCMD().write(FIFOCmd {
             mode: FIFOCmds::COMMIT,
             auto_commit: false,
         })?;
-        while !radio.FIFOSTAT.read()?.contains(FIFOStat::FREE_THR) {} // TODO: Interrupt
+        while !radio.FIFOSTAT().read()?.contains(FIFOStat::FREE_THR) {} // TODO: Interrupt
     }
 
-    radio.FIFODATATX.write(postamble)?;
+    radio.FIFODATATX().write(postamble)?;
 
-    radio.FIFODATATX.write(pa_off)?;
-    radio.FIFOCMD.write(FIFOCmd {
+    radio.FIFODATATX().write(pa_off)?;
+    radio.FIFOCMD().write(FIFOCmd {
         mode: FIFOCmds::COMMIT,
         auto_commit: false,
     })?;
 
-    while radio.RADIOSTATE.read()? != RadioState::IDLE {} // TODO: Interrupt of some sort
-    radio.PWRAMP.write(registers::PwrAmp::empty())?; // FIXME why isn't pa_off doing this?
-    while radio.PWRAMP.read()?.contains(registers::PwrAmp::PWRAMP) {} // TODO: Interrupt of some sort
+    while radio.RADIOSTATE().read()? != RadioState::IDLE {} // TODO: Interrupt of some sort
+    radio.PWRAMP().write(registers::PwrAmp::empty())?; // FIXME why isn't pa_off doing this?
+    while radio.PWRAMP().read()?.contains(registers::PwrAmp::PWRAMP) {} // TODO: Interrupt of some sort
 
-    radio.PWRMODE.write(PwrMode {
+    radio.PWRMODE().write(PwrMode {
         flags: PwrFlags::XOEN | PwrFlags::REFEN,
         mode: PwrModes::POWEROFF,
-    })
+    })?;
+    Ok(())
 }
 
-fn carrier(radio: &mut Registers) -> io::Result<()> {
+fn carrier(radio: &mut Registers) -> Result<()> {
     // TODO: run on threshold, pause for tot
-    radio.PWRMODE.write(PwrMode {
+    radio.PWRMODE().write(PwrMode {
         flags: PwrFlags::XOEN | PwrFlags::REFEN,
         mode: PwrModes::TX,
     })?;
 
-    _ = radio.PLLRANGINGA.read()?; // sticky lock bit ~ IRQPLLUNLIOCK, gate
-    _ = radio.POWSTICKYSTAT.read()?; // sticky lock bit ~ IRQPLLUNLIOCK, gate
+    _ = radio.PLLRANGINGA().read()?; // sticky lock bit ~ IRQPLLUNLIOCK, gate
+    _ = radio.POWSTICKYSTAT().read()?; // sticky lock bit ~ IRQPLLUNLIOCK, gate
 
     let pa_on = FIFOChunkTX::TXCTRL(TXCtrl::SETPA | TXCtrl::PASTATE);
     let carrier = FIFOChunkTX::REPEATDATA {
@@ -198,28 +200,29 @@ fn carrier(radio: &mut Registers) -> io::Result<()> {
 
     let pa_off = FIFOChunkTX::TXCTRL(TXCtrl::SETPA);
 
-    radio.FIFODATATX.write(pa_on)?;
-    radio.FIFODATATX.write(carrier.clone())?;
-    radio.FIFODATATX.write(carrier.clone())?;
-    radio.FIFODATATX.write(carrier.clone())?;
-    radio.FIFODATATX.write(carrier.clone())?;
-    radio.FIFODATATX.write(carrier.clone())?;
-    radio.FIFODATATX.write(carrier.clone())?;
-    radio.FIFODATATX.write(carrier.clone())?;
+    radio.FIFODATATX().write(pa_on)?;
+    radio.FIFODATATX().write(carrier.clone())?;
+    radio.FIFODATATX().write(carrier.clone())?;
+    radio.FIFODATATX().write(carrier.clone())?;
+    radio.FIFODATATX().write(carrier.clone())?;
+    radio.FIFODATATX().write(carrier.clone())?;
+    radio.FIFODATATX().write(carrier.clone())?;
+    radio.FIFODATATX().write(carrier.clone())?;
     // TODO: figure out exactly how long the tot is/limit carrier copies to tot
     // 800ms tot
-    radio.FIFODATATX.write(pa_off)?;
-    radio.FIFOCMD.write(FIFOCmd {
+    radio.FIFODATATX().write(pa_off)?;
+    radio.FIFOCMD().write(FIFOCmd {
         mode: FIFOCmds::COMMIT,
         auto_commit: false,
     })?;
 
-    while radio.RADIOSTATE.read()? != RadioState::IDLE {} // TODO: Interrupt of some sort
+    while radio.RADIOSTATE().read()? != RadioState::IDLE {} // TODO: Interrupt of some sort
 
-    radio.PWRMODE.write(PwrMode {
+    radio.PWRMODE().write(PwrMode {
         flags: PwrFlags::XOEN | PwrFlags::REFEN,
         mode: PwrModes::POWEROFF,
-    })
+    })?;
+    Ok(())
 }
 
 #[derive(Clone, Debug, ValueEnum)]
@@ -241,7 +244,7 @@ struct Args {
     power: u16,
 }
 
-fn main() -> io::Result<()> {
+fn main() -> Result<()> {
     let args = Args::parse();
 
     let mut poll = Poll::new()?;
@@ -273,17 +276,17 @@ fn main() -> io::Result<()> {
     let pa_enable = chip.request_lines(opts)?;
 
     let spi0 = ax5043::open(args.spi)?;
-    let status = Cell::new(Status::empty());
-    let callback = |s| {
-        if s != status.get() {
+    let mut status = Status::empty();
+    let mut callback = |_: &_, _, s, _: &_| {
+        if s != status {
             println!("TX Status change: {:?}", s);
-            status.set(s);
+            status = s;
         }
     };
-    let mut radio = ax5043::Registers::new(&spi0, &callback);
+    let mut radio = ax5043::Registers::new(spi0, &mut callback);
     radio.reset()?;
 
-    let rev = radio.REVISION.read()?;
+    let rev = radio.REVISION().read()?;
     if rev != 0x51 {
         println!("Unexpected revision {}, expected {}", rev, 0x51);
         return Ok(());
@@ -317,5 +320,6 @@ fn main() -> io::Result<()> {
     }
 
     pa_enable.set_values([false])?;
-    radio.reset()
+    radio.reset()?;
+    Ok(())
 }

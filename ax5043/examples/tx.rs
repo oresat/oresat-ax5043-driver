@@ -1,7 +1,5 @@
 extern crate ax5043;
 use std::{
-    cell::Cell,
-    io,
     sync::Arc,
     thread,
     time::Duration,
@@ -13,10 +11,11 @@ use gpiod::{Chip, Options, EdgeDetect};
 use timerfd::{TimerFd, TimerState, SetTimeFlags};
 use mio::{Events, Poll, Waker, unix::SourceFd, Token, Interest};
 use mio_signals::{Signal, Signals};
-use ax5043::*;
+use ax5043::{*, registers::*};
+use anyhow::Result;
 
 mod config_rpi;
-use crate::config_rpi::configure_radio;
+use crate::config_rpi::configure_radio_tx;
 
 fn print_diff<S: AsRef<str> + Display, T: Flags + PartialEq + Debug + Copy>(name: S, new: T, old: T) -> T {
     if new != old {
@@ -37,9 +36,8 @@ fn print_diff<S: AsRef<str> + Display, T: Flags + PartialEq + Debug + Copy>(name
     new
 }
 
-#[derive(Default)]
 struct AXState {
-    irq: ax5043::IRQ,
+    irq: IRQ,
     xtal: XtalStatus,
     //pllranging: PLLRanging,
     radioevent: RadioEvent,
@@ -48,17 +46,17 @@ struct AXState {
     powsstat: PowStat,
 }
 
-fn print_state(radio: &mut Registers, step: &str, state: &mut AXState) -> io::Result<()> {
+fn print_state(radio: &mut Registers, step: &str, state: &mut AXState) -> Result<()> {
     println!("\nstep: {}", step);
-    state.irq        = print_diff("IRQREQ    ", radio.IRQREQUEST.read()?, state.irq);
-    state.xtal       = print_diff("XTALST    ", radio.XTALSTATUS.read()?, state.xtal);
+    state.irq        = print_diff("IRQREQ    ", radio.IRQREQUEST().read()?, state.irq);
+    state.xtal       = print_diff("XTALST    ", radio.XTALSTATUS().read()?, state.xtal);
 
-    println!("{:14}: {:?}", "PLLRANGING", radio.PLLRANGINGA.read()?); // sticky lock bit ~ IRQPLLUNLIOCK, gate
+    println!("{:14}: {:?}", "PLLRANGING", radio.PLLRANGINGA().read()?); // sticky lock bit ~ IRQPLLUNLIOCK, gate
     //state.pllranging = print_diff("PLLRANGING", radio.PLLRANGINGA.read()?, state.pllranging); // sticky lock bit ~ IRQPLLUNLIOCK, gate
-    state.radioevent = print_diff("RADIOEVENT", radio.RADIOEVENTREQ.read()?, state.radioevent);
-    state.powstat    = print_diff("POWSTAT   ", radio.POWSTAT.read()?, state.powstat);
-    state.powsstat   = print_diff("POWSSTAT  ", radio.POWSTICKYSTAT.read()?, state.powsstat); // affects irq/spi status, gate
-    let new = radio.RADIOSTATE.read()?;
+    state.radioevent = print_diff("RADIOEVENT", radio.RADIOEVENTREQ().read()?, state.radioevent);
+    state.powstat    = print_diff("POWSTAT   ", radio.POWSTAT().read()?, state.powstat);
+    state.powsstat   = print_diff("POWSSTAT  ", radio.POWSTICKYSTAT().read()?, state.powsstat); // affects irq/spi status, gate
+    let new = radio.RADIOSTATE().read()?;
     if state.radiostate != new {
         println!("{:14}: {:?}", "RADIOSTATE", new);
         state.radiostate = new;
@@ -66,15 +64,15 @@ fn print_state(radio: &mut Registers, step: &str, state: &mut AXState) -> io::Re
     println!("FIFO | count | free | thresh | stat");
     println!(
         "     | {:5} | {:4} | {:6} | {:?}",
-        radio.FIFOCOUNT.read()?,
-        radio.FIFOFREE.read()?,
-        radio.FIFOTHRESH.read()?,
-        radio.FIFOSTAT.read()?
+        radio.FIFOCOUNT().read()?,
+        radio.FIFOFREE().read()?,
+        radio.FIFOTHRESH().read()?,
+        radio.FIFOSTAT().read()?
     );
     Ok(())
 }
 
-fn ax5043_transmit(radio: &mut Registers, data: &[u8], state: &mut AXState) -> io::Result<()> {
+fn ax5043_transmit(radio: &mut Registers, data: &[u8], state: &mut AXState) -> Result<()> {
     // DS Table 25
     // FULLTX:
     // Synthesizer and transmitter are running. Do not switch into this mode before the synthesiz-
@@ -111,26 +109,35 @@ fn ax5043_transmit(radio: &mut Registers, data: &[u8], state: &mut AXState) -> i
     //            Sticky SSBEVMODEM and SSBEVANA needs to be clear to counter BROWNOUT_GATE
 
     print_state(radio, "pre-fulltx", state)?;
-    radio.PWRMODE.write(PwrMode {
+    radio.PWRMODE().write(PwrMode {
         flags: PwrFlags::XOEN | PwrFlags::REFEN,
         mode: PwrModes::TX,
     })?;
     print_state(radio, "fulltx", state)?;
-    let mut fifo = fifo::FIFO {
-        threshold: 0,
-        autocommit: false,
-        radio,
-    };
     // FIXME: FIFOSTAT CLEAR?
     //fifo.write(data, fifo::TXDataFlags::UNENC | fifo::TXDataFlags::RESIDUE)?;
     // Preamble - see PM p16
-    fifo.write(&[0x11], fifo::TXDataFlags::RAW)?;
-    fifo.write(data, fifo::TXDataFlags::PKTSTART | fifo::TXDataFlags::PKTEND)?;
-    fifo.commit()?;
+
+    let preamble = FIFOChunkTX::REPEATDATA {
+        flags: FIFODataTXFlags::RAW | FIFODataTXFlags::NOCRC,
+        count: 1,
+        data: 0x11,
+    };
+    let packet = FIFOChunkTX::DATA {
+        flags: FIFODataTXFlags::PKTSTART | FIFODataTXFlags::PKTEND,
+        data: data.to_vec(),
+    };
+    radio.FIFODATATX().write(preamble)?;
+    radio.FIFODATATX().write(packet)?;
+
+    radio.FIFOCMD().write(FIFOCmd {
+        mode: FIFOCmds::COMMIT,
+        auto_commit: false,
+    })?;
 
     print_state(radio, "commit", state)?;
 
-    while radio.RADIOSTATE.read()? as u8 != RadioState::IDLE as u8 {} // TODO: Interrupt of some sort
+    while radio.RADIOSTATE().read()? as u8 != RadioState::IDLE as u8 {} // TODO: Interrupt of some sort
     print_state(radio, "tx complete", state)?;
     /*
     radio.PWRMODE.write(PwrMode {
@@ -154,17 +161,17 @@ fn ax5043_transmit(radio: &mut Registers, data: &[u8], state: &mut AXState) -> i
 // - FRAMING::FABORT
 
 
-#[derive(Debug, Default)]
+#[derive(Debug)]
 struct IRQState {
-    irq: ax5043::IRQ
+    irq: IRQ
 }
 
-fn service_irq(radio: &mut Registers, state: &mut IRQState) -> io::Result<()> {
-    state.irq = print_diff("GPIO IRQ: ", radio.IRQREQUEST.read()?, state.irq);
+fn service_irq(radio: &mut Registers, state: &mut IRQState) -> Result<()> {
+    state.irq = print_diff("GPIO IRQ: ", radio.IRQREQUEST().read()?, state.irq);
     Ok(())
 }
 
-fn main() -> io::Result<()> {
+fn main() -> Result<()> {
     let mut poll = Poll::new()?;
     let registry = poll.registry();
 
@@ -173,11 +180,11 @@ fn main() -> io::Result<()> {
     registry.register(&mut signals, CTRLC, Interest::READABLE)?;
 
     let spi0 = ax5043::open("/dev/spidev0.0")?;
-    let status = Cell::new(Status::empty());
-    let callback = |new: Status| {
-        status.set(print_diff("Status change", new, status.get()));
+    let mut status = Status::empty();
+    let mut callback = |_: &_, _, new, _: &_| {
+        status = print_diff("Status change", new, status);
     };
-    let mut radio_tx = ax5043::registers(&spi0, &callback);
+    let mut radio_tx = Registers::new(spi0, &mut callback);
 
     radio_tx.reset()?;
 
@@ -185,7 +192,7 @@ fn main() -> io::Result<()> {
     let irq_waker = Arc::new(Waker::new(poll.registry(), IRQ)?);
     let irq_thread_waker = irq_waker.clone();
 
-    thread::spawn(move || -> io::Result<()> {
+    thread::spawn(move || -> Result<()> {
         let chip = Chip::new("gpiochip0")?;
         let opts = Options::input([17])
             .edge(EdgeDetect::Both)
@@ -197,7 +204,7 @@ fn main() -> io::Result<()> {
         }
     });
 
-    configure_radio(&mut radio_tx)?;
+    configure_radio_tx(&mut radio_tx)?;
 
     let mut tfd = TimerFd::new().unwrap();
     tfd.set_state(TimerState::Periodic{current: Duration::new(1, 0), interval: Duration::from_millis(100)}, SetTimeFlags::Default);
@@ -207,8 +214,17 @@ fn main() -> io::Result<()> {
         BEACON,
         Interest::READABLE)?;
 
-    let mut irqstate = IRQState::default();
-    let mut state = AXState::default();
+    let mut irqstate = IRQState {
+        irq: IRQ::empty(),
+    };
+    let mut state = AXState {
+        irq: IRQ::empty(),
+        xtal: XtalStatus::empty(),
+        radioevent: RadioEvent::empty(),
+        radiostate: RadioState::IDLE,
+        powstat: PowStat::empty(),
+        powsstat: PowStat::empty(),
+    };
 
     let mut events = Events::with_capacity(128);
     'outer: loop {
