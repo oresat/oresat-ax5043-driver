@@ -6,6 +6,7 @@ use thiserror::Error;
 use registers::*;
 
 pub mod config;
+pub mod config_rpi;
 pub mod registers;
 pub mod tui;
 

@@ -10,8 +10,7 @@ use anyhow::Result;
 
 use ax5043::*;
 use ax5043::registers::*;
-mod config_rpi;
-use crate::config_rpi::configure_radio_rx;
+use ax5043::config_rpi::configure_radio_rx;
 
 
 fn print_state(radio: &mut Registers, step: &str) -> Result<()> {

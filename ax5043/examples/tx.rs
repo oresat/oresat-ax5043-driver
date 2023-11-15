@@ -14,8 +14,7 @@ use mio_signals::{Signal, Signals};
 use ax5043::{*, registers::*};
 use anyhow::Result;
 
-mod config_rpi;
-use crate::config_rpi::configure_radio_tx;
+use ax5043::config_rpi::configure_radio_tx;
 
 fn print_diff<S: AsRef<str> + Display, T: Flags + PartialEq + Debug + Copy>(name: S, new: T, old: T) -> T {
     if new != old {

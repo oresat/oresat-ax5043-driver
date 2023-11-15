@@ -18,8 +18,7 @@ use crossterm::{
 use ax5043::registers::*;
 use ax5043::*;
 use ax5043::tui::*;
-mod config_rpi;
-use crate::config_rpi::configure_radio_rx;
+use ax5043::config_rpi::configure_radio_rx;
 
 // FIXME: Default isn't really the way to go, maybe ::new()?
 

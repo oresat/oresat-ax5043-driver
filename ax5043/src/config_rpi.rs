@@ -1,7 +1,6 @@
-use ax5043::{
+use crate::{
     config::{Framing, Modulation, SlowRamp, FEC, *},
     *,
-    registers::*
 };
 
 use anyhow::Result;

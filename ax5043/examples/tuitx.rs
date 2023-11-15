@@ -15,8 +15,7 @@ use crossterm::{
 use anyhow::Result;
 
 use ax5043::{*, registers::*, tui::*,};
-mod config_rpi;
-use crate::config_rpi::configure_radio_tx;
+use ax5043::config_rpi::configure_radio_tx;
 
 struct UIState {
     board: config::Board,
