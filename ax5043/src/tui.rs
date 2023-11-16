@@ -676,7 +676,7 @@ impl RXParams {
                 / board.xtal.div()
                 / 2_u64.pow(20),
             baseband: board.xtal.freq / (2_u64.pow(4) * board.xtal.div() * decimation),
-            bitrate: bitrate,
+            bitrate,
             maxdroffset: u64::from(radio.MAXDROFFSET().read()?)
                 * board.xtal.div()
                 * bitrate
@@ -749,7 +749,7 @@ impl RXParams {
 }
 
 // TODO: trait?
-fn onoff<F: Flags>(field: F, flag: F) -> Style {
+fn onoff<F: Flags>(field: &F, flag: F) -> Style {
     if field.contains(flag) {
         Style::default().bg(Color::Gray).fg(Color::Black)
     } else {
@@ -763,8 +763,8 @@ impl PwrMode {
         Table::new(vec![
             Row::new(vec![
                 Cell::from(format!("{:?}", self.mode)),
-                Cell::from("REFEN").style(onoff(self.flags, PwrFlags::REFEN)),
-                Cell::from("XOEN" ).style(onoff(self.flags, PwrFlags::XOEN)),
+                Cell::from("REFEN").style(onoff(&self.flags, PwrFlags::REFEN)),
+                Cell::from("XOEN" ).style(onoff(&self.flags, PwrFlags::XOEN)),
             ]),
         ])
         .block(Block::default().borders(Borders::ALL).title("PWRMODE"))
@@ -782,14 +782,14 @@ impl PowStat {
     pub fn widget<'a>(&self) -> Table<'a> {
         Table::new(vec![
             Row::new(vec![
-                Cell::from("vIO"     ).style(onoff(*self, PowStat::VIO)),
-                Cell::from("BEvMODEM").style(onoff(*self, PowStat::BEVMODEM)),
-                Cell::from("BEvANA"  ).style(onoff(*self, PowStat::BEVANA)),
-                Cell::from("vMODEM"  ).style(onoff(*self, PowStat::VMODEM)),
-                Cell::from("vANA"    ).style(onoff(*self, PowStat::VANA)),
-                Cell::from("vREF"    ).style(onoff(*self, PowStat::VREF)),
-                Cell::from("REF"     ).style(onoff(*self, PowStat::REF)),
-                Cell::from("SUM"     ).style(onoff(*self, PowStat::SUM))
+                Cell::from("vIO"     ).style(onoff(self, PowStat::VIO)),
+                Cell::from("BEvMODEM").style(onoff(self, PowStat::BEVMODEM)),
+                Cell::from("BEvANA"  ).style(onoff(self, PowStat::BEVANA)),
+                Cell::from("vMODEM"  ).style(onoff(self, PowStat::VMODEM)),
+                Cell::from("vANA"    ).style(onoff(self, PowStat::VANA)),
+                Cell::from("vREF"    ).style(onoff(self, PowStat::VREF)),
+                Cell::from("REF"     ).style(onoff(self, PowStat::REF)),
+                Cell::from("SUM"     ).style(onoff(self, PowStat::SUM))
             ]),
         ])
         .block(Block::default().borders(Borders::ALL).title("POWSTAT"))
@@ -811,21 +811,21 @@ impl IRQ {
     pub fn widget<'a>(&self) -> Table<'a> {
         Table::new(vec![
             Row::new(vec![
-                Cell::from("PLLUNLOCK"  ).style(onoff(*self, IRQ::PLLUNLOCK)),
-                Cell::from("RADIOCTRL"  ).style(onoff(*self, IRQ::RADIOCTRL)),
-                Cell::from("POWER"      ).style(onoff(*self, IRQ::POWER)),
-                Cell::from("XTALREADY"  ).style(onoff(*self, IRQ::XTALREADY)),
-                Cell::from("WAKEUPTIMER").style(onoff(*self, IRQ::WAKEUPTIMER)),
-                Cell::from("LPOSC"      ).style(onoff(*self, IRQ::LPOSC)),
-                Cell::from("GPADC"      ).style(onoff(*self, IRQ::GPADC)),
-                Cell::from("PLLRNGDONE" ).style(onoff(*self, IRQ::PLLRNGDONE)),
+                Cell::from("PLLUNLOCK"  ).style(onoff(self, IRQ::PLLUNLOCK)),
+                Cell::from("RADIOCTRL"  ).style(onoff(self, IRQ::RADIOCTRL)),
+                Cell::from("POWER"      ).style(onoff(self, IRQ::POWER)),
+                Cell::from("XTALREADY"  ).style(onoff(self, IRQ::XTALREADY)),
+                Cell::from("WAKEUPTIMER").style(onoff(self, IRQ::WAKEUPTIMER)),
+                Cell::from("LPOSC"      ).style(onoff(self, IRQ::LPOSC)),
+                Cell::from("GPADC"      ).style(onoff(self, IRQ::GPADC)),
+                Cell::from("PLLRNGDONE" ).style(onoff(self, IRQ::PLLRNGDONE)),
             ]),
             Row::new(vec![
-                Cell::from("FIFONOTEMPTY").style(onoff(*self, IRQ::FIFONOTEMPTY)),
-                Cell::from("FIFONOTFULL" ).style(onoff(*self, IRQ::FIFONOTFULL)),
-                Cell::from("FIFOTHRCNT"  ).style(onoff(*self, IRQ::FIFOTHRCNT)),
-                Cell::from("FIFOTHRFREE" ).style(onoff(*self, IRQ::FIFOTHRFREE)),
-                Cell::from("FIFOERROR"   ).style(onoff(*self, IRQ::FIFOERROR)),
+                Cell::from("FIFONOTEMPTY").style(onoff(self, IRQ::FIFONOTEMPTY)),
+                Cell::from("FIFONOTFULL" ).style(onoff(self, IRQ::FIFONOTFULL)),
+                Cell::from("FIFOTHRCNT"  ).style(onoff(self, IRQ::FIFOTHRCNT)),
+                Cell::from("FIFOTHRFREE" ).style(onoff(self, IRQ::FIFOTHRFREE)),
+                Cell::from("FIFOERROR"   ).style(onoff(self, IRQ::FIFOERROR)),
             ]),
         ])
         .block(Block::default().borders(Borders::ALL).title("IRQ"))
@@ -847,21 +847,21 @@ impl Status {
     pub fn widget<'a>(&self) -> Table<'a> {
         Table::new(vec![
             Row::new(vec![
-                Cell::from("READY"           ).style(onoff(*self, Status::READY)),
-                Cell::from("PLL_LOCK"        ).style(onoff(*self, Status::PLL_LOCK)),
-                Cell::from("FIFO_OVER"       ).style(onoff(*self, Status::FIFO_OVER)),
-                Cell::from("FIFO_UNDER"      ).style(onoff(*self, Status::FIFO_UNDER)),
-                Cell::from("THRESHOLD_FREE"  ).style(onoff(*self, Status::THRESHOLD_FREE)),
-                Cell::from("THRESHOLD_COUNT" ).style(onoff(*self, Status::THRESHOLD_COUNT)),
-                Cell::from("FIFO_FULL"       ).style(onoff(*self, Status::FIFO_FULL)),
-                Cell::from("FIFO_EMPTY"      ).style(onoff(*self, Status::FIFO_EMPTY)),
-                Cell::from("PWR_GOOD"        ).style(onoff(*self, Status::PWR_GOOD)),
-                Cell::from("PWR_INTERRUPT"   ).style(onoff(*self, Status::PWR_INTERRUPT)),
-                Cell::from("RADIO_EVENT"     ).style(onoff(*self, Status::RADIO_EVENT)),
-                Cell::from("XTAL_OSC_RUNNING").style(onoff(*self, Status::XTAL_OSC_RUNNING)),
-                Cell::from("WAKEUP_INTERRUPT").style(onoff(*self, Status::WAKEUP_INTERRUPT)),
-                Cell::from("LPOSC_INTERRUPT" ).style(onoff(*self, Status::LPOSC_INTERRUPT)),
-                Cell::from("GPADC_INTERRUPT" ).style(onoff(*self, Status::GPADC_INTERRUPT)),
+                Cell::from("READY"           ).style(onoff(self, Status::READY)),
+                Cell::from("PLL_LOCK"        ).style(onoff(self, Status::PLL_LOCK)),
+                Cell::from("FIFO_OVER"       ).style(onoff(self, Status::FIFO_OVER)),
+                Cell::from("FIFO_UNDER"      ).style(onoff(self, Status::FIFO_UNDER)),
+                Cell::from("THRESHOLD_FREE"  ).style(onoff(self, Status::THRESHOLD_FREE)),
+                Cell::from("THRESHOLD_COUNT" ).style(onoff(self, Status::THRESHOLD_COUNT)),
+                Cell::from("FIFO_FULL"       ).style(onoff(self, Status::FIFO_FULL)),
+                Cell::from("FIFO_EMPTY"      ).style(onoff(self, Status::FIFO_EMPTY)),
+                Cell::from("PWR_GOOD"        ).style(onoff(self, Status::PWR_GOOD)),
+                Cell::from("PWR_INTERRUPT"   ).style(onoff(self, Status::PWR_INTERRUPT)),
+                Cell::from("RADIO_EVENT"     ).style(onoff(self, Status::RADIO_EVENT)),
+                Cell::from("XTAL_OSC_RUNNING").style(onoff(self, Status::XTAL_OSC_RUNNING)),
+                Cell::from("WAKEUP_INTERRUPT").style(onoff(self, Status::WAKEUP_INTERRUPT)),
+                Cell::from("LPOSC_INTERRUPT" ).style(onoff(self, Status::LPOSC_INTERRUPT)),
+                Cell::from("GPADC_INTERRUPT" ).style(onoff(self, Status::GPADC_INTERRUPT)),
             ]),
         ])
         .block(Block::default().borders(Borders::ALL).title("STATUS"))
@@ -890,11 +890,11 @@ impl RadioEvent {
     pub fn widget<'a>(&self) -> Table<'a> {
         Table::new(vec![
             Row::new(vec![
-                Cell::from("DONE"    ).style(onoff(*self, RadioEvent::DONE)),
-                Cell::from("SETTLED" ).style(onoff(*self, RadioEvent::SETTLED)),
-                Cell::from("STATE"   ).style(onoff(*self, RadioEvent::RADIOSTATECHG)),
-                Cell::from("PARAMSET").style(onoff(*self, RadioEvent::RXPARAMSETCHG)),
-                Cell::from("FRAMECLK").style(onoff(*self, RadioEvent::FRAMECLK)),
+                Cell::from("DONE"    ).style(onoff(self, RadioEvent::DONE)),
+                Cell::from("SETTLED" ).style(onoff(self, RadioEvent::SETTLED)),
+                Cell::from("STATE"   ).style(onoff(self, RadioEvent::RADIOSTATECHG)),
+                Cell::from("PARAMSET").style(onoff(self, RadioEvent::RXPARAMSETCHG)),
+                Cell::from("FRAMECLK").style(onoff(self, RadioEvent::FRAMECLK)),
             ]),
         ])
         .block(Block::default().borders(Borders::ALL).title("Radio Event"))
@@ -910,7 +910,7 @@ impl RadioEvent {
 
 impl RadioState {
     pub fn widget<'a>(&self) -> Table<'a> {
-        Table::new(vec![Row::new([Cell::from(format!("{:?}", self))])])
+        Table::new(vec![Row::new([Cell::from(format!("{self:?}"))])])
             .block(Block::default().borders(Borders::ALL).title("Radio State"))
             .widths(&[Constraint::Max(13)])
     }
@@ -953,7 +953,7 @@ impl TXParameters {
                 Cell::from(format!("{:?} bits/s", self.txrate)),
             ]),
             Row::new([
-                Cell::from(format!("tx power coef b:")),
+                Cell::from("tx power coef b:"),
                 Cell::from(format!("{:X?}", self.b)),
             ]),
         ])

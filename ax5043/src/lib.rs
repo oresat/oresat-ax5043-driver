@@ -137,7 +137,7 @@ impl<const S: usize, V: TryFrom<Reg<S>> + Into<Reg<S>>> IO for ReadWrite<'_, S, 
         self.addr
     }
     fn on_status(&mut self, addr: u16, status: Status, data: &[u8]) {
-        (self.on_status)(self.spi, addr, status, data)
+        (self.on_status)(self.spi, addr, status, data);
     }
 }
 
@@ -164,7 +164,7 @@ impl<const S: usize, V: TryFrom<Reg<S>>> IO for ReadOnly<'_, S, V> {
         self.addr
     }
     fn on_status(&mut self, addr: u16, status: Status, data: &[u8]) {
-        (self.on_status)(self.spi, addr, status, data)
+        (self.on_status)(self.spi, addr, status, data);
     }
 }
 
@@ -187,7 +187,7 @@ impl<const S: usize, V: Into<Reg<S>>> IO for WriteOnly<'_, S, V> {
         self.addr
     }
     fn on_status(&mut self, addr: u16, status: Status, data: &[u8]) {
-        (self.on_status)(self.spi, addr, status, data)
+        (self.on_status)(self.spi, addr, status, data);
     }
 }
 
@@ -204,7 +204,7 @@ pub struct ReadFIFO<'a, const S: usize, V: TryFrom<Vec<u8>>> {
 
 impl<const S: usize, V: TryFrom<Vec<u8>>> ReadFIFO<'_, S, V> {
     fn on_status(&mut self, addr: u16, status: Status, data: &[u8]) {
-        (self.on_status)(self.spi, addr, status, data)
+        (self.on_status)(self.spi, addr, status, data);
     }
 
     pub fn read(&mut self, len: usize) -> Result<Vec<V>>
@@ -230,7 +230,7 @@ impl<const S: usize, V: TryFrom<Vec<u8>>> ReadFIFO<'_, S, V> {
         ])?;
         let mut chunks: Vec<V> = Vec::new();
         let mut bytes = VecDeque::from(rx.clone());
-        while bytes.len() > 0 {
+        while !bytes.is_empty() {
             #[rustfmt::skip]
             let len: usize = match FIFOChunkHeaderRX::try_from(bytes[0]) {
                 Ok(FIFOChunkHeaderRX::RSSI)       => 2,
@@ -264,7 +264,7 @@ pub struct WriteFIFO<'a, const S: usize, V: Into<Vec<u8>>> {
 
 impl<const S: usize, V: Into<Vec<u8>>> WriteFIFO<'_, S, V> {
     fn on_status(&mut self, addr: u16, status: Status, data: &[u8]) {
-        (self.on_status)(self.spi, addr, status, data)
+        (self.on_status)(self.spi, addr, status, data);
     }
 
     pub fn write(&mut self, value: V) -> Result<()> {
@@ -281,7 +281,7 @@ impl<const S: usize, V: Into<Vec<u8>>> WriteFIFO<'_, S, V> {
         //assert_eq!(rx, [0; S]); fails TODO: what does this return? Old value? check that it
         //matches our previous known state?
         let status = Status::from_bits(u16::from_be_bytes(stat)).ok_or(Error::Status(stat))?;
-        self.on_status(u16::from_be_bytes(addr), status, &tx);
+        self.on_status(u16::from_be_bytes(addr), status, tx);
         Ok(())
     }
 }
@@ -580,10 +580,10 @@ pub fn open<P: AsRef<Path>>(path: P) -> std::io::Result<Spidev> {
 }
 
 impl Registers<'_> {
-    pub fn new<'a>(
+    pub fn new(
         spi: Spidev,
-        on_status: &'a mut dyn FnMut(&Spidev, u16, Status, &[u8]),
-    ) -> Registers<'a> {
+        on_status: &mut dyn FnMut(&Spidev, u16, Status, &[u8]),
+    ) -> Registers<'_> {
         // Default vaules from PM Table 22
         Registers {
             spi,
