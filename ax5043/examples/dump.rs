@@ -12,7 +12,7 @@ fn main() -> Result<()> {
         }
     };
     let mut radio = Registers::new(spi, &mut callback);
-
+    radio.reset()?;
     println!("REVISION       {:?}", radio.REVISION().read()?);
     println!("SCRATCH        {:?}", radio.SCRATCH().read()?);
     println!("PWRMODE        {:?}", radio.PWRMODE().read()?);

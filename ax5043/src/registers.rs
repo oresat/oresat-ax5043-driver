@@ -12,7 +12,7 @@ use std::fmt;
 
 // newtypes to placate the orphan rule
 // registers are big endian
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Reg<const S: usize>(pub [u8; S]);
 type Reg8 = Reg<1>;
 type Reg16 = Reg<2>;
@@ -135,7 +135,7 @@ impl From<i32> for Reg32 {
     }
 }
 
-#[derive(Clone, Copy, Debug, IntoPrimitive, TryFromPrimitive)]
+#[derive(Clone, Copy, Debug, PartialEq, IntoPrimitive, TryFromPrimitive)]
 #[repr(u8)]
 #[rustfmt::skip]
 pub enum PwrModes{
@@ -151,7 +151,7 @@ pub enum PwrModes{
 }
 
 bitflags! {
-    #[derive(Clone, Copy, Debug)]
+    #[derive(Clone, Copy, Debug, PartialEq)]
     pub struct PwrFlags: u8 {
         const WDS   = 0x10; // RO
         const REFEN = 0x20;
@@ -160,7 +160,7 @@ bitflags! {
     }
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub struct PwrMode {
     pub mode: PwrModes,
     pub flags: PwrFlags,
@@ -204,7 +204,7 @@ impl TryFrom<Reg8> for PowStat {
 }
 
 bitflags! {
-    #[derive(Clone, Copy, Debug)]
+    #[derive(Clone, Copy, Debug, PartialEq)]
     pub struct PowIRQMask: u8 {
         const PWRGOOD  = 1 << 7;
         const REF      = 1 << 6;
@@ -286,7 +286,7 @@ impl From<RadioEvent> for Reg16 {
     }
 }
 
-#[derive(Clone, Copy, Debug, IntoPrimitive, TryFromPrimitive)]
+#[derive(Clone, Copy, Debug, PartialEq, IntoPrimitive, TryFromPrimitive)]
 #[repr(u8)]
 #[allow(non_camel_case_types)]
 #[rustfmt::skip]
@@ -302,7 +302,7 @@ pub enum ModulationMode {
     FM           = 0b1011,
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Modulation {
     pub mode: ModulationMode,
     pub halfspeed: bool,
@@ -325,7 +325,7 @@ impl From<Modulation> for Reg8 {
 }
 
 bitflags! {
-    #[derive(Clone, Copy, Debug)]
+    #[derive(Clone, Copy, Debug, PartialEq)]
     pub struct Encoding: u8 {
         const INV    = 1 << 0;
         const DIFF   = 1 << 1;
@@ -352,7 +352,7 @@ impl From<Encoding> for Reg8 {
     }
 }
 
-#[derive(Clone, Copy, Debug, IntoPrimitive, TryFromPrimitive)]
+#[derive(Clone, Copy, Debug, PartialEq, IntoPrimitive, TryFromPrimitive)]
 #[repr(u8)]
 #[allow(non_camel_case_types)]
 #[rustfmt::skip]
@@ -365,7 +365,7 @@ pub enum FrameMode {
     WIRELESS_MBUS_4TO6 = 0b101,
 }
 
-#[derive(Clone, Copy, Debug, IntoPrimitive, TryFromPrimitive)]
+#[derive(Clone, Copy, Debug, PartialEq, IntoPrimitive, TryFromPrimitive)]
 #[repr(u8)]
 #[allow(non_camel_case_types)]
 #[rustfmt::skip]
@@ -378,14 +378,14 @@ pub enum CRCMode {
 }
 
 bitflags! {
-    #[derive(Clone, Copy, Debug)]
+    #[derive(Clone, Copy, Debug, PartialEq)]
     pub struct FramingFlags: u8 {
         const ABORT = 1 << 0;
         const FRMRX = 1 << 7;
     }
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Framing {
     pub frmmode: FrameMode,
     pub crcmode: CRCMode,
@@ -410,7 +410,7 @@ impl From<Framing> for Reg8 {
 }
 
 bitflags! {
-    #[derive(Clone, Copy, Debug)]
+    #[derive(Clone, Copy, Debug, PartialEq)]
     pub struct FECFlags: u8 {
         const ENA         = 1 << 0;
         const POS         = 1 << 4;
@@ -420,7 +420,7 @@ bitflags! {
     }
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub struct FEC {
     pub flags: FECFlags,
     pub inpshift: u8,
@@ -442,7 +442,7 @@ impl From<FEC> for Reg8 {
     }
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub struct FECStatus {
     pub max_metric: u8,
     pub inv: bool,
@@ -498,7 +498,7 @@ impl TryFrom<Reg8> for XtalStatus {
 }
 
 bitflags! {
-    #[derive(Clone, Copy, Debug)]
+    #[derive(Clone, Copy, Debug, PartialEq)]
     pub struct PinState: u8 {
         const SYSCLK = 1 << 0;
         const DCLK   = 1 << 1;
@@ -516,7 +516,7 @@ impl TryFrom<Reg8> for PinState {
     }
 }
 
-#[derive(Clone, Copy, Debug, IntoPrimitive, TryFromPrimitive)]
+#[derive(Clone, Copy, Debug, PartialEq, IntoPrimitive, TryFromPrimitive)]
 #[repr(u8)]
 #[allow(non_camel_case_types)]
 #[rustfmt::skip]
@@ -540,7 +540,7 @@ pub enum PFSysClkMode {
     TEST            = 0b1_1111,
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub struct PFSysClk {
     pub mode: PFSysClkMode,
     pub pullup: bool,
@@ -563,14 +563,14 @@ impl From<PFSysClk> for Reg8 {
 }
 
 bitflags! {
-    #[derive(Clone, Copy, Debug)]
+    #[derive(Clone, Copy, Debug, PartialEq)]
     pub struct PFFlags: u8 {
         const INVERT = 1 << 6;
         const PULLUP = 1 << 7;
     }
 }
 
-#[derive(Clone, Copy, Debug, IntoPrimitive, TryFromPrimitive)]
+#[derive(Clone, Copy, Debug, PartialEq, IntoPrimitive, TryFromPrimitive)]
 #[repr(u8)]
 #[rustfmt::skip]
 pub enum PFDClkMode {
@@ -583,7 +583,7 @@ pub enum PFDClkMode {
     TEST = 0b111,
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub struct PFDClk {
     pub mode: PFDClkMode,
     pub flags: PFFlags,
@@ -605,7 +605,7 @@ impl From<PFDClk> for Reg8 {
     }
 }
 
-#[derive(Clone, Copy, Debug, IntoPrimitive, TryFromPrimitive)]
+#[derive(Clone, Copy, Debug, PartialEq, IntoPrimitive, TryFromPrimitive)]
 #[repr(u8)]
 #[allow(non_camel_case_types)]
 #[rustfmt::skip]
@@ -620,7 +620,7 @@ pub enum PFDataMode {
     TEST      = 0b1111,
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub struct PFData {
     pub mode: PFDataMode,
     pub flags: PFFlags,
@@ -642,7 +642,7 @@ impl From<PFData> for Reg8 {
     }
 }
 
-#[derive(Clone, Copy, Debug, IntoPrimitive, TryFromPrimitive)]
+#[derive(Clone, Copy, Debug, PartialEq, IntoPrimitive, TryFromPrimitive)]
 #[repr(u8)]
 #[rustfmt::skip]
 pub enum PFIRQMode {
@@ -653,7 +653,7 @@ pub enum PFIRQMode {
     TEST = 0b111,
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub struct PFIRQ {
     pub mode: PFIRQMode,
     pub flags: PFFlags,
@@ -675,7 +675,7 @@ impl From<PFIRQ> for Reg8 {
     }
 }
 
-#[derive(Clone, Copy, Debug, IntoPrimitive, TryFromPrimitive)]
+#[derive(Clone, Copy, Debug, PartialEq, IntoPrimitive, TryFromPrimitive)]
 #[repr(u8)]
 #[rustfmt::skip]
 pub enum PFAntSelMode {
@@ -689,7 +689,7 @@ pub enum PFAntSelMode {
     TEST      = 0b111,
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub struct PFAntSel {
     pub mode: PFAntSelMode,
     pub flags: PFFlags,
@@ -711,7 +711,7 @@ impl From<PFAntSel> for Reg8 {
     }
 }
 
-#[derive(Clone, Copy, Debug, IntoPrimitive, TryFromPrimitive)]
+#[derive(Clone, Copy, Debug, PartialEq, IntoPrimitive, TryFromPrimitive)]
 #[repr(u8)]
 #[allow(non_camel_case_types)]
 #[rustfmt::skip]
@@ -727,7 +727,7 @@ pub enum PFPwrAmpMode {
     TEST           = 0b1111,
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub struct PFPwrAmp {
     pub mode: PFPwrAmpMode,
     pub flags: PFFlags,
@@ -750,7 +750,7 @@ impl From<PFPwrAmp> for Reg8 {
 }
 
 bitflags! {
-    #[derive(Clone, Copy, Debug)]
+    #[derive(Clone, Copy, Debug, PartialEq)]
     pub struct PwrAmp: u8 {
         const PWRAMP = 1 << 0;
     }
@@ -770,7 +770,7 @@ impl From<PwrAmp> for Reg8 {
 }
 
 bitflags! {
-    #[derive(Clone, Copy, Debug)]
+    #[derive(Clone, Copy, Debug, PartialEq)]
     pub struct FIFOStat: u8 {
         const EMPTY       = 1 << 0;
         const FULL        = 1 << 1;
@@ -789,7 +789,7 @@ impl TryFrom<Reg8> for FIFOStat {
     }
 }
 
-#[derive(Clone, Copy, Debug, IntoPrimitive, TryFromPrimitive)]
+#[derive(Clone, Copy, Debug, PartialEq, IntoPrimitive, TryFromPrimitive)]
 #[repr(u8)]
 #[allow(non_camel_case_types)]
 #[rustfmt::skip]
@@ -802,7 +802,7 @@ pub enum FIFOCmds {
     ROLLBACK     = 0b00_0101,
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub struct FIFOCmd {
     pub mode: FIFOCmds,
     pub auto_commit: bool,
@@ -814,7 +814,7 @@ impl From<FIFOCmd> for Reg8 {
     }
 }
 
-#[derive(Clone, Copy, Debug, TryFromPrimitive)]
+#[derive(Clone, Copy, Debug, PartialEq, TryFromPrimitive)]
 #[repr(u8)]
 #[rustfmt::skip]
 pub enum FIFOChunkHeaderRX {
@@ -830,7 +830,7 @@ pub enum FIFOChunkHeaderRX {
 }
 
 bitflags! {
-    #[derive(Clone, Copy, Debug)]
+    #[derive(Clone, Copy, Debug, PartialEq)]
     pub struct FIFODataRXFlags: u8 {
         const ABORT    = 1 << 6;
         const SIZEFAIL = 1 << 5;
@@ -842,7 +842,7 @@ bitflags! {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum FIFOChunkRX {
     // NOP, ?
     RSSI(i8),
@@ -963,7 +963,7 @@ pub enum FIFOChunkHeaderTX {
 }
 
 bitflags! {
-    #[derive(Clone, Copy, Debug)]
+    #[derive(Clone, Copy, Debug, PartialEq)]
     pub struct TXCtrl: u8 {
         const SETTX    = 1 << 6;
         const TXSE     = 1 << 5;
@@ -976,7 +976,7 @@ bitflags! {
 }
 
 bitflags! {
-    #[derive(Clone, Copy, Debug)]
+    #[derive(Clone, Copy, Debug, PartialEq)]
     pub struct FIFODataTXFlags: u8 {
         const UNENC    = 1 << 5;
         const RAW      = 1 << 4;
@@ -987,7 +987,7 @@ bitflags! {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum FIFOChunkTX {
     NOP,
     TXCTRL(TXCtrl),
@@ -1045,7 +1045,7 @@ impl From<FIFOChunkTX> for Vec<u8> {
     }
 }
 
-#[derive(Clone, Copy, Debug, IntoPrimitive, TryFromPrimitive)]
+#[derive(Clone, Copy, Debug, PartialEq, IntoPrimitive, TryFromPrimitive)]
 #[repr(u8)]
 #[allow(non_camel_case_types)]
 #[rustfmt::skip]
@@ -1057,21 +1057,21 @@ pub enum FLT {
 }
 
 bitflags! {
-    #[derive(Clone, Copy, Debug)]
+    #[derive(Clone, Copy, Debug, PartialEq)]
     pub struct PLLLoopFlags: u8 {
         const FILTEN = 1 << 2;
         const DIRECT = 1 << 3;
     }
 }
 
-#[derive(Clone, Copy, Debug, IntoPrimitive, TryFromPrimitive)]
+#[derive(Clone, Copy, Debug, PartialEq, IntoPrimitive, TryFromPrimitive)]
 #[repr(u8)]
 pub enum FreqSel {
     A = 0,
     B = 1 << 7,
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub struct PLLLoop {
     pub filter: FLT,
     pub flags: PLLLoopFlags,
@@ -1095,7 +1095,7 @@ impl From<PLLLoop> for Reg8 {
     }
 }
 
-#[derive(Clone, Copy, Debug, IntoPrimitive, TryFromPrimitive)]
+#[derive(Clone, Copy, Debug, PartialEq, IntoPrimitive, TryFromPrimitive)]
 #[repr(u8)]
 #[allow(non_camel_case_types)]
 pub enum PLLVCORefDiv {
@@ -1106,7 +1106,7 @@ pub enum PLLVCORefDiv {
 }
 
 bitflags! {
-    #[derive(Clone, Copy, Debug)]
+    #[derive(Clone, Copy, Debug, PartialEq)]
     pub struct PLLVCODivFlags: u8 {
         const RFDIV = 1 << 2;
         const VCOSEL = 1 << 4;
@@ -1114,7 +1114,7 @@ bitflags! {
     }
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub struct PLLVCODiv {
     pub mode: PLLVCORefDiv,
     pub flags: PLLVCODivFlags,
@@ -1137,7 +1137,7 @@ impl From<PLLVCODiv> for Reg8 {
 }
 
 bitflags! {
-    #[derive(Clone, Copy, Debug)]
+    #[derive(Clone, Copy, Debug, PartialEq)]
     pub struct PLLRangingFlags: u8 {
         const RNG_START = 1 << 4;
         const RNGERR = 1 << 5;
@@ -1146,7 +1146,7 @@ bitflags! {
     }
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub struct PLLRanging {
     pub vcor: u8,
     pub flags: PLLRangingFlags,
@@ -1169,7 +1169,7 @@ impl From<PLLRanging> for Reg8 {
 }
 
 bitflags! {
-    #[derive(Clone, Copy, Debug)]
+    #[derive(Clone, Copy, Debug, PartialEq)]
     pub struct Diversity: u8 {
         const DIVENA = 1 << 0;
         const ANTSEL = 1 << 1;
@@ -1189,7 +1189,7 @@ impl From<Diversity> for Reg8 {
     }
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub struct TrkRFFreq(pub i32); // TRKRFFREQ is a signed 20 bit value
 
 impl TryFrom<Reg24> for TrkRFFreq {
@@ -1209,7 +1209,7 @@ impl From<TrkRFFreq> for Reg24 {
     }
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub struct MaxRFOffset {
     pub offset: u32,
     pub correction: bool,
@@ -1241,7 +1241,7 @@ pub enum RxParamSet {
     Set3 = 0b11,
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub struct RxParamSets(
     pub RxParamSet,
     pub RxParamSet,
@@ -1268,14 +1268,14 @@ impl From<RxParamSets> for Reg8 {
     }
 }
 
-//#[derive(Clone, Copy, Debug)] // FIXME:
+//#[derive(Clone, Copy, Debug, PartialEq)] // FIXME:
 //pub enum RxParamSpecial {
 //    Normal,
 //    CoarseAGC,
 //    BBOffsetAcq,
 //}
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub struct RxParamCurSet {
     pub index: u8,
     pub number: RxParamSet,
@@ -1293,7 +1293,7 @@ impl TryFrom<Reg8> for RxParamCurSet {
     }
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub struct AGCGain {
     pub attack: u8,
     pub decay: u8,
@@ -1304,7 +1304,7 @@ impl TryFrom<Reg8> for AGCGain {
     fn try_from(item: Reg8) -> Result<Self, Self::Error> {
         Ok(Self {
             attack: item.0[0] & 0x0F,
-            decay: item.0[0] & 0xF0,
+            decay: (item.0[0] & 0xF0) >> 4,
         })
     }
 }
@@ -1315,7 +1315,7 @@ impl From<AGCGain> for Reg8 {
     }
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub struct AGCHyst {
     pub hyst: u8,
 }
@@ -1335,7 +1335,7 @@ impl From<AGCHyst> for Reg8 {
     }
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub struct AGCMinMax {
     pub min: u8,
     pub max: u8,
@@ -1356,7 +1356,7 @@ impl From<AGCMinMax> for Reg8 {
     }
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub struct TimeGain {
     pub exponent: u8,
     pub mantissa: u8,
@@ -1367,7 +1367,7 @@ impl TryFrom<Reg8> for TimeGain {
     fn try_from(item: Reg8) -> Result<Self, Self::Error> {
         Ok(Self {
             exponent: item.0[0] & 0x0F,
-            mantissa: item.0[0] & 0xF0,
+            mantissa: (item.0[0] & 0xF0) >> 4,
         })
     }
 }
@@ -1378,7 +1378,7 @@ impl From<TimeGain> for Reg8 {
     }
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub struct DRGain {
     pub exponent: u8,
     pub mantissa: u8,
@@ -1389,7 +1389,7 @@ impl TryFrom<Reg8> for DRGain {
     fn try_from(item: Reg8) -> Result<Self, Self::Error> {
         Ok(Self {
             exponent: item.0[0] & 0x0F,
-            mantissa: item.0[0] & 0xF0,
+            mantissa: (item.0[0] & 0xF0) >> 4,
         })
     }
 }
@@ -1399,7 +1399,7 @@ impl From<DRGain> for Reg8 {
     }
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub struct PhaseGain {
     pub gain: u8,
     pub filter: u8,
@@ -1422,7 +1422,7 @@ impl From<PhaseGain> for Reg8 {
 }
 
 bitflags! {
-    #[derive(Clone, Copy, Debug)]
+    #[derive(Clone, Copy, Debug, PartialEq)]
     pub struct FreqGainAFlags: u8 {
         const AMPLGATE = 1 << 4;
         const HALFMOD  = 1 << 5;
@@ -1431,7 +1431,7 @@ bitflags! {
     }
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub struct FreqGainA {
     pub gain: u8,
     pub flags: FreqGainAFlags,
@@ -1454,14 +1454,14 @@ impl From<FreqGainA> for Reg8 {
 }
 
 bitflags! {
-    #[derive(Clone, Copy, Debug)]
+    #[derive(Clone, Copy, Debug, PartialEq)]
     pub struct FreqGainBFlags: u8 {
         const AVG    = 1 << 6;
         const FREEZE = 1 << 7;
     }
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub struct FreqGainB {
     pub gain: u8,
     pub flags: FreqGainBFlags,
@@ -1483,7 +1483,7 @@ impl From<FreqGainB> for Reg8 {
     }
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub struct FreqGainC {
     pub gain: u8,
 }
@@ -1503,7 +1503,7 @@ impl From<FreqGainC> for Reg8 {
     }
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub struct FreqGainD {
     pub gain: u8,
     pub freeze: bool,
@@ -1526,14 +1526,14 @@ impl From<FreqGainD> for Reg8 {
 }
 
 bitflags! {
-    #[derive(Clone, Copy, Debug)]
+    #[derive(Clone, Copy, Debug, PartialEq)]
     pub struct AmplGainFlags: u8 {
         const AGC = 1 << 6;
         const AVG = 1 << 7;
     }
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub struct AmplGain {
     pub gain: u8,
     pub flags: AmplGainFlags,
@@ -1555,7 +1555,7 @@ impl From<AmplGain> for Reg8 {
     }
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub struct FourFSK {
     pub decay: u8,
     pub update: bool,
@@ -1577,7 +1577,7 @@ impl From<FourFSK> for Reg8 {
     }
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub struct BBOffsRes {
     pub res_int_a: u8,
     pub res_int_b: u8,
@@ -1588,7 +1588,7 @@ impl TryFrom<Reg8> for BBOffsRes {
     fn try_from(item: Reg8) -> Result<Self, Self::Error> {
         Ok(Self {
             res_int_a: item.0[0] & 0x0F,
-            res_int_b: item.0[0] & 0xF0,
+            res_int_b: (item.0[0] & 0xF0) >> 4,
         })
     }
 }
@@ -1599,7 +1599,7 @@ impl From<BBOffsRes> for Reg8 {
     }
 }
 
-#[derive(Clone, Copy, Debug, IntoPrimitive, TryFromPrimitive)]
+#[derive(Clone, Copy, Debug, PartialEq, IntoPrimitive, TryFromPrimitive)]
 #[repr(u8)]
 #[allow(non_camel_case_types)]
 #[rustfmt::skip]
@@ -1622,7 +1622,7 @@ impl From<ModCfgF> for Reg8 {
     }
 }
 
-#[derive(Clone, Copy, Debug, IntoPrimitive, TryFromPrimitive)]
+#[derive(Clone, Copy, Debug, PartialEq, IntoPrimitive, TryFromPrimitive)]
 #[repr(u8)]
 #[allow(non_camel_case_types)]
 #[rustfmt::skip]
@@ -1634,7 +1634,7 @@ pub enum SlowRamp {
 }
 
 bitflags! {
-    #[derive(Clone, Copy, Debug)]
+    #[derive(Clone, Copy, Debug, PartialEq)]
     pub struct ModCfgAFlags: u8 {
         const TXDIFF      = 1 << 0;
         const TXSE        = 1 << 1;
@@ -1644,7 +1644,7 @@ bitflags! {
     }
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub struct ModCfgA {
     pub slowramp: SlowRamp,
     pub flags: ModCfgAFlags,
@@ -1667,14 +1667,14 @@ impl From<ModCfgA> for Reg8 {
 }
 
 bitflags! {
-    #[derive(Clone, Copy, Debug)]
+    #[derive(Clone, Copy, Debug, PartialEq)]
     pub struct PLLVCOIFlags: u8 {
         const AUTOMATIC = 0;
         const MANUAL = 1 << 7;
     }
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub struct PLLVCOI {
     pub bias: u8,
     pub flags: PLLVCOIFlags,
@@ -1696,7 +1696,7 @@ impl From<PLLVCOI> for Reg8 {
     }
 }
 
-#[derive(Clone, Copy, Debug, IntoPrimitive, TryFromPrimitive)]
+#[derive(Clone, Copy, Debug, PartialEq, IntoPrimitive, TryFromPrimitive)]
 #[repr(u8)]
 #[allow(non_camel_case_types)]
 #[rustfmt::skip]
@@ -1708,14 +1708,14 @@ pub enum LockDetDly {
 }
 
 bitflags! {
-    #[derive(Clone, Copy, Debug)]
+    #[derive(Clone, Copy, Debug, PartialEq)]
     pub struct LockDetFlags: u8 {
         const AUTOMATIC = 0;
         const MANUAL = 1 << 2;
     }
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub struct PLLLockDet {
     pub delay: LockDetDly,
     pub flags: LockDetFlags,
@@ -1739,7 +1739,7 @@ impl From<PLLLockDet> for Reg8 {
     }
 }
 
-#[derive(Clone, Copy, Debug, IntoPrimitive, TryFromPrimitive)]
+#[derive(Clone, Copy, Debug, PartialEq, IntoPrimitive, TryFromPrimitive)]
 #[repr(u8)]
 #[allow(non_camel_case_types)]
 #[rustfmt::skip]
@@ -1768,7 +1768,7 @@ impl From<PLLRngClk> for Reg8 {
 }
 
 bitflags! {
-    #[derive(Clone, Copy, Debug)]
+    #[derive(Clone, Copy, Debug, PartialEq)]
     pub struct PktAddrCfgFlags: u8 {
         const FEC_SYNC_DIS   = 1 << 5;
         const CRC_SKIP_FIRST = 1 << 6;
@@ -1776,7 +1776,7 @@ bitflags! {
     }
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub struct PktAddrCfg {
     pub addr_pos: u8,
     pub flags: PktAddrCfgFlags,
@@ -1798,7 +1798,7 @@ impl From<PktAddrCfg> for Reg8 {
     }
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub struct PktLenCfg {
     pub pos: u8,
     pub bits: u8,
@@ -1820,7 +1820,7 @@ impl From<PktLenCfg> for Reg8 {
     }
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub struct MatchLen {
     pub len: u8, // FIXME 4bit/5bit
     pub raw: bool,
@@ -1843,7 +1843,7 @@ impl From<MatchLen> for Reg8 {
 }
 
 // FIXME: merge with TimeGain, parameterize over m width
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub struct TMG {
     pub e: u8,
     pub m: u8,
@@ -1873,7 +1873,7 @@ impl fmt::Display for TMG {
 }
 
 bitflags! {
-    #[derive(Clone, Copy, Debug)]
+    #[derive(Clone, Copy, Debug, PartialEq)]
     pub struct PktMiscFlags: u8 {
         const RX_RSSI_CLK   = 1 << 0;
         const RX_AGC_CLK    = 1 << 1;
@@ -1896,7 +1896,7 @@ impl From<PktMiscFlags> for Reg8 {
 }
 
 bitflags! {
-    #[derive(Clone, Copy, Debug)]
+    #[derive(Clone, Copy, Debug, PartialEq)]
     pub struct PktStoreFlags: u8 {
         const TIMER    = 1 << 0;
         const FOFFS    = 1 << 1;
@@ -1922,7 +1922,7 @@ impl From<PktStoreFlags> for Reg8 {
 }
 
 bitflags! {
-    #[derive(Clone, Copy, Debug)]
+    #[derive(Clone, Copy, Debug, PartialEq)]
     pub struct PktAcceptFlags: u8 {
         const RESIDUE = 1 << 0;
         const ABRT    = 1 << 1;
@@ -1946,7 +1946,7 @@ impl From<PktAcceptFlags> for Reg8 {
     }
 }
 
-#[derive(Clone, Copy, Debug, IntoPrimitive, TryFromPrimitive)]
+#[derive(Clone, Copy, Debug, PartialEq, IntoPrimitive, TryFromPrimitive)]
 #[repr(u8)]
 #[rustfmt::skip]
 pub enum PerfF10 {
@@ -1968,7 +1968,7 @@ impl From<PerfF10> for Reg8 {
     }
 }
 
-#[derive(Clone, Copy, Debug, IntoPrimitive, TryFromPrimitive)]
+#[derive(Clone, Copy, Debug, PartialEq, IntoPrimitive, TryFromPrimitive)]
 #[repr(u8)]
 #[rustfmt::skip]
 pub enum PerfF11 {
@@ -1990,7 +1990,7 @@ impl From<PerfF11> for Reg8 {
     }
 }
 
-#[derive(Clone, Copy, Debug, IntoPrimitive, TryFromPrimitive)]
+#[derive(Clone, Copy, Debug, PartialEq, IntoPrimitive, TryFromPrimitive)]
 #[repr(u8)]
 #[allow(non_camel_case_types)]
 #[rustfmt::skip]
@@ -2013,7 +2013,7 @@ impl From<PerfF34> for Reg8 {
     }
 }
 
-#[derive(Clone, Copy, Debug, IntoPrimitive, TryFromPrimitive)]
+#[derive(Clone, Copy, Debug, PartialEq, IntoPrimitive, TryFromPrimitive)]
 #[repr(u8)]
 #[rustfmt::skip]
 pub enum PerfF35 {
