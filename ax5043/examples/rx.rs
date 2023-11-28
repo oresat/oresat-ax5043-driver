@@ -65,16 +65,11 @@ fn print_signal(radio: &mut Registers) -> Result<()> {
         radio.TRKAMPL().read()?,
         radio.TRKPHASE().read()?
     );
-
-    let mut demod: i32 = radio.TRKFSKDEMOD().read()?.into();
-    if demod > 2_i32.pow(13) {
-        demod = demod - 2_i32.pow(14)
-    }
     println!(
         "RFFREQ:{:?} FREQ:{:?} DEMOD:{:?}",
         radio.TRKRFFREQ().read()?,
         radio.TRKFREQ().read()?,
-        demod
+        radio.TRKFSKDEMOD().read()?.0
     );
     println!("{:?}", radio.RXPARAMCURSET().read()?);
     Ok(())

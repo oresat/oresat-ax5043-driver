@@ -1210,6 +1210,27 @@ impl From<TrkRFFreq> for Reg24 {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
+pub struct TrkFSKDemod(pub i16); // TRKFSKDEMOD is a signed 14 bit value
+
+impl TryFrom<Reg16> for TrkFSKDemod {
+    type Error = Reg16;
+    fn try_from(item: Reg16) -> Result<Self, Self::Error> {
+        Ok(Self(
+            (((i16::from(item.0[0])) << 8 | i16::from(item.0[1]))
+             << 2) // for sign extension. The register only sign extends
+             >> 2, // out to 14 bits even though we can read 16
+        ))
+    }
+}
+
+impl From<TrkFSKDemod> for Reg16 {
+    fn from(item: TrkFSKDemod) -> Self {
+        item.0.into()
+    }
+}
+
+
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub struct MaxRFOffset {
     pub offset: u32,
     pub correction: bool,

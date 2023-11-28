@@ -421,13 +421,7 @@ fn get_signal(radio: &mut Registers, channel: &config::ChannelParameters) -> Res
         datarate: radio.TRKDATARATE().read()?,
         ampl: radio.TRKAMPL().read()?,
         phase: radio.TRKPHASE().read()?,
-        fskdemod: {
-            let mut demod: i32 = radio.TRKFSKDEMOD().read()?.into();
-            if demod > 2_i32.pow(13) {
-                demod = demod - 2_i32.pow(14)
-            }
-            demod
-        },
+        fskdemod: radio.TRKFSKDEMOD().read()?.0.into(),
         rffreq: radio.TRKRFFREQ().read()?.0,
         freq: i64::from(radio.TRKFREQ().read()?) * 9600 / 2i64.pow(16), //channel.datarate
         paramcurset: radio.RXPARAMCURSET().read()?,

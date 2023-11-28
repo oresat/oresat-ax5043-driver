@@ -390,7 +390,7 @@ registers! {
         TRKPHASE:       u16         [0x04A, 2, ReadOnly ], // Phase Tracking
         TRKRFFREQ:      TrkRFFreq   [0x04D, 3, ReadWrite], // RF Frequency Tracking
         TRKFREQ:        i16         [0x050, 2, ReadWrite], // Frequency Tracking
-        TRKFSKDEMOD:    u16         [0x052, 2, ReadOnly ], // FSK Demodulator Tracking
+        TRKFSKDEMOD:    TrkFSKDemod [0x052, 2, ReadOnly ], // FSK Demodulator Tracking
         /* Timer */
         TIMER2:         u32         [0x059, 3, ReadOnly], // 1 MHz Timer
         /* Wakeup Timer */
@@ -697,7 +697,7 @@ impl Registers<'_> {
             TRKPHASE: 0,
             TRKRFFREQ: TrkRFFreq(0),
             TRKFREQ: 0,
-            TRKFSKDEMOD: 0,
+            TRKFSKDEMOD: TrkFSKDemod(0),
             TIMER2: 0,
             WAKEUPTIMER: 0,
             WAKEUP: 0,
