@@ -380,17 +380,20 @@ registers! {
         PLLRANGINGB:    PLLRanging  [0x03B, 1, ReadWrite], // PLL Autoranging
         FREQB:          u32         [0x03C, 4, ReadWrite], // Synthesizer Frequency
         /* Signal Strength */
+        SIGNALSTR:      SignalStr   [0x040, 4, ReadOnly ], // Aggregate signal strength block
         RSSI:           i8          [0x040, 1, ReadOnly ], // Received Signal Strength Indicator
         BGNDRSSI:       u8          [0x041, 1, ReadWrite], // Background RSSI
         DIVERSITY:      Diversity   [0x042, 1, ReadWrite], // Antenna Diversity Configuration
         AGCCOUNTER:     i8          [0x043, 1, ReadWrite], // AGC Current Value
         /* Receiver Tracking */
+        RXTRACKING:     RXTracking  [0x045,16, ReadOnly ], // Aggregate receiver tracking block
         TRKDATARATE:    i32         [0x045, 3, ReadOnly ], // Datarate Tracking
         TRKAMPL:        u16         [0x048, 2, ReadOnly ], // Amplitude Tracking
         TRKPHASE:       u16         [0x04A, 2, ReadOnly ], // Phase Tracking
         TRKRFFREQ:      TrkRFFreq   [0x04D, 3, ReadWrite], // RF Frequency Tracking
         TRKFREQ:        i16         [0x050, 2, ReadWrite], // Frequency Tracking
         TRKFSKDEMOD:    TrkFSKDemod [0x052, 2, ReadOnly ], // FSK Demodulator Tracking
+        TRKAFSKDEMOD:   u16         [0x054, 2, ReadOnly ], // AFSK Demodulator Tracking
         /* Timer */
         TIMER2:         u32         [0x059, 3, ReadOnly], // 1 MHz Timer
         /* Wakeup Timer */
@@ -688,16 +691,32 @@ impl Registers<'_> {
                 flags: PLLRangingFlags::empty(),
             },
             FREQB: 0x3934_CCCD,
+            SIGNALSTR: SignalStr {
+                rssi: 0,
+                bgndrssi: 0,
+                diversity: Diversity::empty(),
+                agccounter: 0,
+            },
             RSSI: 0,
             BGNDRSSI: 0,
             DIVERSITY: Diversity::empty(),
             AGCCOUNTER: 0,
+            RXTRACKING: RXTracking {
+                datarate: 0,
+                ampl: 0,
+                phase: 0,
+                rffreq: TrkRFFreq(0),
+                freq: 0,
+                fskdemod: TrkFSKDemod(0),
+                afskdemod: 0,
+            },
             TRKDATARATE: 0,
             TRKAMPL: 0,
             TRKPHASE: 0,
             TRKRFFREQ: TrkRFFreq(0),
             TRKFREQ: 0,
             TRKFSKDEMOD: TrkFSKDemod(0),
+            TRKAFSKDEMOD: 0,
             TIMER2: 0,
             WAKEUPTIMER: 0,
             WAKEUP: 0,

@@ -1190,6 +1190,26 @@ impl From<Diversity> for Reg8 {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
+pub struct SignalStr {
+    pub rssi: i8,
+    pub bgndrssi: u8,
+    pub diversity: Diversity,
+    pub agccounter: i8,
+}
+
+impl TryFrom<Reg<4>> for SignalStr {
+    type Error = Reg<4>;
+    fn try_from(item: Reg<4>) -> Result<Self, Self::Error> {
+        Ok(Self {
+            rssi: Reg8::from(item.0[0]).try_into().map_err(|_| item)?,
+            bgndrssi: Reg8::from(item.0[1]).try_into().map_err(|_| item)?,
+            diversity: Reg8::from(item.0[2]).try_into().map_err(|_| item)?,
+            agccounter: Reg8::from(item.0[3]).try_into().map_err(|_| item)?,
+        })
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub struct TrkRFFreq(pub i32); // TRKRFFREQ is a signed 20 bit value
 
 impl TryFrom<Reg24> for TrkRFFreq {
@@ -1226,6 +1246,40 @@ impl TryFrom<Reg16> for TrkFSKDemod {
 impl From<TrkFSKDemod> for Reg16 {
     fn from(item: TrkFSKDemod) -> Self {
         item.0.into()
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct RXTracking {
+    pub datarate: i32,
+    pub ampl: u16,
+    pub phase: u16,
+    pub rffreq: TrkRFFreq,
+    pub freq: i16,
+    pub fskdemod: TrkFSKDemod,
+    pub afskdemod: u16,
+}
+
+impl TryFrom<Reg<16>> for RXTracking {
+    type Error = Reg<16>;
+    fn try_from(item: Reg<16>) -> Result<Self, Self::Error> {
+        let datarate:  [u8; 3] = item.0[0..3].try_into().unwrap();
+        let ampl:      [u8; 2] = item.0[3..5].try_into().unwrap();
+        let phase:     [u8; 2] = item.0[5..7].try_into().unwrap();
+        let rffreq:    [u8; 3] = item.0[7..10].try_into().unwrap();
+        let freq:      [u8; 2] = item.0[10..12].try_into().unwrap();
+        let fskdemod:  [u8; 2] = item.0[12..14].try_into().unwrap();
+        let afskdemod: [u8; 2] = item.0[14..16].try_into().unwrap();
+
+        Ok(Self {
+            datarate: Reg24::from(datarate).try_into().map_err(|_| item)?,
+            ampl: Reg16::from(ampl).try_into().map_err(|_| item)?,
+            phase: Reg16::from(phase).try_into().map_err(|_| item)?,
+            rffreq: Reg24::from(rffreq).try_into().map_err(|_| item)?,
+            freq: Reg16::from(freq).try_into().map_err(|_| item)?,
+            fskdemod: Reg16::from(fskdemod).try_into().map_err(|_| item)?,
+            afskdemod: Reg16::from(afskdemod).try_into().map_err(|_| item)?,
+        })
     }
 }
 

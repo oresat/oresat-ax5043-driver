@@ -414,16 +414,19 @@ impl Default for RXState {
 // TODO: FRAMING::FRMRX
 
 fn get_signal(radio: &mut Registers, channel: &config::ChannelParameters) -> Result<RXState> {
+    let signal = radio.SIGNALSTR().read()?;
+    let track = radio.RXTRACKING().read()?;
+
     Ok(RXState {
-        rssi: i64::from(radio.RSSI().read()?),
-        bgndrssi: radio.BGNDRSSI().read()?,
-        agccounter: (i32::from(radio.AGCCOUNTER().read()?) * 4) / 3,
-        datarate: radio.TRKDATARATE().read()?,
-        ampl: radio.TRKAMPL().read()?,
-        phase: radio.TRKPHASE().read()?,
-        fskdemod: radio.TRKFSKDEMOD().read()?.0.into(),
-        rffreq: radio.TRKRFFREQ().read()?.0,
-        freq: i64::from(radio.TRKFREQ().read()?) * 9600 / 2i64.pow(16), //channel.datarate
+        rssi: i64::from(signal.rssi),
+        bgndrssi: signal.bgndrssi,
+        agccounter: (i32::from(signal.agccounter) * 4) / 3,
+        datarate: track.datarate,
+        ampl: track.ampl,
+        phase: track.phase,
+        fskdemod: track.fskdemod.0.into(),
+        rffreq: track.rffreq.0,
+        freq: i64::from(track.freq) * 9600 / 2i64.pow(16), //channel.datarate
         paramcurset: radio.RXPARAMCURSET().read()?,
     })
 }
