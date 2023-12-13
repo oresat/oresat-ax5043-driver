@@ -2,10 +2,11 @@ use anyhow::Result;
 use ax5043::{config, config::PwrAmp, config::IRQ, config::*, Status};
 use ax5043::{registers::*, Registers, RX, TX};
 use clap::Parser;
-use gpiod::{Chip, Options};
+use gpiod::{Chip, Options, EdgeDetect};
 use mio::{unix::SourceFd, Events, Interest, Poll, Token};
 use mio_signals::{Signal, Signals};
-use std::{os::fd::AsRawFd, time::Duration};
+use std::{io::Write, os::fd::AsRawFd, time::Duration};
+use std::net::{IpAddr, Ipv6Addr, SocketAddr, UdpSocket};
 use timerfd::{SetTimeFlags, TimerFd, TimerState};
 
 fn configure_radio(radio: &mut Registers) -> Result<(Board, ChannelParameters)> {
@@ -322,12 +323,13 @@ pub fn configure_radio_rx(radio: &mut Registers) -> Result<(Board, ChannelParame
     radio.MATCH1MAX().write(0xA)?;
     radio.TMGRXPREAMBLE2().write(TMG { m: 0x17, e: 1 })?;
 
-    radio.PKTMAXLEN().write(0xC8)?;
-    radio.PKTLENCFG().write(PktLenCfg { pos: 0, bits: 0x0 })?;
+    radio.PKTMAXLEN().write(0xFF)?;
+    radio.PKTLENCFG().write(PktLenCfg { pos: 0, bits: 0xF })?;
     radio.PKTLENOFFSET().write(0x09)?;
 
-    radio.PKTCHUNKSIZE().write(0x0D)?;
+    radio.PKTCHUNKSIZE().write(0x09)?;
     radio.PKTACCEPTFLAGS().write(PktAcceptFlags::LRGP)?;
+
     radio.PKTADDRCFG().write(PktAddrCfg {
         addr_pos: 0,
         flags: PktAddrCfgFlags::MSB_FIRST | PktAddrCfgFlags::FEC_SYNC_DIS,
@@ -338,8 +340,39 @@ pub fn configure_radio_rx(radio: &mut Registers) -> Result<(Board, ChannelParame
     Ok((board, channel))
 }
 
+fn read_packet(radio: &mut Registers, packet: &mut Vec<u8>, uplink: &mut UdpSocket) -> Result<()> {
+    let len = radio.FIFOCOUNT().read()?;
+    if len <= 0 {
+        return Ok(())
+    }
+
+    for chunk in radio.FIFODATARX().read(len.into())? {
+        if let FIFOChunkRX::DATA{flags, ref data} = chunk {
+            println!("{:02X?}", chunk);
+            if flags.intersects(FIFODataRXFlags::ABORT | FIFODataRXFlags::SIZEFAIL | FIFODataRXFlags::ADDRFAIL | FIFODataRXFlags::CRCFAIL | FIFODataRXFlags::RESIDUE) {
+                packet.clear();
+                continue;
+            }
+
+            if flags.contains(FIFODataRXFlags::PKTSTART) {
+                packet.clear();
+            }
+            packet.write(&data)?;
+            if flags.contains(FIFODataRXFlags::PKTEND) {
+                uplink.send(&packet[..packet.len()-2])?;
+                println!("{:02X?}", packet);
+            }
+        }
+    }
+    Ok(())
+}
+
+
 #[derive(Parser, Debug)]
+/// Try it out: `socat UDP-LISTEN:10025 STDOUT`
 struct Args {
+    #[arg(short, long, default_value = "10025")]
+    uplink: u16,
     #[arg(short, long, default_value = "/dev/spidev1.1")]
     spi: String,
 }
@@ -350,6 +383,11 @@ fn main() -> Result<()> {
     let mut poll = Poll::new()?;
     let registry = poll.registry();
     let mut events = Events::with_capacity(128);
+
+    let src = SocketAddr::new(IpAddr::V6(Ipv6Addr::UNSPECIFIED), 0);
+    let dest = SocketAddr::new(IpAddr::V6(Ipv6Addr::LOCALHOST), args.uplink);
+    let mut uplink = UdpSocket::bind(src)?;
+    uplink.connect(dest)?;
 
     let mut tfd = TimerFd::new().unwrap();
     tfd.set_state(
@@ -369,6 +407,13 @@ fn main() -> Result<()> {
     let chip = Chip::new("gpiochip1")?;
     let opts = Options::output([27]).values([false]);
     let pa_enable = chip.request_lines(opts)?;
+
+    let chip0 = Chip::new("gpiochip0")?;
+    let opts = Options::input([31]).edge(EdgeDetect::Rising);
+    let mut lband_irq = chip0.request_lines(opts)?;
+
+    const IRQ: Token = Token(4);
+    registry.register(&mut SourceFd(&lband_irq.as_raw_fd()), IRQ, Interest::READABLE)?;
 
     let spi0 = ax5043::open(args.spi)?;
     let mut status = Status::empty();
@@ -395,6 +440,9 @@ fn main() -> Result<()> {
         mode: PwrModes::RX,
     })?;
 
+    _ = radio.PLLRANGINGA().read()?; // sticky lock bit ~ IRQPLLUNLIOCK, gate
+    _ = radio.POWSTICKYSTAT().read()?; // clear sticky power flags for PWR_GOOD
+
     radio.FIFOCMD().write(FIFOCmd {
         mode: FIFOCmds::CLEAR_ERROR,
         auto_commit: false,
@@ -404,20 +452,20 @@ fn main() -> Result<()> {
         auto_commit: false,
     })?;
 
+    radio.IRQMASK().write(ax5043::registers::IRQ::FIFONOTEMPTY)?;
+    let mut packet = Vec::new();
+
     'outer: loop {
         poll.poll(&mut events, None)?;
         for event in events.iter() {
             match event.token() {
                 TIMER => {
                     tfd.read();
-                    _ = radio.PLLRANGINGA().read()?; // sticky lock bit ~ IRQPLLUNLIOCK, gate
-                    _ = radio.POWSTICKYSTAT().read()?; // clear sticky power flags for PWR_GOOD
-
-                    //println!("RSSI {}", radio.RSSI.read()?);
-                    let len = radio.FIFOCOUNT().read()?;
-                    if len > 0 {
-                        let data = radio.FIFODATARX().read(len.into())?;
-                        println!("{:02X?}", data);
+                }
+                IRQ => {
+                    lband_irq.read_event()?;
+                    while lband_irq.get_values(0u8)? > 0 {
+                        read_packet(&mut radio, &mut packet, &mut uplink)?;
                     }
                 }
                 CTRLC => break 'outer,

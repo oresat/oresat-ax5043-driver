@@ -96,6 +96,8 @@ fn configure_radio(radio: &mut Registers, mode: &Mode, power: u16) -> Result<()>
 
     autorange(radio)?;
     Ok(())
+     // FIXME LSB First only for beacon
+
 }
 
 fn transmit(radio: &mut Registers, buf: &[u8], amt: usize) -> Result<()> {

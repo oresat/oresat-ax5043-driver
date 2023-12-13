@@ -2,7 +2,8 @@ extern crate ax5043;
 use anyhow::{anyhow, Result};
 use mio::{unix::SourceFd, Events, Interest, Poll, Token};
 use mio_signals::{Signal, Signals};
-use std::{os::fd::AsRawFd, time::Duration};
+use std::{io::Write, os::fd::AsRawFd, time::Duration};
+use std::net::{IpAddr, Ipv6Addr, SocketAddr, UdpSocket};
 use timerfd::{SetTimeFlags, TimerFd, TimerState};
 use gpiod::{Chip, EdgeDetect, Options};
 
@@ -76,7 +77,7 @@ fn print_signal(radio: &mut Registers) -> Result<()> {
     Ok(())
 }
 
-pub fn ax5043_receive(radio: &mut Registers) -> Result<()> {
+pub fn ax5043_receive(radio: &mut Registers, packet: &mut Vec<u8>, uplink: &mut UdpSocket) -> Result<()> {
     //print_signal(radio)?;
     let stat = radio.FIFOSTAT().read()?;
     println!("{:?}", stat);
@@ -85,14 +86,32 @@ pub fn ax5043_receive(radio: &mut Registers) -> Result<()> {
     }
 
     let len = radio.FIFOCOUNT().read()?;
-    if len > 0 {
-        for packet in radio.FIFODATARX().read(len.into())? {
-            match packet {
-                FIFOChunkRX::DATA{flags, ref data} => {
-                    println!("{}, {} {:02X?}", len, data.len(), packet)
+    if len <= 0 {
+        return Ok(())
+    }
+
+    for chunk in radio.FIFODATARX().read(len.into())? {
+        match chunk {
+            FIFOChunkRX::DATA{flags, ref data} => {
+                if flags.intersects(FIFODataRXFlags::ABORT | FIFODataRXFlags::SIZEFAIL | FIFODataRXFlags::ADDRFAIL | FIFODataRXFlags::CRCFAIL | FIFODataRXFlags::RESIDUE) {
+                    packet.clear();
+                    continue;
                 }
-                _ => println!("{:02X?}", packet)
+                if flags.contains(FIFODataRXFlags::PKTSTART) {
+                    packet.clear();
+                    packet.write(data)?;
+                }
+                if flags.is_empty() {
+                    packet.write(data)?;
+                }
+                if flags.contains(FIFODataRXFlags::PKTEND) {
+                    packet.write(data)?;
+                    uplink.send(&packet[..packet.len()-2])?;
+                    println!("{:02X?}", packet);
+                    // indicate end
+                }
             }
+            _ => println!("{:02X?}", packet)
         }
     }
     Ok(())
@@ -105,6 +124,12 @@ fn main() -> Result<()> {
     const CTRLC: Token = Token(0);
     let mut signals = Signals::new(Signal::Interrupt.into())?;
     registry.register(&mut signals, CTRLC, Interest::READABLE)?;
+
+    let src = SocketAddr::new(IpAddr::V6(Ipv6Addr::UNSPECIFIED), 0);
+    //let dest = SocketAddr::new(IpAddr::V6(Ipv6Addr::LOCALHOST), 10025);
+    let mut uplink = UdpSocket::bind(src)?;
+    uplink.connect("169.254.209.33:10025")?;
+
 
     let chip = Chip::new("gpiochip0")?;
     let opts = Options::input([16])
@@ -145,6 +170,7 @@ fn main() -> Result<()> {
 
     ax5043_listen(&mut radio_rx)?;
 
+    let mut packet = Vec::new();
     let mut events = Events::with_capacity(128);
     'outer: loop {
         poll.poll(&mut events, None)?;
@@ -153,7 +179,7 @@ fn main() -> Result<()> {
                 BEACON => { tfd.read(); },
                 IRQ => {
                     println!("IRQ!: {:?}", inputs.read_event()?);
-                    ax5043_receive(&mut radio_rx)?;
+                    ax5043_receive(&mut radio_rx, &mut packet, &mut uplink)?;
                 },
                 CTRLC => break 'outer,
                 _ => unreachable!(),

@@ -233,22 +233,22 @@ fn main() -> Result<()> {
                     let packets = [ FIFOChunkTX::REPEATDATA {
                             flags: FIFODataTXFlags::PKTSTART,
                             count: 128,
-                            data: 0x3,
+                            data: 0x41,
                         },
                         FIFOChunkTX::REPEATDATA {
                             flags: FIFODataTXFlags::empty(),
                             count: 128,
-                            data: 0x3,
+                            data: 0x41,
                         },
                         FIFOChunkTX::REPEATDATA {
                             flags: FIFODataTXFlags::empty(),
                             count: 128,
-                            data: 0x3,
+                            data: 0x41,
                         },
                         FIFOChunkTX::REPEATDATA {
                             flags: FIFODataTXFlags::PKTEND,
                             count: 128,
-                            data: 0x3,
+                            data: 0x41,
                         },
                     ];
 
