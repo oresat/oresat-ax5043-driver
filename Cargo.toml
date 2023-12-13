@@ -4,3 +4,6 @@ members = [
     "ax5043",
     "ax5043_derive",
 ]
+
+[patch.crates-io]
+gpiod = { path = "../gpiod-rs" }

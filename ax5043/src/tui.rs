@@ -157,8 +157,15 @@ impl PacketController {
         })
     }
 
-    pub fn widget<'a>(&self) -> Table<'a> {
-        Table::new(vec![
+    pub fn widget<B: Backend>(&self, f: &mut Frame<B>, area: Rect){
+        let layout = Layout::default()
+            .direction(Direction::Vertical)
+            .margin(0)
+            .constraints([Constraint::Min(4), Constraint::Min(2)].as_ref())
+            .split(area);
+
+
+        let upper = Table::new(vec![
             Row::new(vec![
                 Cell::from("TX Boost"),
                 Cell::from("Settle"),
@@ -200,12 +207,7 @@ impl PacketController {
                 Cell::from(self.pkt_chunk_size.to_string()),
             ]),
         ])
-        .block(
-            Block::default()
-                .borders(Borders::ALL)
-                .title("Packet Controller"),
-        )
-        .widths(&[
+         .widths(&[
             Constraint::Max(10),
             Constraint::Max(10),
             Constraint::Max(10),
@@ -215,14 +217,12 @@ impl PacketController {
             Constraint::Max(10),
             Constraint::Max(10),
             Constraint::Max(10),
-            Constraint::Max(10),
-            Constraint::Max(10),
-            Constraint::Max(10),
-        ])
-    }
+            Constraint::Max(6),
+            Constraint::Max(6),
+            Constraint::Max(6),
+        ]);
 
-    pub fn widget_flags<'a>(&self) -> Table<'a> {
-        Table::new(vec![
+        let lower = Table::new(vec![
             Row::new(vec![
                 Cell::from("Misc Flag"),
                 Cell::from("Store Flg"),
@@ -238,7 +238,17 @@ impl PacketController {
             Constraint::Max(30),
             Constraint::Max(30),
             Constraint::Max(50),
-        ])
+        ]);
+
+        f.render_widget(upper, layout[0]);
+        f.render_widget(lower, layout[1]);
+        //FIXME: border?
+//       .block(
+//            Block::default()
+//                .borders(Borders::ALL)
+//                .title("Packet Controller"),
+//        )
+
     }
 }
 

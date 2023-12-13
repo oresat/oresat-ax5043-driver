@@ -97,70 +97,6 @@ fn ui<B: Backend>(f: &mut Frame<B>, state: &UIState) {
     f.render_widget(state.synthesizer.widget(), parameters[0]);
     f.render_widget(state.tx.widget(), parameters[1]);
     f.render_widget(state.chan.widget(), parameters[2]);
-    /*
-        let rx = Layout::default()
-            .direction(Direction::Horizontal)
-            .margin(1)
-            .constraints([
-                Constraint::Percentage(50),
-                Constraint::Percentage(50),
-            ].as_ref())
-            .split(chunks[1]);
-
-        let parameters = Layout::default()
-            .direction(Direction::Vertical)
-            .margin(1)
-            .constraints([
-                Constraint::Percentage(20),
-                Constraint::Percentage(20),
-                Constraint::Percentage(20),
-                Constraint::Percentage(20),
-                Constraint::Percentage(20),
-            ].as_ref())
-            .split(rx[1]);
-
-        f.render_widget(state.receiver_parameters(), parameters[0]);
-        f.render_widget(state.receiver_parameter_set(&state.set0, state.rx.back().unwrap_or(&RXState::default()).paramcurset.number == RxParamSet::Set0), parameters[1]);
-        f.render_widget(state.receiver_parameter_set(&state.set1, state.rx.back().unwrap_or(&RXState::default()).paramcurset.number == RxParamSet::Set1), parameters[2]);
-        f.render_widget(state.receiver_parameter_set(&state.set2, state.rx.back().unwrap_or(&RXState::default()).paramcurset.number == RxParamSet::Set2), parameters[3]);
-        f.render_widget(state.receiver_parameter_set(&state.set3, state.rx.back().unwrap_or(&RXState::default()).paramcurset.number == RxParamSet::Set3), parameters[4]);
-
-        let sparks = Layout::default()
-            .direction(Direction::Vertical)
-            .margin(1)
-            .constraints([
-                Constraint::Percentage(10),
-                Constraint::Percentage(10),
-                Constraint::Percentage(10),
-                Constraint::Percentage(10),
-                Constraint::Percentage(10),
-                Constraint::Percentage(10),
-                Constraint::Percentage(10),
-                Constraint::Percentage(10),
-                Constraint::Percentage(10),
-                Constraint::Min(0),
-            ].as_ref())
-            .split(rx[0]);
-        f.render_widget(state.sparkline("RSSI", "dB", &state.rx.iter().map(|r| u64::from(r.rssi)).collect::<Vec<u64>>()), sparks[0]);
-        f.render_widget(state.sparkline("Background RSSI", "dB",  &state.rx.iter().map(|r| u64::from(r.bgndrssi)).collect::<Vec<u64>>()), sparks[1]);
-        f.render_widget(state.sparkline("AGC Counter", "dB", &state.rx.iter().map(|r| u64::from(r.agccounter)).collect::<Vec<u64>>()), sparks[2]);
-        f.render_widget(state.sparkline("Data Rate", "bits/s", &state.rx.iter().map(|r| u64::from(r.datarate)).collect::<Vec<u64>>()), sparks[3]);
-        f.render_widget(state.sparkline("Amplitude", "", &state.rx.iter().map(|r| u64::from(r.ampl)).collect::<Vec<u64>>()), sparks[4]);
-        f.render_widget(state.sparkline("Phase", "", &state.rx.iter().map(|r| u64::from(r.phase)).collect::<Vec<u64>>()), sparks[5]);
-        let data = &state.rx.iter().map(|r| i64::from(r.fskdemod)).collect::<Vec<i64>>();
-        let min: i64 = *data.iter().min().unwrap_or(&0);
-        let max: i64 = *data.iter().max().unwrap_or(&0);
-        let data = &data.iter().map(|x| u64::try_from(x - min).unwrap()).collect::<Vec<u64>>();
-        f.render_widget(state.spark_signed("FSK Demodulation", "", data, min, max), sparks[6]);
-        let data = &state.rx.iter().map(|r| i64::from(r.rffreq)).collect::<Vec<i64>>();
-        let min: i64 = *data.iter().min().unwrap_or(&0);
-        let max: i64 = *data.iter().max().unwrap_or(&0);
-        let data = &data.iter().map(|x| u64::try_from(x - min).unwrap()).collect::<Vec<u64>>();
-        f.render_widget(state.spark_signed("RF Frequency", "Hz", data, min, max), sparks[7]);
-        f.render_widget(state.sparkline("Frequency", "Hz", &state.rx.iter().map(|r| u64::from(r.freq)).collect::<Vec<u64>>()), sparks[8]);
-        f.render_widget(state.rx_params(&state.rx.iter().map(|r| u64::from(r.paramcurset.index)).collect::<Vec<u64>>(), state.rx.back().unwrap_or(&RXState::default()).paramcurset), sparks[9]);
-    */
-
     f.render_widget(state.status.widget(), chunks[2]);
 }
 
@@ -225,7 +161,7 @@ fn main() -> Result<()> {
     tfd.set_state(
         TimerState::Periodic {
             current: Duration::new(1, 0),
-            interval: Duration::from_millis(500),
+            interval: Duration::from_millis(2000),
         },
         SetTimeFlags::Default,
     );
@@ -287,26 +223,45 @@ fn main() -> Result<()> {
                         auto_commit: false,
                     })?;
 
+                    radio.FIFOTHRESH().write(128)?;
                     // Preamble - see PM p16
                     let preamble = FIFOChunkTX::REPEATDATA {
                         flags: FIFODataTXFlags::RAW | FIFODataTXFlags::NOCRC,
-                        count: 4,
+                        count: 44,
                         data: 0x11,
                     };
-                    let packet = FIFOChunkTX::REPEATDATA {
-                        flags: FIFODataTXFlags::PKTSTART | FIFODataTXFlags::PKTEND,
-                        count: 10,
-                        data: 0x3,
-                    };
+                    let packets = [ FIFOChunkTX::REPEATDATA {
+                            flags: FIFODataTXFlags::PKTSTART,
+                            count: 128,
+                            data: 0x3,
+                        },
+                        FIFOChunkTX::REPEATDATA {
+                            flags: FIFODataTXFlags::empty(),
+                            count: 128,
+                            data: 0x3,
+                        },
+                        FIFOChunkTX::REPEATDATA {
+                            flags: FIFODataTXFlags::empty(),
+                            count: 128,
+                            data: 0x3,
+                        },
+                        FIFOChunkTX::REPEATDATA {
+                            flags: FIFODataTXFlags::PKTEND,
+                            count: 128,
+                            data: 0x3,
+                        },
+                    ];
 
                     radio.FIFODATATX().write(preamble)?;
-                    radio.FIFODATATX().write(packet)?;
 
-                    radio.FIFOCMD().write(FIFOCmd {
-                        mode: FIFOCmds::COMMIT,
-                        auto_commit: false,
-                    })?;
-
+                    for packet in packets {
+                        radio.FIFODATATX().write(packet)?;
+                        radio.FIFOCMD().write(FIFOCmd {
+                            mode: FIFOCmds::COMMIT,
+                            auto_commit: false,
+                        })?;
+                        while !radio.FIFOSTAT().read()?.contains(FIFOStat::FREE_THR) {}
+                    }
                     // FIXME: FIFOSTAT CLEAR?
 
                     loop {

@@ -330,11 +330,11 @@ pub fn configure_radio_rx(radio: &mut Registers) -> Result<(Board, ChannelParame
     radio.MATCH1MAX().write(0xA)?;
     radio.TMGRXPREAMBLE2().write(TMG { m: 0x17, e: 0 })?;
 
-    radio.PKTMAXLEN().write(0xC8)?;
-    radio.PKTLENCFG().write(PktLenCfg { pos: 0, bits: 0x0 })?;
+    radio.PKTMAXLEN().write(0xFF)?;
+    radio.PKTLENCFG().write(PktLenCfg { pos: 0, bits: 0xF })?;
     radio.PKTLENOFFSET().write(0x09)?;
 
-    radio.PKTCHUNKSIZE().write(0x0D)?;
+    radio.PKTCHUNKSIZE().write(0x09)?;
     radio.PKTACCEPTFLAGS().write(PktAcceptFlags::LRGP)?;
 
     radio.RSSIREFERENCE().write(64)?;

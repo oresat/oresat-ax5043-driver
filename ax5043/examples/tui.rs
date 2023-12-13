@@ -1,4 +1,4 @@
-use anyhow::Result;
+use anyhow::{anyhow, Result};
 use crossterm::{
     event::{Event, KeyCode, KeyEvent},
     execute,
@@ -9,14 +9,15 @@ use mio_signals::{Signal, Signals};
 use ratatui::{
     backend::CrosstermBackend,
     prelude::*,
-    widgets::{Block, Borders, Sparkline},
+    widgets::{Block, Borders, Sparkline, Paragraph, BorderType},
     Terminal,
 };
 use std::{
     backtrace::Backtrace, cell, collections::VecDeque, io, os::fd::AsRawFd, panic, time::Duration,
 };
+use gpiod::{Chip, EdgeDetect, Options};
 use timerfd::{SetTimeFlags, TimerFd, TimerState};
-
+use itertools::Itertools;
 use ax5043::config_rpi::configure_radio_rx;
 use ax5043::registers::*;
 use ax5043::tui::*;
@@ -24,10 +25,17 @@ use ax5043::*;
 
 // FIXME: Default isn't really the way to go, maybe ::new()?
 
+#[derive(Debug)]
+enum Comm {
+    RX(FIFOChunkRX),
+    ERR(Result<()>),
+}
+
 struct UIState {
     spark: Style,
     board: config::Board,
     rx: VecDeque<RXState>,
+    packets: VecDeque<(usize, usize, Comm)>,
     status: Status,
     pwrmode: PwrMode,
     powstat: PowStat,
@@ -50,6 +58,7 @@ impl Default for UIState {
             spark: Style::default().fg(Color::Red).bg(Color::White),
             board: config::Board::default(),
             rx: VecDeque::<RXState>::default(),
+            packets: VecDeque::<(usize, usize, Comm)>::default(),
             status: Status::empty(),
             pwrmode: PwrMode {
                 mode: PwrModes::POWEROFF,
@@ -177,8 +186,16 @@ fn ui<B: Backend>(f: &mut Frame<B>, state: &UIState) {
         .split(rx[1]);
 
     f.render_widget(state.synthesizer.widget(), parameters[0]);
-    f.render_widget(state.packet_controller.widget(), parameters[1]);
-    f.render_widget(state.packet_controller.widget_flags(), parameters[2]);
+    state.packet_controller.widget(f, parameters[1]);
+    let packets = Paragraph::new(state.packets.iter().map(|x| format!("{}: {} {:?}", x.0, x.1, x.2)).join("\n"))
+    .style(Style::default().fg(Color::Yellow))
+    .block(
+        Block::default()
+            .borders(Borders::ALL)
+            .title("Packets received")
+            .border_type(BorderType::Rounded)
+    );
+    f.render_widget(packets, parameters[2]);
     f.render_widget(state.packet_format.widget(), parameters[3]);
     f.render_widget(state.rxparams.widget(), parameters[4]);
     /*
@@ -431,6 +448,32 @@ fn get_signal(radio: &mut Registers, channel: &config::ChannelParameters) -> Res
     })
 }
 
+fn read_packets(radio: &mut Registers, counter: &mut usize, state: &cell::RefCell<&mut UIState>) -> Result<()> {
+    let stat = radio.FIFOSTAT().read()?;
+    if stat.contains(FIFOStat::OVER) {
+        radio.FIFOCMD().write(FIFOCmd {
+            mode: FIFOCmds::CLEAR_DATA,
+            auto_commit: false,
+        })?;
+        return Err(anyhow!("Overflow: {:?}", stat));
+    }
+
+    if !stat.contains(FIFOStat::EMPTY) {
+        let len = radio.FIFOCOUNT().read()?;
+        for data in radio.FIFODATARX().read(len.into())? {
+            let mut len = 0;
+            if let FIFOChunkRX::DATA{ref data, ..} = data {
+                    len = data.len();
+            }
+
+            state.borrow_mut().packets.push_front((*counter, len, Comm::RX(data)));
+            state.borrow_mut().packets.truncate(10);
+            *counter += 1;
+        }
+    }
+    Ok(())
+}
+
 fn main() -> Result<()> {
     panic::set_hook(Box::new(|panic| {
         disable_raw_mode().unwrap();
@@ -548,6 +591,18 @@ fn main() -> Result<()> {
     //radio.TMGRXRSSI().write(TMG { m: 1, e: 6, })?;
     //radio.TMGRXAGC().write(TMG { m: 1, e: 6, })?;
 
+    let chip = Chip::new("gpiochip0")?;
+    let opts = Options::input([16])
+        .edge(EdgeDetect::Rising);
+    let mut irq = chip.request_lines(opts)?;
+
+    const IRQ: Token = Token(3);
+    registry.register(&mut SourceFd(&irq.as_raw_fd()), IRQ, Interest::READABLE)?;
+
+    radio.IRQMASK().write(IRQ::FIFONOTEMPTY)?;
+
+
+    let mut counter = 0;
     let mut events = Events::with_capacity(128);
     'outer: loop {
         poll.poll(&mut events, None)?;
@@ -557,9 +612,7 @@ fn main() -> Result<()> {
                     tfd.read();
                     let signal = get_signal(&mut radio, &channel)?;
                     state.borrow_mut().rx.push_front(signal);
-                    if state.borrow().rx.len() > 100 {
-                        state.borrow_mut().rx.pop_back();
-                    }
+                    state.borrow_mut().rx.truncate(100);
 
                     _ = radio.PLLRANGINGA().read()?; // sticky lock bit ~ IRQPLLUNLIOCK, gate
                     state.borrow_mut().pwrmode = radio.PWRMODE().read()?;
@@ -568,18 +621,29 @@ fn main() -> Result<()> {
                     state.borrow_mut().radio_event = radio.RADIOEVENTREQ().read()?;
                     state.borrow_mut().radio_state = radio.RADIOSTATE().read()?;
 
-                    if !radio.FIFOSTAT().read()?.contains(FIFOStat::EMPTY) {
-                        let len = radio.FIFOCOUNT().read()?;
-                        let data = radio.FIFODATARX().read(len.into())?;
-                        println!("{:X?}", data);
-                        break 'outer;
-                    }
-
                     let _ = term.borrow_mut().draw(|f| {
                         ui(f, &state.borrow());
                     });
                 }
-                //IRQ => service_irq(&mut radio_tx, &mut irqstate)?,
+                IRQ => {
+                    irq.read_event()?;
+                    while irq.get_values(0u8)? > 0 {
+                        let r = read_packets(&mut radio, &mut counter, &state);
+                        if r.is_err() {
+                            state.borrow_mut().packets.push_front((counter, 0, Comm::ERR(r)));
+                            state.borrow_mut().packets.truncate(10);
+                            counter += 1;
+                        }
+                        let _ = term.borrow_mut().draw(|f| {
+                            ui(f, &state.borrow());
+                        });
+                    }
+                    //radio.FIFOCMD().write(FIFOCmd {
+                    //    mode: FIFOCmds::CLEAR_DATA,
+                    //    auto_commit: false,
+                    //})?;
+
+                }
                 STDIN => match crossterm::event::read()? {
                     Event::Key(KeyEvent {
                         code: KeyCode::Char('c'),

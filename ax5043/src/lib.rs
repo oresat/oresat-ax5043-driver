@@ -1,6 +1,6 @@
 use bitflags::bitflags;
 use spidev::{SpiModeFlags, Spidev, SpidevOptions, SpidevTransfer};
-use std::{collections::VecDeque, convert::TryFrom, fmt::Debug, marker::PhantomData, path::Path};
+use std::{collections::VecDeque, convert::TryFrom, fmt::Debug, marker::PhantomData, path::Path, io::Read};
 use thiserror::Error;
 
 use registers::*;
@@ -66,6 +66,10 @@ pub enum Error {
     Io(#[from] std::io::Error),
     #[error("Invalid values returned from device")]
     Decode, // FIXME: recover bytes
+    #[error("Invalid values: {}, {0:?}", .0.len())]
+    DecodeBytes(Vec<u8>),
+    #[error("Invalid header: {0:?}")]
+    FIFOHeader(Vec<u8>),
     #[error("Invalid status (should not happen)")]
     Status([u8; 2]),
     #[error("Autoranging failed")]
@@ -229,10 +233,11 @@ impl<const S: usize, V: TryFrom<Vec<u8>>> ReadFIFO<'_, S, V> {
             SpidevTransfer::read_write(&tx, &mut rx),
         ])?;
         let mut chunks: Vec<V> = Vec::new();
+
         let mut bytes = VecDeque::from(rx.clone());
         while !bytes.is_empty() {
             #[rustfmt::skip]
-            let len: usize = match FIFOChunkHeaderRX::try_from(bytes[0]) {
+            let chunksize: usize = match FIFOChunkHeaderRX::try_from(bytes[0]) {
                 Ok(FIFOChunkHeaderRX::RSSI)       => 2,
                 Ok(FIFOChunkHeaderRX::FREQOFFS)   => 3,
                 Ok(FIFOChunkHeaderRX::ANTRSSI2)   => 3,
@@ -240,14 +245,16 @@ impl<const S: usize, V: TryFrom<Vec<u8>>> ReadFIFO<'_, S, V> {
                 Ok(FIFOChunkHeaderRX::RFFREQOFFS) => 4,
                 Ok(FIFOChunkHeaderRX::DATARATE)   => 4,
                 Ok(FIFOChunkHeaderRX::ANTRSSI3)   => 4,
-                Ok(FIFOChunkHeaderRX::DATA)       => (bytes[1] + 2).into(),
-                Err(_) => return Err(Error::Decode),
+                Ok(FIFOChunkHeaderRX::DATA)       => usize::from(bytes[1]) + 2,
+                Err(_) => return Err(Error::FIFOHeader(bytes.clone().into())),
             };
 
-            let remaining = bytes.split_off(len);
-            let chunk: Vec<u8> = bytes.into();
-            chunks.push(chunk.try_into().map_err(|_| Error::Decode)?);
-            bytes = remaining;
+            if bytes.len() < chunksize {
+                return Err(Error::DecodeBytes(bytes.clone().into()));
+            }
+            let mut chunk = vec![0; chunksize];
+            bytes.read(&mut chunk)?;
+            chunks.push(chunk.clone().try_into().map_err(|_| Error::DecodeBytes(chunk.clone()))?);
         }
         let status = Status::from_bits(u16::from_be_bytes(stat)).ok_or(Error::Status(stat))?;
         self.on_status(u16::from_be_bytes(addr), status, &rx);
