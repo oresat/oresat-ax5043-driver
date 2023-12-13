@@ -42,7 +42,7 @@ On the SD card mounted on my laptop
 See:https://www.raspberrypi.com/documentation/computers/raspberry-pi.html#spi-overview
 
 Laptop wired connection config: IPv4 -> Shared to other computers
-
+Default IP on mine: 169.254.209.136
 Default ssh login: pi@raspberrypi.local, pw:raspberry
 
 Pinnout for Raspberry Pi 4B:
