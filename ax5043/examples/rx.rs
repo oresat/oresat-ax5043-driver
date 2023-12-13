@@ -1,9 +1,10 @@
 extern crate ax5043;
-use anyhow::Result;
+use anyhow::{anyhow, Result};
 use mio::{unix::SourceFd, Events, Interest, Poll, Token};
 use mio_signals::{Signal, Signals};
 use std::{os::fd::AsRawFd, time::Duration};
 use timerfd::{SetTimeFlags, TimerFd, TimerState};
+use gpiod::{Chip, EdgeDetect, Options};
 
 use ax5043::config_rpi::configure_radio_rx;
 use ax5043::registers::*;
@@ -76,14 +77,24 @@ fn print_signal(radio: &mut Registers) -> Result<()> {
 }
 
 pub fn ax5043_receive(radio: &mut Registers) -> Result<()> {
-    print_signal(radio)?;
-
-    if !radio.FIFOSTAT().read()?.contains(FIFOStat::EMPTY) {
-        let len = radio.FIFOCOUNT().read()?;
-        let data = radio.FIFODATARX().read(len.into())?;
-        println!("{:X?}", data);
+    //print_signal(radio)?;
+    let stat = radio.FIFOSTAT().read()?;
+    println!("{:?}", stat);
+    if stat.contains(FIFOStat::EMPTY) {
+        return Err(anyhow!("Empty IRQ"));
     }
 
+    let len = radio.FIFOCOUNT().read()?;
+    if len > 0 {
+        for packet in radio.FIFODATARX().read(len.into())? {
+            match packet {
+                FIFOChunkRX::DATA{flags, ref data} => {
+                    println!("{}, {} {:02X?}", len, data.len(), packet)
+                }
+                _ => println!("{:02X?}", packet)
+            }
+        }
+    }
     Ok(())
 }
 
@@ -94,6 +105,12 @@ fn main() -> Result<()> {
     const CTRLC: Token = Token(0);
     let mut signals = Signals::new(Signal::Interrupt.into())?;
     registry.register(&mut signals, CTRLC, Interest::READABLE)?;
+
+    let chip = Chip::new("gpiochip0")?;
+    let opts = Options::input([16])
+        .edge(EdgeDetect::Rising);
+    let mut inputs = chip.request_lines(opts)?;
+
 
     let spi1 = ax5043::open("/dev/spidev1.0")?;
     let mut status = Status::empty();
@@ -120,8 +137,11 @@ fn main() -> Result<()> {
     const BEACON: Token = Token(2);
     registry.register(&mut SourceFd(&tfd.as_raw_fd()), BEACON, Interest::READABLE)?;
 
-    //let mut irqstate = IRQState::default();
-    //let mut state = AXState::default();
+    const IRQ: Token = Token(3);
+    registry.register(&mut SourceFd(&inputs.as_raw_fd()), IRQ, Interest::READABLE)?;
+
+    radio_rx.IRQMASK().write(IRQ::FIFONOTEMPTY)?;
+    println!("{:?}", radio_rx.IRQMASK().read()?);
 
     ax5043_listen(&mut radio_rx)?;
 
@@ -130,11 +150,11 @@ fn main() -> Result<()> {
         poll.poll(&mut events, None)?;
         for event in events.iter() {
             match event.token() {
-                BEACON => {
-                    tfd.read();
+                BEACON => { tfd.read(); },
+                IRQ => {
+                    println!("IRQ!: {:?}", inputs.read_event()?);
                     ax5043_receive(&mut radio_rx)?;
-                }
-                //IRQ => service_irq(&mut radio_tx, &mut irqstate)?,
+                },
                 CTRLC => break 'outer,
                 _ => unreachable!(),
             }
