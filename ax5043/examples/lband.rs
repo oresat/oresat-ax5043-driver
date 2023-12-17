@@ -2,12 +2,12 @@ use anyhow::Result;
 use ax5043::{config, config::PwrAmp, config::IRQ, config::*, Status};
 use ax5043::{registers::*, Registers, RX, TX};
 use clap::Parser;
+use crc::{Crc, CRC_16_GENIBUS}; // TODO: this CRC works but is it correct?
 use gpiod::{Chip, Options, EdgeDetect};
 use mio::{unix::SourceFd, Events, Interest, Poll, Token};
 use mio_signals::{Signal, Signals};
-use std::{io::Write, os::fd::AsRawFd, time::Duration};
-use std::net::{IpAddr, Ipv6Addr, SocketAddr, UdpSocket};
-use timerfd::{SetTimeFlags, TimerFd, TimerState};
+use std::{io::Write, os::fd::AsRawFd};
+use std::net::{IpAddr, Ipv4Addr, SocketAddr, UdpSocket};
 
 fn configure_radio(radio: &mut Registers) -> Result<(Board, ChannelParameters)> {
     #[rustfmt::skip]
@@ -359,8 +359,19 @@ fn read_packet(radio: &mut Registers, packet: &mut Vec<u8>, uplink: &mut UdpSock
             }
             packet.write(&data)?;
             if flags.contains(FIFODataRXFlags::PKTEND) {
-                uplink.send(&packet[..packet.len()-2])?;
-                println!("{:02X?}", packet);
+                let bytes = packet.split_off(packet.len()-2);
+                let checksum = u16::from_be_bytes([bytes[0], bytes[1]]);
+                let ccitt = Crc::<u16>::new(&CRC_16_GENIBUS);
+                let mut digest = ccitt.digest();
+                digest.update(packet);
+                let calculated = digest.finalize();
+
+                if calculated == checksum {
+                    uplink.send(packet)?;
+                    println!("{:02X?}", packet);
+                } else {
+                    println!("Rejected CRC: received 0x{:x}, calculated 0x{:x}", checksum, calculated);
+                }
             }
         }
     }
@@ -384,25 +395,14 @@ fn main() -> Result<()> {
     let registry = poll.registry();
     let mut events = Events::with_capacity(128);
 
-    let src = SocketAddr::new(IpAddr::V6(Ipv6Addr::UNSPECIFIED), 0);
-    let dest = SocketAddr::new(IpAddr::V6(Ipv6Addr::LOCALHOST), args.uplink);
+    let src = SocketAddr::new(IpAddr::V4(Ipv4Addr::UNSPECIFIED), 0);
+    let dest = SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), args.uplink);
     let mut uplink = UdpSocket::bind(src)?;
     uplink.connect(dest)?;
 
-    let mut tfd = TimerFd::new().unwrap();
-    tfd.set_state(
-        TimerState::Periodic {
-            current: Duration::new(1, 0),
-            interval: Duration::from_millis(50),
-        },
-        SetTimeFlags::Default,
-    );
-    const TIMER: Token = Token(2);
-    registry.register(&mut SourceFd(&tfd.as_raw_fd()), TIMER, Interest::READABLE)?;
-
-    const CTRLC: Token = Token(3);
+    const SIGINT: Token = Token(3);
     let mut signals = Signals::new(Signal::Interrupt.into())?;
-    registry.register(&mut signals, CTRLC, Interest::READABLE)?;
+    registry.register(&mut signals, SIGINT, Interest::READABLE)?;
 
     let chip = Chip::new("gpiochip1")?;
     let opts = Options::output([27]).values([false]);
@@ -459,16 +459,13 @@ fn main() -> Result<()> {
         poll.poll(&mut events, None)?;
         for event in events.iter() {
             match event.token() {
-                TIMER => {
-                    tfd.read();
-                }
                 IRQ => {
                     lband_irq.read_event()?;
                     while lband_irq.get_values(0u8)? > 0 {
                         read_packet(&mut radio, &mut packet, &mut uplink)?;
                     }
                 }
-                CTRLC => break 'outer,
+                SIGINT => break 'outer,
                 _ => unreachable!(),
             }
         }
