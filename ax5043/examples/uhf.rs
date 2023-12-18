@@ -47,9 +47,9 @@ fn configure_radio(radio: &mut Registers, power: u16) -> Result<(Board, ChannelP
             charge_pump_current: 0xC8,                // Default value
             filter_bandwidth: LoopFilter::Internalx5, // Default value
         },
-        //vco_current: Some(0x16), // depends on VCO, auto or manual, readback VCOIR, see AND9858/D for manual cal
-        vco_current: None,                        // FIXME: label Auto
-        lock_detector_delay: None, // auto or manual, readback PLLLOCKDET::LOCKDETDLYR
+        //vco_current: Manual(0x16), // depends on VCO, readback VCOIR, see AND9858/D for manual cal
+        vco_current: Control::Automatic,
+        lock_detector_delay: Control::Automatic, // readback PLLLOCKDET::LOCKDETDLYR
         ranging_clock: RangingClock::XtalDiv1024, // less than one tenth the loop filter bandwidth. Derive?
     };
 

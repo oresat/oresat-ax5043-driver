@@ -512,6 +512,11 @@ impl From<FreqReg> for FreqSel {
     }
 }
 
+pub enum Control<T> {
+    Automatic,
+    Manual(T),
+}
+
 pub struct Synthesizer {
     pub freq_a: Hz,
     pub freq_b: Hz,
@@ -526,9 +531,8 @@ pub struct Synthesizer {
     // PLLVCODIV::{VCOSEL,VCO2INT} from phys layout
     // PLLRANGING::VCOR{A,B} saved, otherwise 8. also has status
 
-    // TODO: instead of Option do {Auto, Manual<T>}
-    pub vco_current: Option<u8>, //depends on VCO, auto or manual, readback VCOIR, see AND9858/D for manual cal
-    pub lock_detector_delay: Option<LockDetector>, // auto or manual, readback PLLLOCKDET::LOCKDETDLYR
+    pub vco_current: Control<u8>, //depends on VCO, auto or manual, readback VCOIR, see AND9858/D for manual cal
+    pub lock_detector_delay: Control<LockDetector>, // auto or manual, readback PLLLOCKDET::LOCKDETDLYR
     pub ranging_clock: RangingClock, // less than one tenth the loop filter bandwidth. Derive?
 }
 
@@ -604,11 +608,11 @@ pub fn configure_synth(radio: &mut Registers, board: &Board, synth: &Synthesizer
     }
 
     radio.PLLVCOI().write(match synth.vco_current {
-        Some(x) => PLLVCOI {
+        Control::Manual(x) => PLLVCOI {
             bias: x,
             flags: PLLVCOIFlags::MANUAL,
         },
-        None => PLLVCOI {
+        Control::Automatic => PLLVCOI {
             bias: 0,
             flags: PLLVCOIFlags::AUTOMATIC,
         },
@@ -620,12 +624,12 @@ pub fn configure_synth(radio: &mut Registers, board: &Board, synth: &Synthesizer
         readback: LockDetDly::d6ns,
     };
     radio.PLLLOCKDET().write(match synth.lock_detector_delay {
-        Some(x) => PLLLockDet {
+        Control::Manual(x) => PLLLockDet {
             flags: LockDetFlags::MANUAL,
             delay: x.into(),
             ..lock_default
         },
-        None => PLLLockDet {
+        Control::Automatic => PLLLockDet {
             flags: LockDetFlags::AUTOMATIC,
             ..lock_default
         },
