@@ -25,7 +25,6 @@ fn configure_radio(radio: &mut Registers) -> Result<(Board, ChannelParameters)> 
         },
         vco: VCO::Internal,
         filter: Filter::Internal,
-        antenna: Antenna::Differential,
         dac: DAC { pin: DACPin::None },
         adc: ADC::None,
     };

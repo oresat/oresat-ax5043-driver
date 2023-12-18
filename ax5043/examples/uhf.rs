@@ -31,7 +31,6 @@ fn configure_radio(radio: &mut Registers, power: u16) -> Result<(Board, ChannelP
         },
         vco: VCO::Internal,
         filter: Filter::Internal,
-        antenna: Antenna::SingleEnded, // FIXME this is only TX
         dac: DAC { pin: DACPin::None },
         adc: ADC::None,
     };
@@ -68,6 +67,7 @@ fn configure_radio(radio: &mut Registers, power: u16) -> Result<(Board, ChannelP
         datarate: 96_000,
     };
     let parameters = TXParameters {
+        antenna: Antenna::SingleEnded,
         amp: AmplitudeShaping::RaisedCosine {
             a: 0,
             b: power,

@@ -5,7 +5,7 @@ use crate::{
 
 use anyhow::Result;
 
-fn config(radio: &mut Registers, antenna: config::Antenna) -> Result<(Board, ChannelParameters)> {
+fn config(radio: &mut Registers) -> Result<(Board, ChannelParameters)> {
     #[rustfmt::skip]
     let board = Board {
         sysclk: Pin { mode: config::SysClk::Z,    pullup: true,  invert: false, },
@@ -21,7 +21,6 @@ fn config(radio: &mut Registers, antenna: config::Antenna) -> Result<(Board, Cha
         },
         vco: VCO::Internal,
         filter: Filter::Internal,
-        antenna,
         dac: DAC {
             pin: DACPin::PwrAmp,
         },
@@ -66,9 +65,10 @@ fn config(radio: &mut Registers, antenna: config::Antenna) -> Result<(Board, Cha
 }
 
 pub fn configure_radio_tx(radio: &mut Registers) -> Result<config::Board> {
-    let (board, channel) = config(radio, config::Antenna::SingleEnded)?;
+    let (board, channel) = config(radio)?;
 
     let txparams = TXParameters {
+        antenna: Antenna::SingleEnded,
         amp: AmplitudeShaping::RaisedCosine {
             a: 0,
             b: 0x700,
@@ -179,7 +179,7 @@ packet: PS3
 // fif/bandwidth?
 
 pub fn configure_radio_rx(radio: &mut Registers) -> Result<(Board, ChannelParameters)> {
-    let (board, channel) = config(radio, config::Antenna::Differential)?;
+    let (board, channel) = config(radio)?;
 
     radio.PERF_F18().write(0x02)?; // TODO set by radiolab during RX
     radio.PERF_F26().write(0x96)?;

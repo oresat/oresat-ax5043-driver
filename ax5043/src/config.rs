@@ -309,7 +309,6 @@ pub struct Board {
     pub xtal: Xtal,
     pub vco: VCO,
     pub filter: Filter,
-    pub antenna: Antenna,
     pub dac: DAC,
     pub adc: ADC,
 }
@@ -403,18 +402,6 @@ pub fn configure(radio: &mut Registers, board: &Board) -> Result<()> {
 
     // FIXME: Depends on register FRAIMING
     radio.PERF_F72().write(0x00)?;
-
-    // ModCfgA has TX Specific settings, but antenna is used in TX and RX. This sets
-    // the TX stuff to safe defaults.
-    radio.MODCFGA().write(ModCfgA {
-        slowramp: registers::SlowRamp::STARTUP_1b,
-        flags: match board.antenna {
-            Antenna::SingleEnded => ModCfgAFlags::TXSE,
-            Antenna::Differential => ModCfgAFlags::TXDIFF,
-        } | ModCfgAFlags::PLLLCK_GATE
-            | ModCfgAFlags::BROWN_GATE,
-    })?;
-
     Ok(())
 }
 
@@ -850,6 +837,7 @@ amplitude shaper and the predistortion is bypassed, and α1
 used.
 */
 pub struct TXParameters {
+    pub antenna: Antenna,
     pub amp: AmplitudeShaping,
     pub plllock_gate: bool,
     pub brownout_gate: bool,
@@ -870,7 +858,7 @@ pub fn configure_tx(
             radio.MODCFGF().write(bt.try_into().unwrap())?;
             let cfga = ModCfgA {
                 slowramp: ramp.into(),
-                flags: match board.antenna {
+                flags: match parameters.antenna {
                     Antenna::SingleEnded => ModCfgAFlags::TXSE,
                     Antenna::Differential => ModCfgAFlags::TXDIFF,
                 } | match parameters.amp {
@@ -891,7 +879,7 @@ pub fn configure_tx(
         Modulation::ASK => {
             let cfga = ModCfgA {
                 slowramp: SlowRamp::Bits1.into(),
-                flags: match board.antenna {
+                flags: match parameters.antenna {
                     Antenna::SingleEnded => ModCfgAFlags::TXSE,
                     Antenna::Differential => ModCfgAFlags::TXDIFF,
                 } | match parameters.amp {
