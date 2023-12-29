@@ -9,15 +9,17 @@ edition = "2021"
 anyhow = "1.0.75"
 ax5043_derive = { path = "../ax5043_derive" }
 bitflags = "2.3.1"
-clap = { version = "4.2.2", features = ["derive"] }
 crc = "3.0.1"
-crossterm = "0.27"
 gpiod = "0.2.3"
-itertools = "0.12.0"
-mio = { version = "0.8.8", features = ["net", "os-poll", "os-ext"] }
-mio-signals = "0.2.0"
 num_enum = "0.7.0"
 ratatui = "0.23"
 spidev = "0.6.0"
 thiserror = "1.0.50"
+
+[dev-dependencies]
+clap = { version = "4.2.2", features = ["derive"] }
+crossterm = "0.27"
+itertools = "0.12.0"
+mio = { version = "0.8.8", features = ["net", "os-poll", "os-ext"] }
+mio-signals = "0.2.0"
 timerfd = "1.5.0"
