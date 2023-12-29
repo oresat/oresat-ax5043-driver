@@ -7,7 +7,7 @@
 //        instead of rustfmt::skip
 use bitflags::bitflags;
 use num_enum::{IntoPrimitive, TryFromPrimitive};
-use std::fmt;
+use std::{fmt, ops::{Index, Range}};
 // FIXME: use ax5043_derive::{Serialize, Deserialize};
 
 // newtypes to placate the orphan rule
@@ -19,6 +19,21 @@ type Reg16 = Reg<2>;
 type Reg24 = Reg<3>;
 type Reg32 = Reg<4>;
 // TODO? struct RegN(Vec<u8>);
+
+impl<const S: usize> Index<usize> for Reg<S> {
+    type Output = u8;
+    fn index(&self, index: usize) -> &Self::Output {
+        &self.0[index]
+    }
+}
+
+impl<const S: usize> Index<Range<usize>> for Reg<S> {
+    type Output = [u8];
+    fn index(&self, index: Range<usize>) -> &Self::Output {
+        &self.0[index]
+    }
+}
+
 
 impl<const S: usize> From<[u8; S]> for Reg<S> {
     fn from(item: [u8; S]) -> Self {
@@ -63,7 +78,7 @@ impl TryFrom<Reg16> for i16 {
 impl TryFrom<Reg24> for u32 {
     type Error = Reg24;
     fn try_from(item: Reg24) -> Result<Self, Self::Error> {
-        Ok(Self::from(item.0[0]) << 16 | Self::from(item.0[1]) << 8 | Self::from(item.0[2]))
+        Ok(Self::from(item[0]) << 16 | Self::from(item[1]) << 8 | Self::from(item[2]))
     }
 }
 
@@ -72,9 +87,9 @@ impl TryFrom<Reg24> for i32 {
     fn try_from(item: Reg24) -> Result<Self, Self::Error> {
         // Shift down for sign extension
         Ok(
-            (Self::from(item.0[0]) << 24
-                | Self::from(item.0[1]) << 16
-                | Self::from(item.0[2]) << 8)
+            (Self::from(item[0]) << 24
+                | Self::from(item[1]) << 16
+                | Self::from(item[2]) << 8)
                 >> 8,
         )
     }
@@ -170,8 +185,8 @@ impl TryFrom<Reg8> for PwrMode {
     type Error = Reg8;
     fn try_from(item: Reg8) -> Result<Self, Self::Error> {
         Ok(Self {
-            mode: PwrModes::try_from(item.0[0] & 0x0f).or(Err(item))?,
-            flags: PwrFlags::from_bits(item.0[0] & 0xf0).ok_or(item)?,
+            mode: PwrModes::try_from(item[0] & 0x0f).or(Err(item))?,
+            flags: PwrFlags::from_bits(item[0] & 0xf0).ok_or(item)?,
         })
     }
 }
@@ -199,7 +214,7 @@ bitflags! {
 impl TryFrom<Reg8> for PowStat {
     type Error = Reg8;
     fn try_from(item: Reg8) -> Result<Self, Self::Error> {
-        Self::from_bits(item.0[0]).ok_or(item)
+        Self::from_bits(item[0]).ok_or(item)
     }
 }
 
@@ -220,7 +235,7 @@ bitflags! {
 impl TryFrom<Reg8> for PowIRQMask {
     type Error = Reg8;
     fn try_from(item: Reg8) -> Result<Self, Self::Error> {
-        Self::from_bits(item.0[0]).ok_or(item)
+        Self::from_bits(item[0]).ok_or(item)
     }
 }
 
@@ -312,8 +327,8 @@ impl TryFrom<Reg8> for Modulation {
     type Error = Reg8;
     fn try_from(item: Reg8) -> Result<Self, Self::Error> {
         Ok(Self {
-            mode: ModulationMode::try_from(item.0[0] & 0x0F).or(Err(item))?,
-            halfspeed: item.0[0] & 0x10 > 0,
+            mode: ModulationMode::try_from(item[0] & 0x0F).or(Err(item))?,
+            halfspeed: item[0] & 0x10 > 0,
         })
     }
 }
@@ -342,7 +357,7 @@ bitflags! {
 impl TryFrom<Reg8> for Encoding {
     type Error = Reg8;
     fn try_from(item: Reg8) -> Result<Self, Self::Error> {
-        Self::from_bits(item.0[0]).ok_or(item)
+        Self::from_bits(item[0]).ok_or(item)
     }
 }
 
@@ -396,9 +411,9 @@ impl TryFrom<Reg8> for Framing {
     type Error = Reg8;
     fn try_from(item: Reg8) -> Result<Self, Self::Error> {
         Ok(Self {
-            frmmode: FrameMode::try_from((item.0[0] & 0x0e) >> 1).or(Err(item))?,
-            crcmode: CRCMode::try_from((item.0[0] & 0x70) >> 4).or(Err(item))?,
-            flags: FramingFlags::from_bits(item.0[0] & 0x81).ok_or(item)?,
+            frmmode: FrameMode::try_from((item[0] & 0x0e) >> 1).or(Err(item))?,
+            crcmode: CRCMode::try_from((item[0] & 0x70) >> 4).or(Err(item))?,
+            flags: FramingFlags::from_bits(item[0] & 0x81).ok_or(item)?,
         })
     }
 }
@@ -430,8 +445,8 @@ impl TryFrom<Reg8> for FEC {
     type Error = Reg8;
     fn try_from(item: Reg8) -> Result<Self, Self::Error> {
         Ok(Self {
-            flags: FECFlags::from_bits(item.0[0] & 0xF1).ok_or(item)?,
-            inpshift: item.0[0] & 0x0E,
+            flags: FECFlags::from_bits(item[0] & 0xF1).ok_or(item)?,
+            inpshift: item[0] & 0x0E,
         })
     }
 }
@@ -452,8 +467,8 @@ impl TryFrom<Reg8> for FECStatus {
     type Error = Reg8;
     fn try_from(item: Reg8) -> Result<Self, Self::Error> {
         Ok(Self {
-            max_metric: item.0[0] & 0x7F,
-            inv: item.0[0] & 0x80 > 0,
+            max_metric: item[0] & 0x7F,
+            inv: item[0] & 0x80 > 0,
         })
     }
 }
@@ -479,7 +494,7 @@ pub enum RadioState {
 impl TryFrom<Reg8> for RadioState {
     type Error = Reg8;
     fn try_from(item: Reg8) -> Result<Self, Self::Error> {
-        Self::try_from(item.0[0]).or(Err(item))
+        Self::try_from(item[0]).or(Err(item))
     }
 }
 
@@ -493,7 +508,7 @@ bitflags! {
 impl TryFrom<Reg8> for XtalStatus {
     type Error = Reg8;
     fn try_from(item: Reg8) -> Result<Self, Self::Error> {
-        Self::from_bits(item.0[0]).ok_or(item)
+        Self::from_bits(item[0]).ok_or(item)
     }
 }
 
@@ -512,7 +527,7 @@ bitflags! {
 impl TryFrom<Reg8> for PinState {
     type Error = Reg8;
     fn try_from(item: Reg8) -> Result<Self, Self::Error> {
-        Self::from_bits(item.0[0]).ok_or(item)
+        Self::from_bits(item[0]).ok_or(item)
     }
 }
 
@@ -550,8 +565,8 @@ impl TryFrom<Reg8> for PFSysClk {
     type Error = Reg8;
     fn try_from(item: Reg8) -> Result<Self, Self::Error> {
         Ok(Self {
-            mode: PFSysClkMode::try_from(item.0[0] & 0x1f).or(Err(item))?,
-            pullup: item.0[0] & 0x80 > 0,
+            mode: PFSysClkMode::try_from(item[0] & 0x1f).or(Err(item))?,
+            pullup: item[0] & 0x80 > 0,
         })
     }
 }
@@ -593,8 +608,8 @@ impl TryFrom<Reg8> for PFDClk {
     type Error = Reg8;
     fn try_from(item: Reg8) -> Result<Self, Self::Error> {
         Ok(Self {
-            mode: PFDClkMode::try_from(item.0[0] & 0x7).or(Err(item))?,
-            flags: PFFlags::from_bits(item.0[0] & 0xC0).ok_or(item)?,
+            mode: PFDClkMode::try_from(item[0] & 0x7).or(Err(item))?,
+            flags: PFFlags::from_bits(item[0] & 0xC0).ok_or(item)?,
         })
     }
 }
@@ -630,8 +645,8 @@ impl TryFrom<Reg8> for PFData {
     type Error = Reg8;
     fn try_from(item: Reg8) -> Result<Self, Self::Error> {
         Ok(Self {
-            mode: PFDataMode::try_from(item.0[0] & 0xF).or(Err(item))?,
-            flags: PFFlags::from_bits(item.0[0] & 0xC0).ok_or(item)?,
+            mode: PFDataMode::try_from(item[0] & 0xF).or(Err(item))?,
+            flags: PFFlags::from_bits(item[0] & 0xC0).ok_or(item)?,
         })
     }
 }
@@ -663,8 +678,8 @@ impl TryFrom<Reg8> for PFIRQ {
     type Error = Reg8;
     fn try_from(item: Reg8) -> Result<Self, Self::Error> {
         Ok(Self {
-            mode: PFIRQMode::try_from(item.0[0] & 0xF).or(Err(item))?,
-            flags: PFFlags::from_bits(item.0[0] & 0xC0).ok_or(item)?,
+            mode: PFIRQMode::try_from(item[0] & 0xF).or(Err(item))?,
+            flags: PFFlags::from_bits(item[0] & 0xC0).ok_or(item)?,
         })
     }
 }
@@ -699,8 +714,8 @@ impl TryFrom<Reg8> for PFAntSel {
     type Error = Reg8;
     fn try_from(item: Reg8) -> Result<Self, Self::Error> {
         Ok(Self {
-            mode: PFAntSelMode::try_from(item.0[0] & 0xF).or(Err(item))?,
-            flags: PFFlags::from_bits(item.0[0] & 0xC0).ok_or(item)?,
+            mode: PFAntSelMode::try_from(item[0] & 0xF).or(Err(item))?,
+            flags: PFFlags::from_bits(item[0] & 0xC0).ok_or(item)?,
         })
     }
 }
@@ -737,8 +752,8 @@ impl TryFrom<Reg8> for PFPwrAmp {
     type Error = Reg8;
     fn try_from(item: Reg8) -> Result<Self, Self::Error> {
         Ok(Self {
-            mode: PFPwrAmpMode::try_from(item.0[0] & 0xF).or(Err(item))?,
-            flags: PFFlags::from_bits(item.0[0] & 0xC0).ok_or(item)?,
+            mode: PFPwrAmpMode::try_from(item[0] & 0xF).or(Err(item))?,
+            flags: PFFlags::from_bits(item[0] & 0xC0).ok_or(item)?,
         })
     }
 }
@@ -759,7 +774,7 @@ bitflags! {
 impl TryFrom<Reg8> for PwrAmp {
     type Error = Reg8;
     fn try_from(item: Reg8) -> Result<Self, Self::Error> {
-        Self::from_bits(item.0[0]).ok_or(item)
+        Self::from_bits(item[0]).ok_or(item)
     }
 }
 
@@ -785,7 +800,7 @@ bitflags! {
 impl TryFrom<Reg8> for FIFOStat {
     type Error = Reg8;
     fn try_from(item: Reg8) -> Result<Self, Self::Error> {
-        FIFOStat::from_bits(item.0[0]).ok_or(item)
+        FIFOStat::from_bits(item[0]).ok_or(item)
     }
 }
 
@@ -1082,9 +1097,9 @@ impl TryFrom<Reg8> for PLLLoop {
     type Error = Reg8;
     fn try_from(item: Reg8) -> Result<Self, Self::Error> {
         Ok(Self {
-            filter: FLT::try_from(item.0[0] & 0x3).or(Err(item))?,
-            flags: PLLLoopFlags::from_bits(item.0[0] & 0xC).ok_or(item)?,
-            freqsel: FreqSel::try_from(item.0[0] & 0x80).or(Err(item))?,
+            filter: FLT::try_from(item[0] & 0x3).or(Err(item))?,
+            flags: PLLLoopFlags::from_bits(item[0] & 0xC).ok_or(item)?,
+            freqsel: FreqSel::try_from(item[0] & 0x80).or(Err(item))?,
         })
     }
 }
@@ -1124,8 +1139,8 @@ impl TryFrom<Reg8> for PLLVCODiv {
     type Error = Reg8;
     fn try_from(item: Reg8) -> Result<Self, Self::Error> {
         Ok(Self {
-            mode: PLLVCORefDiv::try_from(item.0[0] & 0x03).or(Err(item))?,
-            flags: PLLVCODivFlags::from_bits(item.0[0] & 0xFC).ok_or(item)?,
+            mode: PLLVCORefDiv::try_from(item[0] & 0x03).or(Err(item))?,
+            flags: PLLVCODivFlags::from_bits(item[0] & 0xFC).ok_or(item)?,
         })
     }
 }
@@ -1156,8 +1171,8 @@ impl TryFrom<Reg8> for PLLRanging {
     type Error = Reg8;
     fn try_from(item: Reg8) -> Result<Self, Self::Error> {
         Ok(Self {
-            vcor: item.0[0] & 0x0f,
-            flags: PLLRangingFlags::from_bits(item.0[0] & 0xf0).ok_or(item)?,
+            vcor: item[0] & 0x0f,
+            flags: PLLRangingFlags::from_bits(item[0] & 0xf0).ok_or(item)?,
         })
     }
 }
@@ -1179,7 +1194,7 @@ bitflags! {
 impl TryFrom<Reg8> for Diversity {
     type Error = Reg8;
     fn try_from(item: Reg8) -> Result<Self, Self::Error> {
-        Self::from_bits(item.0[0]).ok_or(item)
+        Self::from_bits(item[0]).ok_or(item)
     }
 }
 
@@ -1201,10 +1216,10 @@ impl TryFrom<Reg<4>> for SignalStr {
     type Error = Reg<4>;
     fn try_from(item: Reg<4>) -> Result<Self, Self::Error> {
         Ok(Self {
-            rssi: Reg8::from(item.0[0]).try_into().map_err(|_| item)?,
-            bgndrssi: Reg8::from(item.0[1]).try_into().map_err(|_| item)?,
-            diversity: Reg8::from(item.0[2]).try_into().map_err(|_| item)?,
-            agccounter: Reg8::from(item.0[3]).try_into().map_err(|_| item)?,
+            rssi: Reg8::from(item[0]).try_into().map_err(|_| item)?,
+            bgndrssi: Reg8::from(item[1]).try_into().map_err(|_| item)?,
+            diversity: Reg8::from(item[2]).try_into().map_err(|_| item)?,
+            agccounter: Reg8::from(item[3]).try_into().map_err(|_| item)?,
         })
     }
 }
@@ -1216,7 +1231,7 @@ impl TryFrom<Reg24> for TrkRFFreq {
     type Error = Reg24;
     fn try_from(item: Reg24) -> Result<Self, Self::Error> {
         Ok(Self(
-            (((i32::from(item.0[0])) << 24 | (i32::from(item.0[1])) << 16 | (i32::from(item.0[2])) << 8)
+            (((i32::from(item[0])) << 24 | (i32::from(item[1])) << 16 | (i32::from(item[2])) << 8)
              << 4)  // for sign extension. The register only sign extends
              >> 12, // out to 20 bits even though we can read 24
         ))
@@ -1236,7 +1251,7 @@ impl TryFrom<Reg16> for TrkFSKDemod {
     type Error = Reg16;
     fn try_from(item: Reg16) -> Result<Self, Self::Error> {
         Ok(Self(
-            (((i16::from(item.0[0])) << 8 | i16::from(item.0[1]))
+            (((i16::from(item[0])) << 8 | i16::from(item[1]))
              << 2) // for sign extension. The register only sign extends
              >> 2, // out to 14 bits even though we can read 16
         ))
@@ -1263,13 +1278,13 @@ pub struct RXTracking {
 impl TryFrom<Reg<16>> for RXTracking {
     type Error = Reg<16>;
     fn try_from(item: Reg<16>) -> Result<Self, Self::Error> {
-        let datarate:  [u8; 3] = item.0[0..3].try_into().unwrap();
-        let ampl:      [u8; 2] = item.0[3..5].try_into().unwrap();
-        let phase:     [u8; 2] = item.0[5..7].try_into().unwrap();
-        let rffreq:    [u8; 3] = item.0[7..10].try_into().unwrap();
-        let freq:      [u8; 2] = item.0[10..12].try_into().unwrap();
-        let fskdemod:  [u8; 2] = item.0[12..14].try_into().unwrap();
-        let afskdemod: [u8; 2] = item.0[14..16].try_into().unwrap();
+        let datarate:  [u8; 3] = item[0..3].try_into().unwrap();
+        let ampl:      [u8; 2] = item[3..5].try_into().unwrap();
+        let phase:     [u8; 2] = item[5..7].try_into().unwrap();
+        let rffreq:    [u8; 3] = item[7..10].try_into().unwrap();
+        let freq:      [u8; 2] = item[10..12].try_into().unwrap();
+        let fskdemod:  [u8; 2] = item[12..14].try_into().unwrap();
+        let afskdemod: [u8; 2] = item[14..16].try_into().unwrap();
 
         Ok(Self {
             datarate: Reg24::from(datarate).try_into().map_err(|_| item)?,
@@ -1293,7 +1308,7 @@ pub struct MaxRFOffset {
 impl TryFrom<Reg24> for MaxRFOffset {
     type Error = Reg24;
     fn try_from(item: Reg24) -> Result<Self, Self::Error> {
-        let value = u32::from(item.0[0]) << 16 | u32::from(item.0[1]) << 8 | u32::from(item.0[2]);
+        let value = u32::from(item[0]) << 16 | u32::from(item[1]) << 8 | u32::from(item[2]);
         Ok(Self {
             offset: value & 0xF_FFFF,
             correction: (value & (1 << 23)) != 0,
@@ -1328,10 +1343,10 @@ impl TryFrom<Reg8> for RxParamSets {
     type Error = Reg8;
     fn try_from(item: Reg8) -> Result<Self, Self::Error> {
         Ok(Self(
-            RxParamSet::try_from(item.0[0] & 0x3).or(Err(item))?,
-            RxParamSet::try_from(item.0[0] & ((0x3 << 2) >> 2)).or(Err(item))?,
-            RxParamSet::try_from(item.0[0] & ((0x3 << 4) >> 4)).or(Err(item))?,
-            RxParamSet::try_from(item.0[0] & ((0x3 << 6) >> 6)).or(Err(item))?,
+            RxParamSet::try_from(item[0] & 0x3).or(Err(item))?,
+            RxParamSet::try_from(item[0] & ((0x3 << 2) >> 2)).or(Err(item))?,
+            RxParamSet::try_from(item[0] & ((0x3 << 4) >> 4)).or(Err(item))?,
+            RxParamSet::try_from(item[0] & ((0x3 << 6) >> 6)).or(Err(item))?,
         ))
     }
 }
@@ -1361,9 +1376,9 @@ impl TryFrom<Reg8> for RxParamCurSet {
     type Error = Reg8;
     fn try_from(item: Reg8) -> Result<Self, Self::Error> {
         Ok(Self {
-            index: item.0[0] & 0x3,
-            number: RxParamSet::try_from((item.0[0] & 0xC) >> 2).or(Err(item))?,
-            special: (item.0[0] & 0xF0) >> 4,
+            index: item[0] & 0x3,
+            number: RxParamSet::try_from((item[0] & 0xC) >> 2).or(Err(item))?,
+            special: (item[0] & 0xF0) >> 4,
         })
     }
 }
@@ -1378,8 +1393,8 @@ impl TryFrom<Reg8> for AGCGain {
     type Error = Reg8;
     fn try_from(item: Reg8) -> Result<Self, Self::Error> {
         Ok(Self {
-            attack: item.0[0] & 0x0F,
-            decay: (item.0[0] & 0xF0) >> 4,
+            attack: item[0] & 0x0F,
+            decay: (item[0] & 0xF0) >> 4,
         })
     }
 }
@@ -1399,7 +1414,7 @@ impl TryFrom<Reg8> for AGCHyst {
     type Error = Reg8;
     fn try_from(item: Reg8) -> Result<Self, Self::Error> {
         Ok(Self {
-            hyst: item.0[0] & 0x07,
+            hyst: item[0] & 0x07,
         })
     }
 }
@@ -1420,8 +1435,8 @@ impl TryFrom<Reg8> for AGCMinMax {
     type Error = Reg8;
     fn try_from(item: Reg8) -> Result<Self, Self::Error> {
         Ok(Self {
-            min: item.0[0] & 0x07,
-            max: (item.0[0] >> 3) & 0x07,
+            min: item[0] & 0x07,
+            max: (item[0] >> 3) & 0x07,
         })
     }
 }
@@ -1441,8 +1456,8 @@ impl TryFrom<Reg8> for TimeGain {
     type Error = Reg8;
     fn try_from(item: Reg8) -> Result<Self, Self::Error> {
         Ok(Self {
-            exponent: item.0[0] & 0x0F,
-            mantissa: (item.0[0] & 0xF0) >> 4,
+            exponent: item[0] & 0x0F,
+            mantissa: (item[0] & 0xF0) >> 4,
         })
     }
 }
@@ -1463,8 +1478,8 @@ impl TryFrom<Reg8> for DRGain {
     type Error = Reg8;
     fn try_from(item: Reg8) -> Result<Self, Self::Error> {
         Ok(Self {
-            exponent: item.0[0] & 0x0F,
-            mantissa: (item.0[0] & 0xF0) >> 4,
+            exponent: item[0] & 0x0F,
+            mantissa: (item[0] & 0xF0) >> 4,
         })
     }
 }
@@ -1484,8 +1499,8 @@ impl TryFrom<Reg8> for PhaseGain {
     type Error = Reg8;
     fn try_from(item: Reg8) -> Result<Self, Self::Error> {
         Ok(Self {
-            gain: item.0[0] & 0x0F,
-            filter: (item.0[0] >> 6) & 0x03,
+            gain: item[0] & 0x0F,
+            filter: (item[0] >> 6) & 0x03,
         })
     }
 }
@@ -1516,8 +1531,8 @@ impl TryFrom<Reg8> for FreqGainA {
     type Error = Reg8;
     fn try_from(item: Reg8) -> Result<Self, Self::Error> {
         Ok(Self {
-            gain: item.0[0] & 0x0F,
-            flags: FreqGainAFlags::from_bits(item.0[0] & 0xF0).ok_or(item)?,
+            gain: item[0] & 0x0F,
+            flags: FreqGainAFlags::from_bits(item[0] & 0xF0).ok_or(item)?,
         })
     }
 }
@@ -1546,8 +1561,8 @@ impl TryFrom<Reg8> for FreqGainB {
     type Error = Reg8;
     fn try_from(item: Reg8) -> Result<Self, Self::Error> {
         Ok(Self {
-            gain: item.0[0] & 0x1F,
-            flags: FreqGainBFlags::from_bits(item.0[0] & 0xC0).ok_or(item)?,
+            gain: item[0] & 0x1F,
+            flags: FreqGainBFlags::from_bits(item[0] & 0xC0).ok_or(item)?,
         })
     }
 }
@@ -1567,7 +1582,7 @@ impl TryFrom<Reg8> for FreqGainC {
     type Error = Reg8;
     fn try_from(item: Reg8) -> Result<Self, Self::Error> {
         Ok(Self {
-            gain: item.0[0] & 0x1F,
+            gain: item[0] & 0x1F,
         })
     }
 }
@@ -1588,8 +1603,8 @@ impl TryFrom<Reg8> for FreqGainD {
     type Error = Reg8;
     fn try_from(item: Reg8) -> Result<Self, Self::Error> {
         Ok(Self {
-            gain: item.0[0] & 0x1F,
-            freeze: item.0[0] & 0x80 > 0,
+            gain: item[0] & 0x1F,
+            freeze: item[0] & 0x80 > 0,
         })
     }
 }
@@ -1618,8 +1633,8 @@ impl TryFrom<Reg8> for AmplGain {
     type Error = Reg8;
     fn try_from(item: Reg8) -> Result<Self, Self::Error> {
         Ok(Self {
-            gain: item.0[0] & 0x0F,
-            flags: AmplGainFlags::from_bits(item.0[0] & 0xC0).ok_or(item)?,
+            gain: item[0] & 0x0F,
+            flags: AmplGainFlags::from_bits(item[0] & 0xC0).ok_or(item)?,
         })
     }
 }
@@ -1640,8 +1655,8 @@ impl TryFrom<Reg8> for FourFSK {
     type Error = Reg8;
     fn try_from(item: Reg8) -> Result<Self, Self::Error> {
         Ok(Self {
-            decay: item.0[0] & 0x0F,
-            update: item.0[0] & 0x10 > 0,
+            decay: item[0] & 0x0F,
+            update: item[0] & 0x10 > 0,
         })
     }
 }
@@ -1662,8 +1677,8 @@ impl TryFrom<Reg8> for BBOffsRes {
     type Error = Reg8;
     fn try_from(item: Reg8) -> Result<Self, Self::Error> {
         Ok(Self {
-            res_int_a: item.0[0] & 0x0F,
-            res_int_b: (item.0[0] & 0xF0) >> 4,
+            res_int_a: item[0] & 0x0F,
+            res_int_b: (item[0] & 0xF0) >> 4,
         })
     }
 }
@@ -1687,7 +1702,7 @@ pub enum ModCfgF {
 impl TryFrom<Reg8> for ModCfgF {
     type Error = Reg8;
     fn try_from(item: Reg8) -> Result<Self, Self::Error> {
-        ModCfgF::try_from(item.0[0]).or(Err(item))
+        ModCfgF::try_from(item[0]).or(Err(item))
     }
 }
 
@@ -1729,8 +1744,8 @@ impl TryFrom<Reg8> for ModCfgA {
     type Error = Reg8;
     fn try_from(item: Reg8) -> Result<Self, Self::Error> {
         Ok(Self {
-            slowramp: SlowRamp::try_from((item.0[0] & 0x30) >> 4).or(Err(item))?,
-            flags: ModCfgAFlags::from_bits(item.0[0] & 0xCF).ok_or(item)?,
+            slowramp: SlowRamp::try_from((item[0] & 0x30) >> 4).or(Err(item))?,
+            flags: ModCfgAFlags::from_bits(item[0] & 0xCF).ok_or(item)?,
         })
     }
 }
@@ -1759,8 +1774,8 @@ impl TryFrom<Reg8> for PLLVCOI {
     type Error = Reg8;
     fn try_from(item: Reg8) -> Result<Self, Self::Error> {
         Ok(Self {
-            bias: item.0[0] & 0x3F,
-            flags: PLLVCOIFlags::from_bits(item.0[0] & 0x80).ok_or(item)?,
+            bias: item[0] & 0x3F,
+            flags: PLLVCOIFlags::from_bits(item[0] & 0x80).ok_or(item)?,
         })
     }
 }
@@ -1801,9 +1816,9 @@ impl TryFrom<Reg8> for PLLLockDet {
     type Error = Reg8;
     fn try_from(item: Reg8) -> Result<Self, Self::Error> {
         Ok(Self {
-            delay: LockDetDly::try_from(item.0[0] & 0x03).or(Err(item))?,
-            flags: LockDetFlags::from_bits(item.0[0] & 0x04).ok_or(item)?,
-            readback: LockDetDly::try_from((item.0[0] & 0xc0) >> 6).or(Err(item))?,
+            delay: LockDetDly::try_from(item[0] & 0x03).or(Err(item))?,
+            flags: LockDetFlags::from_bits(item[0] & 0x04).ok_or(item)?,
+            readback: LockDetDly::try_from((item[0] & 0xc0) >> 6).or(Err(item))?,
         })
     }
 }
@@ -1832,7 +1847,7 @@ pub enum PLLRngClk {
 impl TryFrom<Reg8> for PLLRngClk {
     type Error = Reg8;
     fn try_from(item: Reg8) -> Result<Self, Self::Error> {
-        Self::try_from(item.0[0]).or(Err(item))
+        Self::try_from(item[0]).or(Err(item))
     }
 }
 
@@ -1861,8 +1876,8 @@ impl TryFrom<Reg8> for PktAddrCfg {
     type Error = Reg8;
     fn try_from(item: Reg8) -> Result<Self, Self::Error> {
         Ok(Self {
-            addr_pos: item.0[0] & 0xF,
-            flags: PktAddrCfgFlags::from_bits(item.0[0] & 0xF0).ok_or(item)?,
+            addr_pos: item[0] & 0xF,
+            flags: PktAddrCfgFlags::from_bits(item[0] & 0xF0).ok_or(item)?,
         })
     }
 }
@@ -1883,8 +1898,8 @@ impl TryFrom<Reg8> for PktLenCfg {
     type Error = Reg8;
     fn try_from(item: Reg8) -> Result<Self, Self::Error> {
         Ok(Self {
-            pos: item.0[0] & 0xF,
-            bits: (item.0[0] & 0xF0) >> 4,
+            pos: item[0] & 0xF,
+            bits: (item[0] & 0xF0) >> 4,
         })
     }
 }
@@ -1905,8 +1920,8 @@ impl TryFrom<Reg8> for MatchLen {
     type Error = Reg8;
     fn try_from(item: Reg8) -> Result<Self, Self::Error> {
         Ok(Self {
-            len: item.0[0] & 0x1F,
-            raw: (item.0[0] & 0x80) > 0,
+            len: item[0] & 0x1F,
+            raw: (item[0] & 0x80) > 0,
         })
     }
 }
@@ -1928,8 +1943,8 @@ impl TryFrom<Reg8> for TMG {
     type Error = Reg8;
     fn try_from(item: Reg8) -> Result<Self, Self::Error> {
         Ok(Self {
-            m: item.0[0] & 0x1F,
-            e: (item.0[0] >> 5) & 0x7,
+            m: item[0] & 0x1F,
+            e: (item[0] >> 5) & 0x7,
         })
     }
 }
@@ -1960,7 +1975,7 @@ bitflags! {
 impl TryFrom<Reg8> for PktMiscFlags {
     type Error = Reg8;
     fn try_from(item: Reg8) -> Result<Self, Self::Error> {
-        Self::from_bits(item.0[0]).ok_or(item)
+        Self::from_bits(item[0]).ok_or(item)
     }
 }
 
@@ -1986,7 +2001,7 @@ bitflags! {
 impl TryFrom<Reg8> for PktStoreFlags {
     type Error = Reg8;
     fn try_from(item: Reg8) -> Result<Self, Self::Error> {
-        Self::from_bits(item.0[0]).ok_or(item)
+        Self::from_bits(item[0]).ok_or(item)
     }
 }
 
@@ -2011,7 +2026,7 @@ bitflags! {
 impl TryFrom<Reg8> for PktAcceptFlags {
     type Error = Reg8;
     fn try_from(item: Reg8) -> Result<Self, Self::Error> {
-        Self::from_bits(item.0[0]).ok_or(item)
+        Self::from_bits(item[0]).ok_or(item)
     }
 }
 
@@ -2033,7 +2048,7 @@ pub enum PerfF10 {
 impl TryFrom<Reg8> for PerfF10 {
     type Error = Reg8;
     fn try_from(item: Reg8) -> Result<Self, Self::Error> {
-        Self::try_from(item.0[0]).or(Err(item))
+        Self::try_from(item[0]).or(Err(item))
     }
 }
 
@@ -2055,7 +2070,7 @@ pub enum PerfF11 {
 impl TryFrom<Reg8> for PerfF11 {
     type Error = Reg8;
     fn try_from(item: Reg8) -> Result<Self, Self::Error> {
-        Self::try_from(item.0[0]).or(Err(item))
+        Self::try_from(item[0]).or(Err(item))
     }
 }
 
@@ -2078,7 +2093,7 @@ pub enum PerfF34 {
 impl TryFrom<Reg8> for PerfF34 {
     type Error = Reg8;
     fn try_from(item: Reg8) -> Result<Self, Self::Error> {
-        Self::try_from(item.0[0]).or(Err(item))
+        Self::try_from(item[0]).or(Err(item))
     }
 }
 
@@ -2099,7 +2114,7 @@ pub enum PerfF35 {
 impl TryFrom<Reg8> for PerfF35 {
     type Error = Reg8;
     fn try_from(item: Reg8) -> Result<Self, Self::Error> {
-        Self::try_from(item.0[0]).or(Err(item))
+        Self::try_from(item[0]).or(Err(item))
     }
 }
 
