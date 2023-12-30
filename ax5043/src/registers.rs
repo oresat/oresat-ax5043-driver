@@ -9,6 +9,8 @@ use bitflags::bitflags;
 use num_enum::{IntoPrimitive, TryFromPrimitive};
 use std::{fmt, ops::{Index, Range}};
 // FIXME: use ax5043_derive::{Serialize, Deserialize};
+#[cfg(test)]
+use proptest::prelude::*;
 
 // newtypes to placate the orphan rule
 // registers are big endian
@@ -102,6 +104,13 @@ impl TryFrom<Reg32> for u32 {
     }
 }
 
+impl TryFrom<Reg32> for i32 {
+    type Error = Reg32;
+    fn try_from(item: Reg32) -> Result<Self, Self::Error> {
+        Ok(Self::from_be_bytes(item.into()))
+    }
+}
+
 impl From<u8> for Reg8 {
     fn from(item: u8) -> Self {
         Self(item.to_be_bytes())
@@ -150,6 +159,49 @@ impl From<i32> for Reg32 {
     }
 }
 
+#[cfg(test)]
+proptest! {
+    #[test]
+    fn reg8_u8_inverse(n: u8) {
+        assert_eq!(n, Reg8::from(n).try_into().unwrap());
+    }
+
+    #[test]
+    fn reg8_i8_inverse(n: i8) {
+        assert_eq!(n, Reg8::from(n).try_into().unwrap());
+    }
+
+    #[test]
+    fn reg16_u16_inverse(n: u16) {
+        assert_eq!(n, Reg16::from(n).try_into().unwrap());
+    }
+
+    #[test]
+    fn reg16_i16_inverse(n: i16) {
+        assert_eq!(n, Reg16::from(n).try_into().unwrap());
+    }
+
+    #[test] // FIXME: Test whole range, possibly fallible conversion?
+    fn reg24_u32_inverse(n in 0..2_u32.pow(24)) {
+        assert_eq!(n, Reg24::from(n).try_into().unwrap());
+    }
+
+    #[test] // FIXME: Test whole range, possibly fallible conversion?
+    fn reg24_i32_inverse(n in -2_i32.pow(23)..2_i32.pow(23)) {
+        assert_eq!(n, Reg24::from(n).try_into().unwrap());
+    }
+
+    #[test]
+    fn reg32_u32_inverse(n: u32) {
+        assert_eq!(n, Reg32::from(n).try_into().unwrap());
+    }
+
+    #[test]
+    fn reg32_i32_inverse(n: i32) {
+        assert_eq!(n, Reg32::from(n).try_into().unwrap());
+    }
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, IntoPrimitive, TryFromPrimitive)]
 #[repr(u8)]
 #[rustfmt::skip]
@@ -194,6 +246,39 @@ impl TryFrom<Reg8> for PwrMode {
 impl From<PwrMode> for Reg8 {
     fn from(item: PwrMode) -> Self {
         (u8::from(item.mode) | item.flags.bits()).into()
+    }
+}
+
+#[cfg(test)]
+fn pwrmodes_strategy() -> impl Strategy<Value = PwrModes> {
+    prop_oneof![
+        Just(PwrModes::POWEROFF),
+        Just(PwrModes::DEEPSLEEP),
+        Just(PwrModes::XOEN),
+        Just(PwrModes::FIFOEN),
+        Just(PwrModes::SYNTHRX),
+        Just(PwrModes::RX),
+        Just(PwrModes::WORRX),
+        Just(PwrModes::SYNTHTX),
+        Just(PwrModes::TX),
+    ]
+}
+
+#[cfg(test)]
+prop_compose! {
+    fn arb_pwrmode()(mode in pwrmodes_strategy(), bits in prop::bits::u8::masked(0xF0)) -> PwrMode {
+        PwrMode {
+            mode,
+            flags: PwrFlags::from_bits(bits).unwrap(),
+        }
+    }
+}
+
+#[cfg(test)]
+proptest! {
+    #[test]
+    fn pwrmode_inverse(t in arb_pwrmode()) {
+        assert_eq!(t, Reg8::from(t).try_into().unwrap());
     }
 }
 
