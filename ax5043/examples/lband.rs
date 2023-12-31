@@ -367,7 +367,7 @@ fn read_packet(radio: &mut Registers, packet: &mut Vec<u8>, uplink: &mut UdpSock
 
                 if calculated == checksum {
                     uplink.send(packet)?;
-                    println!("{:02X?}", packet);
+                    println!("LBAND RX PACKET: {:02X?}", packet);
                 } else {
                     println!("Rejected CRC: received 0x{:x}, calculated 0x{:x}", checksum, calculated);
                 }

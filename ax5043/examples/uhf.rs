@@ -15,6 +15,9 @@ use std::{
     os::fd::AsRawFd,
 };
 
+//use std::time::Duration;
+//use timerfd::{SetTimeFlags, TimerFd, TimerState};
+
 fn configure_radio(radio: &mut Registers, power: u16) -> Result<(Board, ChannelParameters)> {
     #[rustfmt::skip]
     let board = Board {
@@ -63,26 +66,12 @@ fn configure_radio(radio: &mut Registers, power: u16) -> Result<(Board, ChannelP
             fec: config::FEC {},
         }, // FIXME PKTADDRCFG bit order
         crc: CRC::CCITT { initial: 0xFFFF },
-        //datarate: 9_600, // FIXME: beacon datarate vs edl datarate?
-        datarate: 96_000,
-    };
-    let parameters = TXParameters {
-        antenna: Antenna::SingleEnded,
-        amp: AmplitudeShaping::RaisedCosine {
-            a: 0,
-            b: power,
-            c: 0,
-            d: 0,
-            e: 0,
-        },
-        plllock_gate: true,
-        brownout_gate: true,
+        datarate: 9_600,
     };
 
     configure(radio, &board)?;
     configure_synth(radio, &board, &synth)?;
     configure_channel(radio, &board, &channel)?;
-    configure_tx(radio, &board, &channel, &parameters)?;
 
     radio.FIFOTHRESH().write(128)?; // Half the FIFO size
 
@@ -115,7 +104,8 @@ impl RXParameters {
                 frequency_leak,
                 ..
             } => {
-                // m = 0.5;
+                //let m = 0.5; // Modulation index, fixed by MSK
+                // bandwidth = bitrate/2 from wikipedia
                 // bandwidth  = (1+m) * bitrate; // Carson's rule
                 //let bandwidth = 3 * channel.datarate / 2;
                 //let fcoeff = 0.25; // FIXME PHASEGAIN::FILTERIDX but translated through table 116
@@ -128,9 +118,9 @@ impl RXParameters {
                 //let fbaseband = bandwidth * (1+fcoeff_inv);
                 //let fbaseband = 75000; // From radiolab
                 //let decimation = board.xtal.freq / (fbaseband * 2u64.pow(4) * board.xtal.div());
-                //radio.DECIMATION.write(decimation.try_into().unwrap())?; // TODO: 7bits max
+                //radio.DECIMATION.write(decimation.try_into().unwrap())?; // TODO: 7bits max, 0 invalid
                 radio.DECIMATION().write(1)?;
-                // TODO: see note table 96
+                // TODO: see note table 96: RXDATARATE - TIMEGAINx ≥ 2^12 should be ensured
                 //radio.RXDATARATE.write((2u64.pow(7) * board.xtal.freq / (channel.datarate * board.xtal.div() * decimation)).try_into().unwrap())?;
                 radio.RXDATARATE().write(0x5355)?;
 
@@ -204,6 +194,7 @@ pub fn configure_radio_rx(radio: &mut Registers, power: u16) -> Result<(Board, C
     };
     params.write(radio, &board, &channel)?;
 
+    // TODO: see note table 96: RXDATARATE - TIMEGAINx ≥ 2^12 should be ensured
     let set0 = RXParameterSet {
         agc: RXParameterAGC {
             attack: 0x3,
@@ -381,7 +372,7 @@ fn read_packet(radio: &mut Registers, packet: &mut Vec<u8>, uplink: &mut UdpSock
 
                 if calculated == checksum {
                     uplink.send(packet)?;
-                    println!("{:02X?}", packet);
+                    println!("UHF RX PACKET: {:02X?}", packet);
                 } else {
                     println!("Rejected CRC: received 0x{:x}, calculated 0x{:x}", checksum, calculated);
                 }
@@ -390,7 +381,6 @@ fn read_packet(radio: &mut Registers, packet: &mut Vec<u8>, uplink: &mut UdpSock
     }
     Ok(())
 }
-
 
 fn transmit(radio: &mut Registers, buf: &[u8], amt: usize) -> Result<()> {
 
@@ -485,6 +475,8 @@ fn transmit(radio: &mut Registers, buf: &[u8], amt: usize) -> Result<()> {
 struct Args {
     #[arg(short, long, default_value = "10015")]
     beacon: u16,
+    #[arg(short, long, default_value = "10016")]
+    downlink: u16,
     #[arg(short, long, default_value = "10025")]
     uplink: u16,
     #[arg(short, long, default_value = "/dev/spidev0.0")]
@@ -505,10 +497,27 @@ fn main() -> Result<()> {
     const BEACON: Token = Token(0);
     registry.register(&mut beacon, BEACON, Interest::READABLE)?;
 
+    let addr = SocketAddr::new(IpAddr::V6(Ipv6Addr::UNSPECIFIED), args.downlink);
+    let mut downlink = UdpSocket::bind(addr)?;
+    const DOWNLINK: Token = Token(1);
+    registry.register(&mut downlink, DOWNLINK, Interest::READABLE)?;
+
     let src = SocketAddr::new(IpAddr::V4(Ipv4Addr::UNSPECIFIED), 0);
     let dest = SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), args.uplink);
     let mut uplink = UdpSocket::bind(src)?;
     uplink.connect(dest)?;
+
+    //let mut tfd = TimerFd::new().unwrap();
+    //tfd.set_state(
+    //    TimerState::Periodic {
+    //        current: Duration::new(1, 0),
+    //        interval: Duration::from_millis(50),
+    //    },
+    //    SetTimeFlags::Default,
+    //);
+    //const TIMER: Token = Token(2);
+    //registry.register(&mut SourceFd(&tfd.as_raw_fd()), TIMER, Interest::READABLE)?;
+
 
     const SIGINT: Token = Token(3);
     let mut signals = Signals::new(Signal::Interrupt.into())?;
@@ -542,7 +551,7 @@ fn main() -> Result<()> {
         return Ok(());
     }
 
-    configure_radio_rx(&mut radio, args.power)?;
+    let (board, _) = configure_radio_rx(&mut radio, args.power)?;
     pa_enable.set_values([true])?;
 
     radio.PWRMODE().write(PwrMode {
@@ -571,18 +580,58 @@ fn main() -> Result<()> {
         for event in events.iter() {
             match event.token() {
                 BEACON => {
-
                     radio.IRQMASK().write(ax5043::registers::IRQ::empty())?;
                     // See errata - PWRMODE must transition through off for FIFO to work
                     radio.PWRMODE().write(PwrMode {
                         flags: PwrFlags::XOEN | PwrFlags::REFEN,
                         mode: PwrModes::POWEROFF,
                     })?;
-
                     let mut buf = [0; 2048];
                     let (amt, src) = beacon.recv_from(&mut buf)?;
                     println!("Recv {} from {}: {:X?}", amt, src, &buf[..amt]);
+
+                    let channel = ChannelParameters {
+                        modulation: config::Modulation::GMSK {
+                            ramp: config::SlowRamp::Bits1,
+                            bt: BT(0.5),
+                        },
+                        encoding: Encoding::NRZI | Encoding::SCRAM,
+                        framing: config::Framing::HDLC {
+                            fec: config::FEC {},
+                        }, // FIXME PKTADDRCFG bit order
+                        crc: CRC::CCITT { initial: 0xFFFF },
+                        datarate: 9_600,
+                    };
+
+                    let parameters = TXParameters {
+                        antenna: Antenna::SingleEnded,
+                        amp: AmplitudeShaping::RaisedCosine {
+                            a: 0,
+                            b: args.power,
+                            //b: 0xFFF,
+                            c: 0,
+                            d: 0,
+                            e: 0,
+                        },
+                        plllock_gate: true,
+                        brownout_gate: true,
+                    };
+
+                    configure_channel(&mut radio, &board, &channel)?;
+                    configure_tx(&mut radio, &board, &channel, &parameters)?;
+                    radio.PKTADDRCFG().write(PktAddrCfg {
+                        addr_pos: 0,
+                        flags: PktAddrCfgFlags::FEC_SYNC_DIS,
+                    })?;
+
+
                     transmit(&mut radio, &buf, amt)?;
+                    radio.PKTADDRCFG().write(PktAddrCfg {
+                        addr_pos: 0,
+                        flags: PktAddrCfgFlags::MSB_FIRST | PktAddrCfgFlags::FEC_SYNC_DIS,
+                    })?;
+
+
                     radio.PWRMODE().write(PwrMode {
                         flags: PwrFlags::XOEN | PwrFlags::REFEN,
                         mode: PwrModes::RX,
@@ -591,12 +640,67 @@ fn main() -> Result<()> {
                     _ = radio.POWSTICKYSTAT().read()?; // clear sticky power flags for PWR_GOOD
                     radio.IRQMASK().write(ax5043::registers::IRQ::FIFONOTEMPTY)?;
                 }
+                DOWNLINK => {
+                    radio.IRQMASK().write(ax5043::registers::IRQ::empty())?;
+                    // See errata - PWRMODE must transition through off for FIFO to work
+                    radio.PWRMODE().write(PwrMode {
+                        flags: PwrFlags::XOEN | PwrFlags::REFEN,
+                        mode: PwrModes::POWEROFF,
+                    })?;
+                    let mut buf = [0; 2048];
+                    let (amt, src) = downlink.recv_from(&mut buf)?;
+                    println!("Recv {} from {}: {:X?}", amt, src, &buf[..amt]);
+
+                    let channel = ChannelParameters {
+                        modulation: config::Modulation::GMSK {
+                            ramp: config::SlowRamp::Bits1,
+                            bt: BT(0.5),
+                        },
+                        encoding: Encoding::NRZI | Encoding::SCRAM,
+                        framing: config::Framing::HDLC {
+                            fec: config::FEC {},
+                        }, // FIXME PKTADDRCFG bit order
+                        crc: CRC::CCITT { initial: 0xFFFF },
+                        datarate: 96_000,
+                    };
+
+
+                    let parameters = TXParameters {
+                        antenna: Antenna::SingleEnded,
+                        amp: AmplitudeShaping::RaisedCosine {
+                            a: 0,
+                            b: args.power,
+                            c: 0,
+                            d: 0,
+                            e: 0,
+                        },
+                        plllock_gate: true,
+                        brownout_gate: true,
+                    };
+
+                    configure_channel(&mut radio, &board, &channel)?;
+                    configure_tx(&mut radio, &board, &channel, &parameters)?;
+
+                    transmit(&mut radio, &buf, amt)?;
+                    radio.PWRMODE().write(PwrMode {
+                        flags: PwrFlags::XOEN | PwrFlags::REFEN,
+                        mode: PwrModes::RX,
+                    })?;
+                    _ = radio.PLLRANGINGA().read()?; // sticky lock bit ~ IRQPLLUNLIOCK, gate
+                    _ = radio.POWSTICKYSTAT().read()?; // clear sticky power flags for PWR_GOOD
+                    radio.IRQMASK().write(ax5043::registers::IRQ::FIFONOTEMPTY)?;
+
+                }
                 IRQ => {
                     uhf_irq.read_event()?;
                     while uhf_irq.get_values(0u8)? > 0 {
                         read_packet(&mut radio, &mut packet, &mut uplink)?;
                     }
                 }
+                //TIMER => {
+                //    tfd.read();
+                //    println!("RSSI: {}", radio.RSSI().read()?);
+                //}
                 SIGINT => break 'outer,
                 _ => unreachable!(),
             }
