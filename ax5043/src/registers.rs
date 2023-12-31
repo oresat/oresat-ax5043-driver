@@ -9,8 +9,8 @@ use bitflags::bitflags;
 use num_enum::{IntoPrimitive, TryFromPrimitive};
 use std::{fmt, ops::{Index, Range}};
 // FIXME: use ax5043_derive::{Serialize, Deserialize};
-#[cfg(test)]
-use proptest::prelude::*;
+#[cfg(test)] use proptest::prelude::*;
+#[cfg(test)] use proptest_derive::Arbitrary;
 
 // newtypes to placate the orphan rule
 // registers are big endian
@@ -203,6 +203,7 @@ proptest! {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, IntoPrimitive, TryFromPrimitive)]
+#[cfg_attr(test, derive(Arbitrary))]
 #[repr(u8)]
 #[rustfmt::skip]
 pub enum PwrModes{
@@ -250,34 +251,13 @@ impl From<PwrMode> for Reg8 {
 }
 
 #[cfg(test)]
-fn pwrmodes_strategy() -> impl Strategy<Value = PwrModes> {
-    prop_oneof![
-        Just(PwrModes::POWEROFF),
-        Just(PwrModes::DEEPSLEEP),
-        Just(PwrModes::XOEN),
-        Just(PwrModes::FIFOEN),
-        Just(PwrModes::SYNTHRX),
-        Just(PwrModes::RX),
-        Just(PwrModes::WORRX),
-        Just(PwrModes::SYNTHTX),
-        Just(PwrModes::TX),
-    ]
-}
-
-#[cfg(test)]
-prop_compose! {
-    fn arb_pwrmode()(mode in pwrmodes_strategy(), bits in prop::bits::u8::masked(0xF0)) -> PwrMode {
-        PwrMode {
-            mode,
-            flags: PwrFlags::from_bits(bits).unwrap(),
-        }
-    }
-}
-
-#[cfg(test)]
 proptest! {
     #[test]
-    fn pwrmode_inverse(t in arb_pwrmode()) {
+    fn pwrmode_inverse(t in
+        (any::<PwrModes>(),
+        prop::bits::u8::masked(0xF0).prop_map(
+            |x| PwrFlags::from_bits(x).unwrap())).prop_map(
+            |(mode, flags)| PwrMode {mode, flags})) {
         assert_eq!(t, Reg8::from(t).try_into().unwrap());
     }
 }
@@ -300,6 +280,14 @@ impl TryFrom<Reg8> for PowStat {
     type Error = Reg8;
     fn try_from(item: Reg8) -> Result<Self, Self::Error> {
         Self::from_bits(item[0]).ok_or(item)
+    }
+}
+
+#[cfg(test)]
+proptest! {
+    #[test]
+    fn powstat_read(b in prop::bits::u8::ANY) {
+        assert_eq!(b, PowStat::try_from(Reg::<1>([b])).unwrap().bits())
     }
 }
 
@@ -327,6 +315,14 @@ impl TryFrom<Reg8> for PowIRQMask {
 impl From<PowIRQMask> for Reg8 {
     fn from(item: PowIRQMask) -> Self {
         item.bits().into()
+    }
+}
+
+#[cfg(test)]
+proptest! {
+    #[test]
+    fn powirqmask_inverse(b in prop::bits::u8::ANY.prop_map(|x| PowIRQMask::from_bits(x).unwrap())) {
+        assert_eq!(b, Reg8::from(b).try_into().unwrap())
     }
 }
 
@@ -362,6 +358,14 @@ impl From<IRQ> for Reg16 {
     }
 }
 
+#[cfg(test)]
+proptest! {
+    #[test]
+    fn irq_inverse(b in prop::bits::u16::masked(0x1FFF).prop_map(|x| IRQ::from_bits(x).unwrap())) {
+        assert_eq!(b, Reg16::from(b).try_into().unwrap())
+    }
+}
+
 bitflags! {
     #[derive(Clone, Copy, Debug, PartialEq)]
     pub struct RadioEvent: u16 {
@@ -386,7 +390,17 @@ impl From<RadioEvent> for Reg16 {
     }
 }
 
+#[cfg(test)]
+proptest! {
+    #[test]
+    fn radioevent_inverse(b in prop::bits::u16::masked(0x1F).prop_map(
+            |x| RadioEvent::from_bits(x).unwrap())) {
+        assert_eq!(b, Reg16::from(b).try_into().unwrap())
+    }
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, IntoPrimitive, TryFromPrimitive)]
+#[cfg_attr(test, derive(Arbitrary))]
 #[repr(u8)]
 #[allow(non_camel_case_types)]
 #[rustfmt::skip]
@@ -403,6 +417,7 @@ pub enum ModulationMode {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
+#[cfg_attr(test, derive(Arbitrary))]
 pub struct Modulation {
     pub mode: ModulationMode,
     pub halfspeed: bool,
@@ -421,6 +436,17 @@ impl TryFrom<Reg8> for Modulation {
 impl From<Modulation> for Reg8 {
     fn from(item: Modulation) -> Self {
         (u8::from(item.mode) | if item.halfspeed { 0x10 } else { 0 }).into()
+    }
+}
+
+#[cfg(test)]
+proptest! {
+    #[test]
+    fn modulation_inverse(
+        b in
+        (any::<ModulationMode>(), prop::bool::ANY).prop_map(
+            |(mode, halfspeed)| Modulation {mode, halfspeed})) {
+        assert_eq!(b, Reg8::from(b).try_into().unwrap())
     }
 }
 
@@ -452,7 +478,17 @@ impl From<Encoding> for Reg8 {
     }
 }
 
+#[cfg(test)]
+proptest! {
+    #[test]
+    fn encoding_inverse(b in prop::bits::u8::masked(0x1F).prop_map(
+            |x| Encoding::from_bits(x).unwrap())) {
+        assert_eq!(b, Reg8::from(b).try_into().unwrap())
+    }
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, IntoPrimitive, TryFromPrimitive)]
+#[cfg_attr(test, derive(Arbitrary))]
 #[repr(u8)]
 #[allow(non_camel_case_types)]
 #[rustfmt::skip]
@@ -466,6 +502,7 @@ pub enum FrameMode {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, IntoPrimitive, TryFromPrimitive)]
+#[cfg_attr(test, derive(Arbitrary))]
 #[repr(u8)]
 #[allow(non_camel_case_types)]
 #[rustfmt::skip]
@@ -506,6 +543,18 @@ impl TryFrom<Reg8> for Framing {
 impl From<Framing> for Reg8 {
     fn from(item: Framing) -> Self {
         (u8::from(item.frmmode) << 1 | u8::from(item.crcmode) << 4 | item.flags.bits()).into()
+    }
+}
+
+#[cfg(test)]
+proptest! {
+    #[test]
+    fn framing_inverse(
+        b in
+        (any::<FrameMode>(), any::<CRCMode>(), prop::bits::u8::masked(0x81).prop_map(
+                |x| FramingFlags::from_bits(x).unwrap())).prop_map(
+            |(frmmode, crcmode, flags)| Framing {frmmode, crcmode, flags})) {
+        assert_eq!(b, Reg8::from(b).try_into().unwrap())
     }
 }
 
