@@ -798,9 +798,10 @@ pub fn configure_channel(
         }
         Modulation::GMSK { .. } => {
             radio.MODULATION().write(crate::Modulation {
-                mode: ModulationMode::FSK,
+                mode: ModulationMode::MSK,
                 halfspeed: false,
             })?;
+            // TODO in MSK mode does FSKDEV have an effect?
             // m = 0.5, fskdev = 0.5 * f_dev, 1/(0.5*0.5) = 4
             radio.FSKDEV().write(
                 ((parameters.datarate / 4) * 2_u64.pow(24) / board.xtal.freq)
