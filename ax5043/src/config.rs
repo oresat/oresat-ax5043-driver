@@ -1201,24 +1201,26 @@ pub fn autorange(radio: &mut Registers) -> Result<()> {
      */
 
     // TODO: check PLL lock/Sticky lock
-    //println!("Setting Mode: XOEN");
     radio.PWRMODE().write(PwrMode {
         mode: PwrModes::XOEN,
         flags: PwrFlags::XOEN | PwrFlags::REFEN,
-    })?; // TODO what does refen do
+    })?; // TODO REFEN corresponds to REF and VREF in POWSTAT. Is this the power
+         // domain for the synth? I assume that means we need it for autoranigng then
+         // but this should be tested.
     while radio.XTALSTATUS().read()? != XtalStatus::XTAL_RUN {} // TODO: IRQXTALREADY
-                                                                //println!("XTAL Running, RNG_START");
+
     radio.PLLRANGINGA().write(PLLRanging {
         vcor: 0x08,
         flags: PLLRangingFlags::RNG_START,
     })?; // TODO: cache or pre-calc VCORA/B?
+
     while radio
         .PLLRANGINGA()
         .read()?
         .flags
         .contains(PLLRangingFlags::RNG_START)
     {} // TODO: IRQRNGDONE
-       //println!("RNG_START done");
+
     if radio
         .PLLRANGINGA()
         .read()?
@@ -1228,9 +1230,9 @@ pub fn autorange(radio: &mut Registers) -> Result<()> {
         return Err(Error::Autorange);
     }
 
-    //println!("\n{:?}", radio.PLLRANGINGA.read()?);
-    //println!("PLLVCOIR: 0x{:x?}", radio.PLLVCOIR.read()?);
-    //println!("PLLOCKDET: 0x{:x?}", radio.PLLLOCKDET.read()?);
+    //println!("\n{:?}", radio.PLLRANGINGA().read()?);
+    //println!("PLLVCOIR: 0x{:x?}", radio.PLLVCOIR().read()?);
+    //println!("PLLOCKDET: 0x{:x?}", radio.PLLLOCKDET().read()?);
     radio.PWRMODE().write(PwrMode {
         mode: PwrModes::POWEROFF,
         flags: PwrFlags::empty(),
