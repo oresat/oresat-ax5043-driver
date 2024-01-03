@@ -18,7 +18,7 @@ use std::{
 //use std::time::Duration;
 //use timerfd::{SetTimeFlags, TimerFd, TimerState};
 
-fn configure_radio(radio: &mut Registers, power: u16) -> Result<(Board, ChannelParameters)> {
+fn configure_radio(radio: &mut Registers) -> Result<(Board, ChannelParameters)> {
     #[rustfmt::skip]
     let board = Board {
         sysclk: Pin { mode: SysClk::Z,      pullup: true,  invert: false, },
@@ -173,8 +173,8 @@ packet: PS3
 // fbaseband
 // fif/bandwidth?
 
-pub fn configure_radio_rx(radio: &mut Registers, power: u16) -> Result<(Board, ChannelParameters)> {
-    let (board, channel) = configure_radio(radio, power)?;
+pub fn configure_radio_rx(radio: &mut Registers) -> Result<(Board, ChannelParameters)> {
+    let (board, channel) = configure_radio(radio)?;
 
     radio.PERF_F18().write(0x02)?; // TODO set by radiolab during RX
     radio.PERF_F26().write(0x96)?;
@@ -541,7 +541,7 @@ fn main() -> Result<()> {
         return Ok(());
     }
 
-    let (board, _) = configure_radio_rx(&mut radio, args.power)?;
+    let (board, _) = configure_radio_rx(&mut radio)?;
     pa_enable.set_values([true])?;
 
     radio.PWRMODE().write(PwrMode {
