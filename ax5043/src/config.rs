@@ -758,6 +758,12 @@ pub enum CRC {
     CRC32 {initial: u32},
 }
 
+#[derive(PartialEq)]
+pub enum BitOrder {
+    LSBFirst,
+    MSBFirst,
+}
+
 pub struct ChannelParameters {
     pub modulation: Modulation,
     // If BROWN GATE is set, the transmitter is disabled
@@ -770,7 +776,7 @@ pub struct ChannelParameters {
     pub framing: Framing,
     pub crc: CRC,
     pub datarate: u64,
-    // TODO:pktaddrcfg
+    pub bitorder: BitOrder,
 }
 
 pub fn configure_channel(
@@ -818,6 +824,20 @@ pub fn configure_channel(
         flags: FramingFlags::empty(),
     })?;
     radio.CRCINIT().write(0xFFFF_FFFF)?;
+
+    let flags = PktAddrCfgFlags::FEC_SYNC_DIS // FIXME config when FEC is ready
+        | if parameters.bitorder == BitOrder::MSBFirst {
+            PktAddrCfgFlags::MSB_FIRST
+        } else {
+            // LSB first is unset MSB
+            PktAddrCfgFlags::empty()
+        };
+
+    radio.PKTADDRCFG().write(PktAddrCfg {
+        addr_pos: 0,
+        flags,
+    })?;
+
     Ok(())
 }
 

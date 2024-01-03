@@ -64,9 +64,10 @@ fn configure_radio(radio: &mut Registers, power: u16) -> Result<(Board, ChannelP
         encoding: Encoding::NRZI | Encoding::SCRAM,
         framing: config::Framing::HDLC {
             fec: config::FEC {},
-        }, // FIXME PKTADDRCFG bit order
+        },
         crc: CRC::CCITT { initial: 0xFFFF },
-        datarate: 9_600,
+        datarate: 96_000,
+        bitorder: BitOrder::MSBFirst,
     };
 
     configure(radio, &board)?;
@@ -77,8 +78,6 @@ fn configure_radio(radio: &mut Registers, power: u16) -> Result<(Board, ChannelP
 
     autorange(radio)?;
     Ok((board, channel))
-     // FIXME LSB First only for beacon
-
 }
 
 enum RXParameters {
@@ -334,11 +333,6 @@ pub fn configure_radio_rx(radio: &mut Registers, power: u16) -> Result<(Board, C
     radio.PKTCHUNKSIZE().write(0x09)?;
     radio.PKTACCEPTFLAGS().write(PktAcceptFlags::LRGP)?;
 
-    radio.PKTADDRCFG().write(PktAddrCfg {
-        addr_pos: 0,
-        flags: PktAddrCfgFlags::MSB_FIRST | PktAddrCfgFlags::FEC_SYNC_DIS,
-    })?;
-
     radio.RSSIREFERENCE().write(64)?;
 
     Ok((board, channel))
@@ -383,10 +377,6 @@ fn read_packet(radio: &mut Registers, packet: &mut Vec<u8>, uplink: &mut UdpSock
 }
 
 fn transmit(radio: &mut Registers, buf: &[u8], amt: usize) -> Result<()> {
-
-    // TODO Datarate
-    // TODO bitorder
-
     radio.PWRMODE().write(PwrMode {
         flags: PwrFlags::XOEN | PwrFlags::REFEN,
         mode: PwrModes::TX,
@@ -598,9 +588,10 @@ fn main() -> Result<()> {
                         encoding: Encoding::NRZI | Encoding::SCRAM,
                         framing: config::Framing::HDLC {
                             fec: config::FEC {},
-                        }, // FIXME PKTADDRCFG bit order
+                        },
                         crc: CRC::CCITT { initial: 0xFFFF },
                         datarate: 9_600,
+                        bitorder: BitOrder::LSBFirst,
                     };
 
                     let parameters = TXParameters {
@@ -619,18 +610,8 @@ fn main() -> Result<()> {
 
                     configure_channel(&mut radio, &board, &channel)?;
                     configure_tx(&mut radio, &board, &channel, &parameters)?;
-                    radio.PKTADDRCFG().write(PktAddrCfg {
-                        addr_pos: 0,
-                        flags: PktAddrCfgFlags::FEC_SYNC_DIS,
-                    })?;
-
 
                     transmit(&mut radio, &buf, amt)?;
-                    radio.PKTADDRCFG().write(PktAddrCfg {
-                        addr_pos: 0,
-                        flags: PktAddrCfgFlags::MSB_FIRST | PktAddrCfgFlags::FEC_SYNC_DIS,
-                    })?;
-
 
                     radio.PWRMODE().write(PwrMode {
                         flags: PwrFlags::XOEN | PwrFlags::REFEN,
@@ -659,11 +640,11 @@ fn main() -> Result<()> {
                         encoding: Encoding::NRZI | Encoding::SCRAM,
                         framing: config::Framing::HDLC {
                             fec: config::FEC {},
-                        }, // FIXME PKTADDRCFG bit order
+                        },
                         crc: CRC::CCITT { initial: 0xFFFF },
                         datarate: 96_000,
+                        bitorder: BitOrder::MSBFirst,
                     };
-
 
                     let parameters = TXParameters {
                         antenna: Antenna::SingleEnded,

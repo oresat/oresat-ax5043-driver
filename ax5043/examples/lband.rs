@@ -59,6 +59,7 @@ fn configure_radio(radio: &mut Registers) -> Result<(Board, ChannelParameters)> 
         },
         crc: CRC::CCITT { initial: 0xFFFF },
         datarate: 60_000,
+        bitorder: BitOrder::MSBFirst,
     };
 
     configure(radio, &board)?;
@@ -328,11 +329,6 @@ pub fn configure_radio_rx(radio: &mut Registers) -> Result<(Board, ChannelParame
 
     radio.PKTCHUNKSIZE().write(0x09)?;
     radio.PKTACCEPTFLAGS().write(PktAcceptFlags::LRGP)?;
-
-    radio.PKTADDRCFG().write(PktAddrCfg {
-        addr_pos: 0,
-        flags: PktAddrCfgFlags::MSB_FIRST | PktAddrCfgFlags::FEC_SYNC_DIS,
-    })?;
 
     radio.RSSIREFERENCE().write(64)?;
 

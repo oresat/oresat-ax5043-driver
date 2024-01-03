@@ -56,6 +56,7 @@ fn config(radio: &mut Registers) -> Result<(Board, ChannelParameters)> {
         framing: Framing::HDLC { fec: FEC {} },
         crc: CRC::CCITT { initial: 0xFFFF },
         datarate: 9_600,
+        bitorder: BitOrder::LSBFirst,
     };
     configure_channel(radio, &board, &channel)?;
 

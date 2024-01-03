@@ -58,6 +58,7 @@ fn configure_radio(radio: &mut Registers, power: u16) -> Result<()> {
         framing: config::Framing::Raw,
         crc: CRC::None,
         datarate: 9_600,
+        bitorder: BitOrder::LSBFirst,
     };
     let parameters = TXParameters {
         antenna: Antenna::SingleEnded,
@@ -81,8 +82,6 @@ fn configure_radio(radio: &mut Registers, power: u16) -> Result<()> {
 
     autorange(radio)?;
     Ok(())
-     // FIXME LSB First only for beacon
-
 }
 
 fn carrier(radio: &mut Registers) -> Result<()> {
