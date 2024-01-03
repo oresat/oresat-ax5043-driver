@@ -1,7 +1,7 @@
 // Intended to be run on the C3v6, takes data from UDP port 10015
 // and transmits it through the UHF AX5043
 use anyhow::Result;
-use ax5043::{config, config::PwrAmp, config::IRQ, config::*, Status};
+use ax5043::{config, config::PwrAmp, config::IRQ, config::*};
 use ax5043::{registers, registers::*, Registers, RX, TX};
 use clap::Parser;
 use crc::{Crc, CRC_16_GENIBUS}; // TODO: this CRC works but is it correct?
@@ -346,13 +346,17 @@ fn read_packet(radio: &mut Registers, packet: &mut Vec<u8>, uplink: &mut UdpSock
 
     for chunk in radio.FIFODATARX().read(len.into())? {
         if let FIFOChunkRX::DATA{flags, ref data} = chunk {
-            println!("{:02X?}", chunk);
+            //println!("{:02X?}", chunk);
             if flags.intersects(FIFODataRXFlags::ABORT | FIFODataRXFlags::SIZEFAIL | FIFODataRXFlags::ADDRFAIL | FIFODataRXFlags::CRCFAIL | FIFODataRXFlags::RESIDUE) {
+                println!("UHF REJECTED {:02X?}", chunk);
                 packet.clear();
                 continue;
             }
 
             if flags.contains(FIFODataRXFlags::PKTSTART) {
+                if !packet.is_empty() {
+                    println!("UHF PKT RESTART {:02X?}", chunk);
+                }
                 packet.clear();
             }
             packet.write(&data)?;
@@ -525,13 +529,15 @@ fn main() -> Result<()> {
     registry.register(&mut SourceFd(&uhf_irq.as_raw_fd()), IRQ, Interest::READABLE)?;
 
     let spi0 = ax5043::open(args.spi)?;
-    let mut status = Status::empty();
-    let mut callback = |_: &_, _, s, _: &_| {
-        if s != status {
-            println!("TX Status change: {:?}", s);
-            status = s;
-        }
-    };
+    //let mut status = Status::empty();
+    //let mut callback = |_: &_, _, s, _: &_| {
+    //    if s != status {
+    //        println!("TX Status change: {:?}", s);
+    //        status = s;
+    //    }
+    //};
+    let mut callback = |_: &_, _, _, _: &_| {};
+
     let mut radio = ax5043::Registers::new(spi0, &mut callback);
     radio.reset()?;
 
@@ -577,8 +583,8 @@ fn main() -> Result<()> {
                         mode: PwrModes::POWEROFF,
                     })?;
                     let mut buf = [0; 2048];
-                    let (amt, src) = beacon.recv_from(&mut buf)?;
-                    println!("Recv {} from {}: {:X?}", amt, src, &buf[..amt]);
+                    let (amt, _src) = beacon.recv_from(&mut buf)?;
+                    //println!("Recv {} from {}: {:X?}", amt, src, &buf[..amt]);
 
                     let channel = ChannelParameters {
                         modulation: config::Modulation::GMSK {
@@ -629,8 +635,8 @@ fn main() -> Result<()> {
                         mode: PwrModes::POWEROFF,
                     })?;
                     let mut buf = [0; 2048];
-                    let (amt, src) = downlink.recv_from(&mut buf)?;
-                    println!("Recv {} from {}: {:X?}", amt, src, &buf[..amt]);
+                    let (amt, _src) = downlink.recv_from(&mut buf)?;
+                    //println!("Recv {} from {}: {:X?}", amt, src, &buf[..amt]);
 
                     let channel = ChannelParameters {
                         modulation: config::Modulation::GMSK {

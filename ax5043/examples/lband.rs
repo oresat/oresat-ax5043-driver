@@ -1,5 +1,5 @@
 use anyhow::Result;
-use ax5043::{config, config::PwrAmp, config::IRQ, config::*, Status};
+use ax5043::{config, config::PwrAmp, config::IRQ, config::*};
 use ax5043::{registers::*, Registers, RX, TX};
 use clap::Parser;
 use crc::{Crc, CRC_16_GENIBUS}; // TODO: this CRC works but is it correct?
@@ -95,8 +95,8 @@ impl RXParameters {
                 frequency_leak,
                 ..
             } => {
-                // m = 0.5;
-                // bandwidth  = (1+m) * bitrate; // Carson's rule
+                // modulation index: m = 0.5;
+                // bandwidth = (1+m) * datarate (Carson's rule)
                 //let bandwidth = 3 * channel.datarate / 2;
                 //let fcoeff = 0.25; // FIXME PHASEGAIN::FILTERIDX but translated through table 116
                 //let fcoeff_inv = 4; // 1/fcoeff
@@ -343,13 +343,17 @@ fn read_packet(radio: &mut Registers, packet: &mut Vec<u8>, uplink: &mut UdpSock
 
     for chunk in radio.FIFODATARX().read(len.into())? {
         if let FIFOChunkRX::DATA{flags, ref data} = chunk {
-            println!("{:02X?}", chunk);
+            //println!("{:02X?}", chunk);
             if flags.intersects(FIFODataRXFlags::ABORT | FIFODataRXFlags::SIZEFAIL | FIFODataRXFlags::ADDRFAIL | FIFODataRXFlags::CRCFAIL | FIFODataRXFlags::RESIDUE) {
+                println!("LBAND REJECTED {:02X?}", chunk);
                 packet.clear();
                 continue;
             }
 
             if flags.contains(FIFODataRXFlags::PKTSTART) {
+                if !packet.is_empty() {
+                    println!("LBAND PKT RESTART {:02X?}", chunk);
+                }
                 packet.clear();
             }
             packet.write(&data)?;
@@ -411,13 +415,15 @@ fn main() -> Result<()> {
     registry.register(&mut SourceFd(&lband_irq.as_raw_fd()), IRQ, Interest::READABLE)?;
 
     let spi0 = ax5043::open(args.spi)?;
-    let mut status = Status::empty();
-    let mut callback = |_: &_, _, s, _: &_| {
-        if s != status {
-            println!("RX Status change: {:?}", s);
-            status = s;
-        }
-    };
+    //let mut status = ax5043::Status::empty();
+    //let mut callback = |_: &_, _, s, _: &_| {
+    //    if s != status {
+    //        println!("RX Status change: {:?}", s);
+    //        status = s;
+    //    }
+    //};
+    let mut callback = |_: &_, _, _, _: &_| {};
+
     let mut radio = ax5043::Registers::new(spi0, &mut callback);
     radio.reset()?;
 
