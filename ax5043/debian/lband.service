@@ -1,0 +1,6 @@
+[Unit]
+Description="AX5043 driver for L Band"
+
+[Service]
+Type=simple
+ExecStart="/usr/bin/lband"

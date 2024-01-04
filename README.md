@@ -99,6 +99,9 @@ Examples
 - `ground`: Receives beacon packets on a socket and transmits them.
 - `roundtrip`: Transmit from one radio and receive on the second.
 
-
+Debian Packaging:
+- Install [cargo-deb](https://github.com/kornelski/cargo-deb): `cargo install cargo-deb`
+- Build the deb: `cargo deb --target armv7-unknown-linux-gnueabihf`
+- The resulting package can be found in `target/armv7-unknown-linux-gnueabihf/debian/`
 
 
