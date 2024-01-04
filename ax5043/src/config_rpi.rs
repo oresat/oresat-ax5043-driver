@@ -25,8 +25,7 @@ fn config(radio: &mut Registers) -> Result<(Board, ChannelParameters)> {
             pin: DACPin::PwrAmp,
         },
         adc: ADC::ADC1,
-    };
-    configure(radio, &board)?;
+    }.write(radio)?;
 
     let synth = Synthesizer {
         freq_a: 436_500_000,
@@ -44,8 +43,7 @@ fn config(radio: &mut Registers) -> Result<(Board, ChannelParameters)> {
         vco_current: Control::Automatic,
         lock_detector_delay: Control::Automatic, // readback PLLLOCKDET::LOCKDETDLYR
         ranging_clock: RangingClock::XtalDiv1024, // less than one tenth the loop filter bandwidth. Derive?
-    };
-    configure_synth(radio, &board, &synth)?;
+    }.write(radio, &board)?;
 
     let channel = ChannelParameters {
         modulation: Modulation::GMSK {
@@ -57,10 +55,9 @@ fn config(radio: &mut Registers) -> Result<(Board, ChannelParameters)> {
         crc: CRC::CCITT { initial: 0xFFFF },
         datarate: 9_600,
         bitorder: BitOrder::LSBFirst,
-    };
-    configure_channel(radio, &board, &channel)?;
+    }.write(radio, &board)?;
 
-    autorange(radio)?;
+    synth.autorange(radio)?;
 
     Ok((board, channel))
 }
@@ -79,8 +76,7 @@ pub fn configure_radio_tx(radio: &mut Registers) -> Result<config::Board> {
         },
         plllock_gate: true,
         brownout_gate: true,
-    };
-    configure_tx(radio, &board, &channel, &txparams)?;
+    }.write(radio, &board, &channel)?;
 
     // As far as I can tell PLLUNLOCK and PLLRNGDONE have no way to clear/are level triggered
     // radio.IRQMASK.write(registers::IRQ::XTALREADY | registers::IRQ::RADIOCTRL)?;

@@ -27,7 +27,7 @@ fn configure_radio(radio: &mut Registers) -> Result<(Board, ChannelParameters)> 
         filter: Filter::Internal,
         dac: DAC { pin: DACPin::None },
         adc: ADC::None,
-    };
+    }.write(radio)?;
 
     let synth = Synthesizer {
         freq_a: 457_000_000,
@@ -45,11 +45,10 @@ fn configure_radio(radio: &mut Registers) -> Result<(Board, ChannelParameters)> 
         vco_current: Control::Automatic,
         lock_detector_delay: Control::Automatic, // readback PLLLOCKDET::LOCKDETDLYR
         ranging_clock: RangingClock::XtalDiv1024, // less than one tenth the loop filter bandwidth. Derive?
-    };
+    }.write(radio, &board)?;
 
     let channel = ChannelParameters {
         modulation: config::Modulation::GMSK {
-            //deviation: 20_000,
             ramp: config::SlowRamp::Bits1,
             bt: BT(0.5),
         },
@@ -60,15 +59,11 @@ fn configure_radio(radio: &mut Registers) -> Result<(Board, ChannelParameters)> 
         crc: CRC::CCITT { initial: 0xFFFF },
         datarate: 60_000,
         bitorder: BitOrder::MSBFirst,
-    };
-
-    configure(radio, &board)?;
-    configure_synth(radio, &board, &synth)?;
-    configure_channel(radio, &board, &channel)?;
+    }.write(radio, &board)?;
 
     radio.FIFOTHRESH().write(128)?; // Half the FIFO size
 
-    autorange(radio)?;
+    synth.autorange(radio)?;
     Ok((board, channel))
 }
 

@@ -36,7 +36,7 @@ fn configure_radio(radio: &mut Registers) -> Result<(Board, ChannelParameters)> 
         filter: Filter::Internal,
         dac: DAC { pin: DACPin::None },
         adc: ADC::None,
-    };
+    }.write(radio)?;
 
     let synth = Synthesizer {
         freq_a: 436_500_000,
@@ -54,7 +54,7 @@ fn configure_radio(radio: &mut Registers) -> Result<(Board, ChannelParameters)> 
         vco_current: Control::Automatic,
         lock_detector_delay: Control::Automatic, // readback PLLLOCKDET::LOCKDETDLYR
         ranging_clock: RangingClock::XtalDiv1024, // less than one tenth the loop filter bandwidth. Derive?
-    };
+    }.write(radio, &board)?;
 
     let channel = ChannelParameters {
         modulation: config::Modulation::GMSK {
@@ -68,15 +68,11 @@ fn configure_radio(radio: &mut Registers) -> Result<(Board, ChannelParameters)> 
         crc: CRC::CCITT { initial: 0xFFFF },
         datarate: 96_000,
         bitorder: BitOrder::MSBFirst,
-    };
-
-    configure(radio, &board)?;
-    configure_synth(radio, &board, &synth)?;
-    configure_channel(radio, &board, &channel)?;
+    }.write(radio, &board)?;
 
     radio.FIFOTHRESH().write(128)?; // Half the FIFO size
 
-    autorange(radio)?;
+    synth.autorange(radio)?;
     Ok((board, channel))
 }
 
@@ -598,7 +594,7 @@ fn main() -> Result<()> {
                         crc: CRC::CCITT { initial: 0xFFFF },
                         datarate: 9_600,
                         bitorder: BitOrder::LSBFirst,
-                    };
+                    }.write(&mut radio, &board)?;
 
                     let parameters = TXParameters {
                         antenna: Antenna::SingleEnded,
@@ -612,10 +608,7 @@ fn main() -> Result<()> {
                         },
                         plllock_gate: true,
                         brownout_gate: true,
-                    };
-
-                    configure_channel(&mut radio, &board, &channel)?;
-                    configure_tx(&mut radio, &board, &channel, &parameters)?;
+                    }.write(&mut radio, &board, &channel)?;
 
                     transmit(&mut radio, &buf, amt)?;
 
@@ -650,7 +643,7 @@ fn main() -> Result<()> {
                         crc: CRC::CCITT { initial: 0xFFFF },
                         datarate: 96_000,
                         bitorder: BitOrder::MSBFirst,
-                    };
+                    }.write(&mut radio, &board)?;
 
                     let parameters = TXParameters {
                         antenna: Antenna::SingleEnded,
@@ -663,10 +656,7 @@ fn main() -> Result<()> {
                         },
                         plllock_gate: true,
                         brownout_gate: true,
-                    };
-
-                    configure_channel(&mut radio, &board, &channel)?;
-                    configure_tx(&mut radio, &board, &channel, &parameters)?;
+                    }.write(&mut radio, &board, &channel)?;
 
                     transmit(&mut radio, &buf, amt)?;
                     radio.PWRMODE().write(PwrMode {
@@ -676,7 +666,6 @@ fn main() -> Result<()> {
                     _ = radio.PLLRANGINGA().read()?; // sticky lock bit ~ IRQPLLUNLIOCK, gate
                     _ = radio.POWSTICKYSTAT().read()?; // clear sticky power flags for PWR_GOOD
                     radio.IRQMASK().write(ax5043::registers::IRQ::FIFONOTEMPTY)?;
-
                 }
                 IRQ => {
                     uhf_irq.read_event()?;
