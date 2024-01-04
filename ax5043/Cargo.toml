@@ -3,7 +3,7 @@ name = "ax5043"
 version = "0.1.0"
 authors = ["Theo Hill <Theo0x48@gmail.com>"]
 edition = "2021"
-description = "AX5043 userspace lib, C3 UHF/LBand driver"
+description = "C3 UHF/LBand AX5043 driver"
 license = "GPL-3.0-or-later"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
