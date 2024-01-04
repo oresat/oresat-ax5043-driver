@@ -328,9 +328,9 @@ fn set_load_cap(radio: &mut Registers, load_cap: f64) -> Result<()> {
 }
 
 pub fn configure(radio: &mut Registers, board: &Board) -> Result<()> {
-    // check that dac pin is set correctly
-    // check that tcxo_en is set correctly
-
+    // TODO: check that dac pin is set correctly
+    // TODO: check that tcxo_en is set correctly
+    // TODO: check SYSCLK inver
     radio.PINFUNCSYSCLK().write(PFSysClk {
         mode: board.sysclk.mode.into(),
         pullup: board.sysclk.pullup,
@@ -343,10 +343,6 @@ pub fn configure(radio: &mut Registers, board: &Board) -> Result<()> {
         mode: board.data.mode.into(),
         flags: board.data.into(),
     })?;
-    radio.PINFUNCPWRAMP().write(PFPwrAmp {
-        mode: board.pwramp.mode.into(),
-        flags: board.pwramp.into(),
-    })?;
     radio.PINFUNCIRQ().write(PFIRQ {
         mode: board.irq.mode.into(),
         flags: board.irq.into(),
@@ -354,6 +350,10 @@ pub fn configure(radio: &mut Registers, board: &Board) -> Result<()> {
     radio.PINFUNCANTSEL().write(PFAntSel {
         mode: board.antsel.mode.into(),
         flags: board.antsel.into(),
+    })?;
+    radio.PINFUNCPWRAMP().write(PFPwrAmp {
+        mode: board.pwramp.mode.into(),
+        flags: board.pwramp.into(),
     })?;
 
     if board.xtal.freq < 24_800_000 {
