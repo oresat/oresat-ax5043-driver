@@ -1,6 +1,6 @@
 // Intended to be run on the C3v6, takes data from UDP port 10015
 // and transmits it through the UHF AX5043
-use anyhow::Result;
+use anyhow::{ensure, Result};
 use ax5043::{config, config::PwrAmp, config::IRQ, config::*};
 use ax5043::{registers, registers::*, Registers, RX, TX};
 use clap::Parser;
@@ -538,10 +538,7 @@ fn main() -> Result<()> {
     radio.reset()?;
 
     let rev = radio.REVISION().read()?;
-    if rev != 0x51 {
-        println!("Unexpected revision {}, expected {}", rev, 0x51);
-        return Ok(());
-    }
+    ensure!(rev == 0x51, "Unexpected revision {}, expected {}", rev, 0x51);
 
     let (board, _) = configure_radio_rx(&mut radio)?;
     pa_enable.set_values([true])?;

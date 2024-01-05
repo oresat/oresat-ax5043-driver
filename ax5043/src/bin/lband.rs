@@ -1,4 +1,4 @@
-use anyhow::Result;
+use anyhow::{ensure, Result};
 use ax5043::{config, config::PwrAmp, config::IRQ, config::*};
 use ax5043::{registers::*, Registers, RX, TX};
 use clap::Parser;
@@ -366,6 +366,7 @@ fn read_packet(radio: &mut Registers, packet: &mut Vec<u8>, uplink: &mut UdpSock
                 } else {
                     println!("Rejected CRC: received 0x{:x}, calculated 0x{:x}", checksum, calculated);
                 }
+                packet.clear();
             }
         }
     }
@@ -423,10 +424,7 @@ fn main() -> Result<()> {
     radio.reset()?;
 
     let rev = radio.REVISION().read()?;
-    if rev != 0x51 {
-        println!("Unexpected revision {}, expected {}", rev, 0x51);
-        return Ok(());
-    }
+    ensure!(rev == 0x51, "Unexpected revision {}, expected {}", rev, 0x51);
 
     configure_radio_rx(&mut radio)?;
     pa_enable.set_values([true])?;
