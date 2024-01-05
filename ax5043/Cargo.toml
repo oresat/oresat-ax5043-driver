@@ -31,6 +31,9 @@ timerfd = "1.5.0"
 
 [package.metadata.deb]
 maintainer-scripts = "debian/"
+# cargo-deb somehow resolves the wrong libc (2.35 currently)
+# even though the cross toolchain uses 2.31.
+depends = "libc6:armhf (>= 2.31)"
 systemd-units = [
     { unit-name = "lband" },
     { unit-name = "uhf" },
