@@ -370,13 +370,14 @@ fn read_packet(radio: &mut Registers, packet: &mut Vec<u8>, uplink: &mut UdpSock
                 } else {
                     println!("Rejected CRC: received 0x{:x}, calculated 0x{:x}", checksum, calculated);
                 }
+                packet.clear()
             }
         }
     }
     Ok(())
 }
 
-fn transmit(radio: &mut Registers, buf: &[u8], amt: usize) -> Result<()> {
+fn transmit(radio: &mut Registers, buf: &[u8], amt: usize, src: SocketAddr) -> Result<()> {
     radio.PWRMODE().write(PwrMode {
         flags: PwrFlags::XOEN | PwrFlags::REFEN,
         mode: PwrModes::TX,
@@ -427,11 +428,11 @@ fn transmit(radio: &mut Registers, buf: &[u8], amt: usize) -> Result<()> {
     radio.FIFODATATX().write(pa_on)?;
     radio.FIFODATATX().write(preamble)?;
 
-    println!("sending {} chunks", packet.len());
-    println!("{:X?}", packet);
+    //println!("sending {} chunks", packet.len());
+    println!("UHF SEND {} from {:?}: {:X?}", amt, src, packet);
 
     for chunk in packet {
-        println!("chunk");
+        //println!("chunk");
         radio.FIFODATATX().write(chunk)?;
         radio.FIFOCMD().write(FIFOCmd {
             mode: FIFOCmds::COMMIT,
@@ -576,7 +577,7 @@ fn main() -> Result<()> {
                         mode: PwrModes::POWEROFF,
                     })?;
                     let mut buf = [0; 2048];
-                    let (amt, _src) = beacon.recv_from(&mut buf)?;
+                    let (amt, src) = beacon.recv_from(&mut buf)?;
                     //println!("Recv {} from {}: {:X?}", amt, src, &buf[..amt]);
 
                     let mut channel = ChannelParameters {
@@ -607,7 +608,7 @@ fn main() -> Result<()> {
                         brownout_gate: true,
                     }.write(&mut radio, &board, &channel)?;
 
-                    transmit(&mut radio, &buf, amt)?;
+                    transmit(&mut radio, &buf, amt, src)?;
 
                     channel.bitorder = BitOrder::MSBFirst;
                     channel.write(&mut radio, &board)?;
@@ -628,7 +629,7 @@ fn main() -> Result<()> {
                         mode: PwrModes::POWEROFF,
                     })?;
                     let mut buf = [0; 2048];
-                    let (amt, _src) = downlink.recv_from(&mut buf)?;
+                    let (amt, src) = downlink.recv_from(&mut buf)?;
                     //println!("Recv {} from {}: {:X?}", amt, src, &buf[..amt]);
 
                     let channel = ChannelParameters {
@@ -658,7 +659,7 @@ fn main() -> Result<()> {
                         brownout_gate: true,
                     }.write(&mut radio, &board, &channel)?;
 
-                    transmit(&mut radio, &buf, amt)?;
+                    transmit(&mut radio, &buf, amt, src)?;
                     radio.PWRMODE().write(PwrMode {
                         flags: PwrFlags::XOEN | PwrFlags::REFEN,
                         mode: PwrModes::RX,
