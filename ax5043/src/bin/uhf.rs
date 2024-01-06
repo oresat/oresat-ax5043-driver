@@ -579,7 +579,7 @@ fn main() -> Result<()> {
                     let (amt, _src) = beacon.recv_from(&mut buf)?;
                     //println!("Recv {} from {}: {:X?}", amt, src, &buf[..amt]);
 
-                    let channel = ChannelParameters {
+                    let mut channel = ChannelParameters {
                         modulation: config::Modulation::GMSK {
                             ramp: config::SlowRamp::Bits1,
                             bt: BT(0.5),
@@ -608,6 +608,9 @@ fn main() -> Result<()> {
                     }.write(&mut radio, &board, &channel)?;
 
                     transmit(&mut radio, &buf, amt)?;
+
+                    channel.bitorder = BitOrder::MSBFirst;
+                    channel.write(&mut radio, &board)?;
 
                     radio.PWRMODE().write(PwrMode {
                         flags: PwrFlags::XOEN | PwrFlags::REFEN,
