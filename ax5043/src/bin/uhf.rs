@@ -1,6 +1,6 @@
 // Intended to be run on the C3v6, takes data from UDP port 10015
 // and transmits it through the UHF AX5043
-use anyhow::{ensure, Result};
+use anyhow::{ensure, Context, Result};
 use ax5043::{config, config::PwrAmp, config::IRQ, config::*};
 use ax5043::{registers, registers::*, Registers, RX, TX};
 use clap::Parser;
@@ -10,7 +10,7 @@ use mio::net::UdpSocket;
 use mio::{unix::SourceFd, Events, Interest, Poll, Token};
 use mio_signals::{Signal, Signals};
 use std::{
-    io::Write,
+    io::{Write, ErrorKind},
     net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr},
     os::fd::AsRawFd,
 };
@@ -576,9 +576,6 @@ fn main() -> Result<()> {
                         flags: PwrFlags::XOEN | PwrFlags::REFEN,
                         mode: PwrModes::POWEROFF,
                     })?;
-                    let mut buf = [0; 2048];
-                    let (amt, src) = beacon.recv_from(&mut buf)?;
-                    //println!("Recv {} from {}: {:X?}", amt, src, &buf[..amt]);
 
                     let mut channel = ChannelParameters {
                         modulation: config::Modulation::GMSK {
@@ -608,7 +605,14 @@ fn main() -> Result<()> {
                         brownout_gate: true,
                     }.write(&mut radio, &board, &channel)?;
 
-                    transmit(&mut radio, &buf, amt, src)?;
+                    let mut buf = [0; 2048];
+                    loop {
+                        match downlink.recv_from(&mut buf) {
+                            Ok((amt, src)) => transmit(&mut radio, &buf, amt, src)?,
+                            Err(e) if e.kind() == ErrorKind::WouldBlock => break,
+                            Err(e) => return Err(e).context("Ping socket read failed"),
+                        }
+                    }
 
                     channel.bitorder = BitOrder::MSBFirst;
                     channel.write(&mut radio, &board)?;
@@ -628,9 +632,6 @@ fn main() -> Result<()> {
                         flags: PwrFlags::XOEN | PwrFlags::REFEN,
                         mode: PwrModes::POWEROFF,
                     })?;
-                    let mut buf = [0; 2048];
-                    let (amt, src) = downlink.recv_from(&mut buf)?;
-                    //println!("Recv {} from {}: {:X?}", amt, src, &buf[..amt]);
 
                     let channel = ChannelParameters {
                         modulation: config::Modulation::GMSK {
@@ -659,7 +660,15 @@ fn main() -> Result<()> {
                         brownout_gate: true,
                     }.write(&mut radio, &board, &channel)?;
 
-                    transmit(&mut radio, &buf, amt, src)?;
+                    let mut buf = [0; 2048];
+                    loop {
+                        match downlink.recv_from(&mut buf) {
+                            Ok((amt, src)) => transmit(&mut radio, &buf, amt, src)?,
+                            Err(e) if e.kind() == ErrorKind::WouldBlock => break,
+                            Err(e) => return Err(e).context("Ping socket read failed"),
+                        }
+                    }
+
                     radio.PWRMODE().write(PwrMode {
                         flags: PwrFlags::XOEN | PwrFlags::REFEN,
                         mode: PwrModes::RX,
