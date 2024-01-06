@@ -595,7 +595,14 @@ impl Synthesizer {
         }
 
         let vco = match board.vco {
-            VCO::Internal => PLLVCODivFlags::empty(),
+            // The way I read the datasheet, VCO2INT shouldn't matter if VCOSEL isn't set
+            // but:
+            // - Radiolab sets it anyway
+            // - The recommended schematics have L1 and L2 shorted, which VCO2INT probably
+            //   affects.
+            // This makes me wonder if it has some kind of effect on VCO2 which might lead to
+            // reduced noise or something.
+            VCO::Internal => PLLVCODivFlags::VCO2INT, // PLLVCODivFlags::empty(),
             VCO::Inductor => PLLVCODivFlags::VCOSEL | PLLVCODivFlags::VCO2INT,
             VCO::External => PLLVCODivFlags::VCOSEL,
         };
