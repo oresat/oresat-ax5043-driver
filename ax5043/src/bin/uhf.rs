@@ -355,7 +355,7 @@ fn process_chunk(chunk: FIFOChunkRX, packet: &mut Vec<u8>, uplink: &mut UdpSocke
             return Ok(());
         }
 
-        packet.write(data)?;
+        packet.write_all(data)?;
         if flags.contains(FIFODataRXFlags::PKTEND) {
             let bytes = packet.split_off(packet.len()-2);
             let checksum = u16::from_be_bytes([bytes[0], bytes[1]]);
@@ -378,7 +378,7 @@ fn process_chunk(chunk: FIFOChunkRX, packet: &mut Vec<u8>, uplink: &mut UdpSocke
 
 fn read_packet(radio: &mut Registers, packet: &mut Vec<u8>, uplink: &mut UdpSocket) -> Result<()> {
     let len = radio.FIFOCOUNT().read()?;
-    if len <= 0 {
+    if len == 0 {
         return Ok(())
     }
 

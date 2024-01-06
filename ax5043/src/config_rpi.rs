@@ -65,7 +65,7 @@ fn config(radio: &mut Registers) -> Result<(Board, ChannelParameters)> {
 pub fn configure_radio_tx(radio: &mut Registers) -> Result<config::Board> {
     let (board, channel) = config(radio)?;
 
-    let txparams = TXParameters {
+    TXParameters {
         antenna: Antenna::SingleEnded,
         amp: AmplitudeShaping::RaisedCosine {
             a: 0,
