@@ -334,44 +334,62 @@ pub fn configure_radio_rx(radio: &mut Registers) -> Result<(Board, ChannelParame
     Ok((board, channel))
 }
 
+fn process_chunk(chunk: FIFOChunkRX, packet: &mut Vec<u8>, uplink: &mut UdpSocket) -> Result<()> {
+    if let FIFOChunkRX::DATA{flags, ref data} = chunk {
+        //println!("{:02X?}", chunk);
+        if flags.intersects(FIFODataRXFlags::ABORT | FIFODataRXFlags::SIZEFAIL | FIFODataRXFlags::ADDRFAIL | FIFODataRXFlags::CRCFAIL | FIFODataRXFlags::RESIDUE) {
+            println!("UHF REJECTED {:02X?}", chunk);
+            packet.clear();
+            return Ok(());
+        }
+
+        if flags.contains(FIFODataRXFlags::PKTSTART) {
+            if !packet.is_empty() {
+                println!("UHF PKT RESTART {:02X?}", chunk);
+            }
+            packet.clear();
+        }
+
+        if !flags.contains(FIFODataRXFlags::PKTSTART) && packet.is_empty() {
+            println!("Invalid continued chunk {:02X?}", chunk);
+            return Ok(());
+        }
+
+        packet.write(data)?;
+        if flags.contains(FIFODataRXFlags::PKTEND) {
+            let bytes = packet.split_off(packet.len()-2);
+            let checksum = u16::from_be_bytes([bytes[0], bytes[1]]);
+            let ccitt = Crc::<u16>::new(&CRC_16_GENIBUS);
+            let mut digest = ccitt.digest();
+            digest.update(packet);
+            let calculated = digest.finalize();
+
+            if calculated == checksum {
+                uplink.send(packet)?;
+                println!("UHF RX PACKET: {:02X?}", packet);
+            } else {
+                println!("Rejected CRC: received 0x{:x}, calculated 0x{:x}", checksum, calculated);
+            }
+            packet.clear();
+        }
+    }
+    Ok(())
+}
+
 fn read_packet(radio: &mut Registers, packet: &mut Vec<u8>, uplink: &mut UdpSocket) -> Result<()> {
     let len = radio.FIFOCOUNT().read()?;
     if len <= 0 {
         return Ok(())
     }
 
-    for chunk in radio.FIFODATARX().read(len.into())? {
-        if let FIFOChunkRX::DATA{flags, ref data} = chunk {
-            //println!("{:02X?}", chunk);
-            if flags.intersects(FIFODataRXFlags::ABORT | FIFODataRXFlags::SIZEFAIL | FIFODataRXFlags::ADDRFAIL | FIFODataRXFlags::CRCFAIL | FIFODataRXFlags::RESIDUE) {
-                println!("UHF REJECTED {:02X?}", chunk);
-                packet.clear();
-                continue;
-            }
-
-            if flags.contains(FIFODataRXFlags::PKTSTART) {
-                if !packet.is_empty() {
-                    println!("UHF PKT RESTART {:02X?}", chunk);
-                }
-                packet.clear();
-            }
-            packet.write(&data)?;
-            if flags.contains(FIFODataRXFlags::PKTEND) {
-                let bytes = packet.split_off(packet.len()-2);
-                let checksum = u16::from_be_bytes([bytes[0], bytes[1]]);
-                let ccitt = Crc::<u16>::new(&CRC_16_GENIBUS);
-                let mut digest = ccitt.digest();
-                digest.update(packet);
-                let calculated = digest.finalize();
-
-                if calculated == checksum {
-                    uplink.send(packet)?;
-                    println!("UHF RX PACKET: {:02X?}", packet);
-                } else {
-                    println!("Rejected CRC: received 0x{:x}, calculated 0x{:x}", checksum, calculated);
-                }
-                packet.clear()
-            }
+    match radio.FIFODATARX().read(len.into()) {
+        Ok(chunks) => for chunk in chunks {
+            process_chunk(chunk, packet, uplink)?;
+        },
+        Err(e) => {
+            // FIFO Errors are usually just overflow, non-fatal
+            println!("{}", e);
+            packet.clear();
         }
     }
     Ok(())
