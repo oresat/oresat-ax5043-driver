@@ -11,7 +11,7 @@ use mio::{unix::SourceFd, Events, Interest, Poll, Token};
 use mio_signals::{Signal, Signals};
 use std::{
     io::{Write, ErrorKind},
-    net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr},
+    net::{IpAddr, Ipv4Addr, SocketAddr},
     os::fd::AsRawFd,
 };
 
@@ -501,12 +501,12 @@ fn main() -> Result<()> {
     let registry = poll.registry();
     let mut events = Events::with_capacity(128);
 
-    let addr = SocketAddr::new(IpAddr::V6(Ipv6Addr::UNSPECIFIED), args.beacon);
+    let addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), args.beacon);
     let mut beacon = UdpSocket::bind(addr)?;
     const BEACON: Token = Token(0);
     registry.register(&mut beacon, BEACON, Interest::READABLE)?;
 
-    let addr = SocketAddr::new(IpAddr::V6(Ipv6Addr::UNSPECIFIED), args.downlink);
+    let addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), args.downlink);
     let mut downlink = UdpSocket::bind(addr)?;
     const DOWNLINK: Token = Token(1);
     registry.register(&mut downlink, DOWNLINK, Interest::READABLE)?;
@@ -625,7 +625,7 @@ fn main() -> Result<()> {
 
                     let mut buf = [0; 2048];
                     loop {
-                        match downlink.recv_from(&mut buf) {
+                        match beacon.recv_from(&mut buf) {
                             Ok((amt, src)) => transmit(&mut radio, &buf, amt, src)?,
                             Err(e) if e.kind() == ErrorKind::WouldBlock => break,
                             Err(e) => return Err(e).context("Ping socket read failed"),
@@ -683,7 +683,7 @@ fn main() -> Result<()> {
                         match downlink.recv_from(&mut buf) {
                             Ok((amt, src)) => transmit(&mut radio, &buf, amt, src)?,
                             Err(e) if e.kind() == ErrorKind::WouldBlock => break,
-                            Err(e) => return Err(e).context("Ping socket read failed"),
+                            Err(e) => return Err(e).context("Downlink socket read failed"),
                         }
                     }
 
