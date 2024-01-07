@@ -430,7 +430,7 @@ impl Default for RXState {
 
 // TODO: FRAMING::FRMRX
 
-fn get_signal(radio: &mut Registers, channel: &config::ChannelParameters) -> Result<RXState> {
+fn get_signal(radio: &mut Registers, _channel: &config::ChannelParameters) -> Result<RXState> {
     let signal = radio.SIGNALSTR().read()?;
     let track = radio.RXTRACKING().read()?;
 

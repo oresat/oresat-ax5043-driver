@@ -67,80 +67,6 @@ fn configure_radio(radio: &mut Registers) -> Result<(Board, ChannelParameters)> 
     Ok((board, channel))
 }
 
-enum RXParameters {
-    MSK {
-        //max_dr_offset: u64,
-        freq_offs_corr: bool,
-        ampl_filter: u8,
-        frequency_leak: u8,
-    },
-}
-
-impl RXParameters {
-    fn write(
-        &self,
-        radio: &mut Registers,
-        board: &config::Board,
-        channel: &config::ChannelParameters,
-    ) -> Result<()> {
-        match self {
-            Self::MSK {
-                freq_offs_corr,
-                ampl_filter,
-                frequency_leak,
-                ..
-            } => {
-                // modulation index: m = 0.5;
-                // bandwidth = (1+m) * datarate (Carson's rule)
-                //let bandwidth = 3 * channel.datarate / 2;
-                //let fcoeff = 0.25; // FIXME PHASEGAIN::FILTERIDX but translated through table 116
-                //let fcoeff_inv = 4; // 1/fcoeff
-
-                let if_freq = 56_520; // From radiolab
-                radio.IFFREQ().write(
-                    (if_freq * board.xtal.div() * 2_u64.pow(20) / board.xtal.freq)
-                        .try_into()
-                        .unwrap(),
-                )?;
-
-                //let fbaseband = bandwidth * (1+fcoeff_inv);
-                let fbaseband = 500_000; // From radiolab
-                let decimation = board.xtal.freq / (fbaseband * 2u64.pow(4) * board.xtal.div());
-                radio.DECIMATION().write(decimation.try_into().unwrap())?; // TODO: 7bits max
-
-                // TODO: see note table 96
-                radio.RXDATARATE().write(
-                    (2u64.pow(7) * board.xtal.freq
-                        / (channel.datarate * board.xtal.div() * decimation))
-                        .try_into()
-                        .unwrap(),
-                )?;
-
-                //let droff = (2u64.pow(7) * board.xtal.freq * *max_dr_offset) / (board.xtal.div() * channel.datarate.pow(2) * decimation);
-                //radio.MAXDROFFSET.write(droff.try_into().unwrap())?;
-
-                radio.MAXDROFFSET().write(0)?;
-
-                //let max_rf_offset = bandwidth/4 ; // bw/4 Upper bound - difference between tx and rx fcarriers. see note pm table 98
-                let max_rf_offset = 873; // From radiolab
-                radio.MAXRFOFFSET().write(MaxRFOffset {
-                    offset: (max_rf_offset * 2u64.pow(24) / board.xtal.freq)
-                        .try_into()
-                        .unwrap(),
-                    correction: *freq_offs_corr,
-                })?;
-
-                radio.MAXRFOFFSET().write(MaxRFOffset {
-                    offset: 0x131,
-                    correction: true,
-                })?;
-                radio.AMPLFILTER().write(*ampl_filter)?;
-                radio.FREQUENCYLEAK().write(*frequency_leak)?;
-            }
-        }
-        Ok(())
-    }
-}
 
 /*
 first SYNTHBOOST SYNTHSETTLE
@@ -161,11 +87,6 @@ packet: PS3
     SFD
 */
 
-// FIXME need to know:
-// h/m?
-// fbaseband
-// fif/bandwidth?
-
 pub fn configure_radio_rx(radio: &mut Registers) -> Result<(Board, ChannelParameters)> {
     let (board, channel) = configure_radio(radio)?;
 
@@ -178,13 +99,12 @@ pub fn configure_radio_rx(radio: &mut Registers) -> Result<(Board, ChannelParame
     })?;
     radio.PLLCPI().write(0x10)?;
 
-    let params = RXParameters::MSK {
+    RXParameters::MSK {
         //max_dr_offset: 0, // TODO derived from what?
         freq_offs_corr: true,
         ampl_filter: 0,
         frequency_leak: 0,
-    };
-    params.write(radio, &board, &channel)?;
+    }.write(radio, &board, &channel)?;
 
     let set0 = RXParameterSet {
         agc: RXParameterAGC {

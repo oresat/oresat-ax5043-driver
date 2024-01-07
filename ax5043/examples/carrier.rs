@@ -61,7 +61,7 @@ fn configure_radio(radio: &mut Registers, power: u16) -> Result<()> {
         bitorder: BitOrder::LSBFirst,
     }.write(radio, &board)?;
 
-    let parameters = TXParameters {
+    TXParameters {
         antenna: Antenna::SingleEnded,
         amp: AmplitudeShaping::RaisedCosine {
             a: 0,

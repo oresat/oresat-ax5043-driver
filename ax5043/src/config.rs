@@ -587,7 +587,7 @@ impl Synthesizer {
         radio.PLLCPIBOOST().write(self.boost.charge_pump_current)?;
 
         // TODO: Check VCO with center freqency, check blackmagic table
-        // TODO: Find source for blackmagic table
+        // See Datasheet, table 8
         // FIXME: Also apply to freq_b if selected
         let mut flags = PLLVCODivFlags::empty();
         if self.freq_a > 400_000_000 && self.freq_a < 525_000_000 {
@@ -1029,6 +1029,85 @@ impl TXParameters {
     }
 }
 
+pub enum RXParameters {
+    MSK {
+        // MODULATION::RX_HALFSPEED
+        //max_dr_offset: u64,
+        freq_offs_corr: bool,
+        ampl_filter: u8,
+        frequency_leak: u8,
+    },
+}
+
+impl RXParameters {
+    pub fn write(
+        self,
+        radio: &mut Registers,
+        board: &config::Board,
+        channel: &config::ChannelParameters,
+    ) -> Result<Self> {
+        match self {
+            Self::MSK {
+                freq_offs_corr,
+                ampl_filter,
+                frequency_leak,
+            } => {
+                // modulation index: m = 0.5;
+                // bandwidth = (1+m) * datarate (Carson's rule)
+                // TODO: Radiolab lists bandwidth always as 1.5*datarate, does not compensate for m
+                let bandwidth = 3 * channel.datarate / 2;
+                // FIXME PHASEGAIN::FILTERIDX but translated through table 116. Note that column
+                // names are swapped. Label -3dB BW should be nominal BW.
+                // Radiolab calculates -3dB BW as nominal BW * 1.1, but where does 1.1 come from? TODO
+                // fcoeff = 0.221497
+                // 1/fcoeff = 4.51...  ~=  9/2
+                let fbaseband_min = bandwidth * 9 / 2; // FIXME: this math makes fbaseband_min slightly too small
+                //pick decimation such that fbaseband is at least fbaseband_min
+                //integer devision ensures that decimation value will always pick higher fbaseband
+                //TODO: we can pick a filter such that this is closer
+                let decimation = board.xtal.freq / (board.xtal.div() * 2_u64.pow(4) * fbaseband_min);
+                radio.DECIMATION().write(decimation.try_into().unwrap())?; // TODO: 7bits max
+                //Now that we have a fixed fbaseband, we can re-determine the bandwidth
+                let fbaseband = board.xtal.freq / (board.xtal.div() * 2_u64.pow(4) * decimation);
+                let bandwidth = fbaseband * 2 / 9;
+                // IF freq is half the bandwidth? Is there a way to find the optimal?
+                //let if_freq = 56_520; // From radiolab TODO: find the exact RadioLab formula
+                let if_freq = bandwidth/2;
+                radio.IFFREQ().write(
+                    (if_freq * board.xtal.div() * 2_u64.pow(20) / board.xtal.freq)
+                        .try_into()
+                        .unwrap(),
+                )?;
+
+                // TODO: see note table 96
+                radio.RXDATARATE().write(
+                    (2u64.pow(7) * board.xtal.freq
+                        / (channel.datarate * board.xtal.div() * decimation))
+                        .try_into()
+                        .unwrap(),
+                )?;
+
+                //let droff = (2u64.pow(7) * board.xtal.freq * *max_dr_offset) / (board.xtal.div() * channel.datarate.pow(2) * decimation);
+                //radio.MAXDROFFSET.write(droff.try_into().unwrap())?;
+                radio.MAXDROFFSET().write(0)?;
+
+                let max_rf_offset = bandwidth/4 ; // bw/4 Upper bound - difference between tx and rx fcarriers. see note pm table 98
+                //let max_rf_offset = 873; // From radiolab
+                radio.MAXRFOFFSET().write(MaxRFOffset {
+                    offset: (max_rf_offset * 2u64.pow(24) / board.xtal.freq)
+                        .try_into()
+                        .unwrap(),
+                    correction: freq_offs_corr,
+                })?;
+
+                radio.AMPLFILTER().write(ampl_filter)?;
+                radio.FREQUENCYLEAK().write(frequency_leak)?;
+            }
+        }
+        Ok(self)
+    }
+}
+
 pub struct RXParameterAGC {
     pub attack: u8,
     pub decay: u8,
@@ -1244,9 +1323,3 @@ impl RXParameterSet {
         Ok(())
     }
 }
-
-pub struct RXParameters {
-    // MODULATION::RX_HALFSPEED
-}
-
-
