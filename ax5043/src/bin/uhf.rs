@@ -115,14 +115,7 @@ pub fn configure_radio_rx(radio: &mut Registers) -> Result<(Board, ChannelParame
 
     // TODO: see note table 96: RXDATARATE - TIMEGAINx ≥ 2^12 should be ensured
     let set0 = RXParameterSet {
-        agc: RXParameterAGC {
-            attack: 0x3,
-            decay: 0x8,
-            target: 0x84,
-            ahyst: 0,
-            min: 0,
-            max: 0,
-        },
+        agc: RXParameterAGC::new(&board, &channel),
         gain: RXParameterGain {
             time: TimeGain {
                 mantissa: 0xA,
@@ -154,14 +147,7 @@ pub fn configure_radio_rx(radio: &mut Registers) -> Result<(Board, ChannelParame
     set0.write0(radio)?;
 
     let set1 = RXParameterSet {
-        agc: RXParameterAGC {
-            attack: 0x3,
-            decay: 0x8,
-            target: 0x84,
-            ahyst: 0,
-            min: 0,
-            max: 0,
-        },
+        agc: RXParameterAGC::new(&board, &channel),
         gain: RXParameterGain {
             time: TimeGain {
                 mantissa: 0xA,
@@ -193,14 +179,7 @@ pub fn configure_radio_rx(radio: &mut Registers) -> Result<(Board, ChannelParame
     set1.write1(radio)?;
 
     let set3 = RXParameterSet {
-        agc: RXParameterAGC {
-            attack: 0xF,
-            decay: 0xF,
-            target: 0x84,
-            ahyst: 0,
-            min: 0,
-            max: 0,
-        },
+        agc: RXParameterAGC::off(),
         gain: RXParameterGain {
             time: TimeGain {
                 mantissa: 0xA,

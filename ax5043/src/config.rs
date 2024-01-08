@@ -1108,13 +1108,85 @@ impl RXParameters {
     }
 }
 
+// The note after table 109 has a honking big equation for calculating
+// the 3db corner frequency of the AGC loop. We can't do that in integer math
+// but the two values it eventually sets, attack and decay, only take the values
+// 0 - 14, so we can compress the equation in a lookup table, and then scale it by
+// the clock live when we need the actual values. This specifically is 1/stuff
+// where stuff is everything that isn't fxtal and fxtaldiv. To get f3dB then
+// fxtal / (fxtaldiv * AGCGAIN_LOOP_SCALE[attack|decay])
+const AGCGAIN_LOOP_SCALE: [u64; 15] = [
+    139,
+    245,
+    449,
+    853,
+    1_658,
+    3_267,
+    6_484,
+    12_918,
+    25_786,
+    51_522,
+    102_994,
+    205_938,
+    411_825,
+    823_600,
+    1_647_150,
+];
+
+
 pub struct RXParameterAGC {
-    pub attack: u8,
-    pub decay: u8,
-    pub target: u8,
-    pub ahyst: u8,
-    pub min: u8,
-    pub max: u8,
+    attack: u8,
+    decay: u8,
+    target: u8,
+    ahyst: u8,
+    min: u8,
+    max: u8,
+}
+
+impl RXParameterAGC {
+    pub fn new(board: &Board, channel: &ChannelParameters) -> Self {
+        // Datasheet says attack f3dB should be ~= BITRATE
+        //                 decay f3db should be ~= BITRATE/10
+        //                 TODO: for (G)FSK/(G)MSK only
+        // RadioLAB calculates these as at least instead of about
+        let mut attack = 0xF;
+        for a in 0..AGCGAIN_LOOP_SCALE.len() {
+            let f3db = board.xtal.freq / (board.xtal.div() * AGCGAIN_LOOP_SCALE[a]);
+            if f3db < channel.datarate {
+                attack = a;
+                break
+            }
+        }
+
+        let mut decay = 0xF;
+        for d in 0..AGCGAIN_LOOP_SCALE.len() {
+            let f3db = board.xtal.freq / (board.xtal.div() * AGCGAIN_LOOP_SCALE[d]);
+            if f3db * 10 < channel.datarate {
+                decay = d;
+                break
+            }
+        }
+
+        Self {
+            attack: u8::try_from(attack).unwrap(),
+            decay: u8::try_from(decay).unwrap(),
+            target: 0x84, // RadioLAB always picks this, seems reasonable?
+            ahyst: 0,
+            min: 0,
+            max: 0,
+        }
+    }
+
+    pub fn off() -> Self {
+        Self { // attack/decay value F disables AGC
+            attack: 0xF,
+            decay: 0xF,
+            target: 0x84,
+            ahyst: 0,
+            min: 0,
+            max: 0,
+        }
+    }
 }
 
 pub struct RXParameterFreq {
