@@ -298,7 +298,7 @@ fn read_packet(radio: &mut Registers, packet: &mut Vec<u8>, uplink: &mut UdpSock
     Ok(())
 }
 
-fn transmit(radio: &mut Registers, buf: &[u8], amt: usize, src: SocketAddr) -> Result<()> {
+fn transmit(radio: &mut Registers, buf: &[u8], src: SocketAddr) -> Result<()> {
     radio.PWRMODE().write(PwrMode {
         flags: PwrFlags::XOEN | PwrFlags::REFEN,
         mode: PwrModes::TX,
@@ -306,7 +306,7 @@ fn transmit(radio: &mut Registers, buf: &[u8], amt: usize, src: SocketAddr) -> R
 
     _ = radio.PLLRANGINGA().read()?; // sticky lock bit ~ IRQPLLUNLIOCK, gate
     _ = radio.POWSTICKYSTAT().read()?; // sticky lock bit ~ IRQPLLUNLIOCK, gate
-    let thresh = radio.FIFOTHRESH().read()?.into();
+    let thresh: usize = radio.FIFOTHRESH().read()?.into();
 
     let pa_on = FIFOChunkTX::TXCTRL(TXCtrl::SETPA | TXCtrl::PASTATE);
     /* FIXME: this is the recommended preamble
@@ -328,38 +328,40 @@ fn transmit(radio: &mut Registers, buf: &[u8], amt: usize, src: SocketAddr) -> R
     };
 
     // TODO: integrate recv
-    let mut packet = Vec::new();
-    for i in (0..amt).step_by(thresh) {
-        packet.push(FIFOChunkTX::DATA {
-            flags: if i == 0 {
-                FIFODataTXFlags::PKTSTART
-            } else {
-                FIFODataTXFlags::empty()
-            } | if i + thresh > amt {
-                FIFODataTXFlags::PKTEND
-            } else {
-                FIFODataTXFlags::empty()
-            },
-            data: buf[i..std::cmp::min(i + thresh, amt)].to_vec(),
-        })
+    // TODO: maybe FIFOChunkTX::to_data -> Vec? It knows how big it should be
+    let header_size = 3; // size of FIFOChunkTX::DATA header
+    let mut packet: Vec<FIFOChunkTX> = buf.chunks(thresh - header_size).map(|x| FIFOChunkTX::DATA {
+        flags: FIFODataTXFlags::empty(),
+        data: x.to_vec(),
+    }).collect();
+    if let Some(FIFOChunkTX::DATA { ref mut flags, .. }) = packet.first_mut() {
+        *flags |= FIFODataTXFlags::PKTSTART;
     }
-
+    if let Some(FIFOChunkTX::DATA { ref mut flags, .. }) = packet.last_mut() {
+        *flags |= FIFODataTXFlags::PKTEND;
+    }
     let pa_off = FIFOChunkTX::TXCTRL(TXCtrl::SETPA);
 
     radio.FIFODATATX().write(pa_on)?;
     radio.FIFODATATX().write(preamble)?;
 
-    //println!("sending {} chunks", packet.len());
-    println!("UHF SEND {} from {:?}: {:X?}", amt, src, packet);
+    println!("UHF SEND {} from {:?}: {:X?}", buf.len(), src, packet);
 
     for chunk in packet {
-        //println!("chunk");
         radio.FIFODATATX().write(chunk)?;
         radio.FIFOCMD().write(FIFOCmd {
             mode: FIFOCmds::COMMIT,
             auto_commit: false,
         })?;
-        while !radio.FIFOSTAT().read()?.contains(FIFOStat::FREE_THR) {} // TODO: Interrupt
+        loop { // FIXME interrupt?
+            let stat = radio.FIFOSTAT().read()?;
+            if stat.contains(FIFOStat::OVER) || stat.contains(FIFOStat::UNDER) {
+                println!("chunk: {:?}", stat);
+            }
+            if stat.contains(FIFOStat::FREE_THR) {
+                break;
+            }
+        }
     }
 
     radio.FIFODATATX().write(postamble)?;
@@ -529,7 +531,7 @@ fn main() -> Result<()> {
                     let mut buf = [0; 2048];
                     loop {
                         match beacon.recv_from(&mut buf) {
-                            Ok((amt, src)) => transmit(&mut radio, &buf, amt, src)?,
+                            Ok((amt, src)) => transmit(&mut radio, &buf[..amt], src)?,
                             Err(e) if e.kind() == ErrorKind::WouldBlock => break,
                             Err(e) => return Err(e).context("Ping socket read failed"),
                         }
@@ -584,7 +586,7 @@ fn main() -> Result<()> {
                     let mut buf = [0; 2048];
                     loop {
                         match downlink.recv_from(&mut buf) {
-                            Ok((amt, src)) => transmit(&mut radio, &buf, amt, src)?,
+                            Ok((amt, src)) => transmit(&mut radio, &buf[..amt], src)?,
                             Err(e) if e.kind() == ErrorKind::WouldBlock => break,
                             Err(e) => return Err(e).context("Downlink socket read failed"),
                         }
