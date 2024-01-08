@@ -395,7 +395,7 @@ registers! {
         /* Receiver Tracking */
         RXTRACKING:     RXTracking  [0x045,16, ReadOnly ], // Aggregate receiver tracking block
         TRKDATARATE:    i32         [0x045, 3, ReadOnly ], // Datarate Tracking
-        TRKAMPL:        u16         [0x048, 2, ReadOnly ], // Amplitude Tracking
+        TRKAMPL:        u16         [0x048, 2, ReadOnly ], // Amplitude Tracking - output of demodulator, this / AGCCOUNTER = RSSI
         TRKPHASE:       u16         [0x04A, 2, ReadOnly ], // Phase Tracking
         TRKRFFREQ:      TrkRFFreq   [0x04D, 3, ReadWrite], // RF Frequency Tracking
         TRKFREQ:        i16         [0x050, 2, ReadWrite], // Frequency Tracking
