@@ -1070,9 +1070,16 @@ impl RXParameters {
                 //Now that we have a fixed fbaseband, we can re-determine the bandwidth
                 let fbaseband = board.xtal.freq / (board.xtal.div() * 2_u64.pow(4) * decimation);
                 let bandwidth = fbaseband * 2 / 9;
-                // IF freq is half the bandwidth? Is there a way to find the optimal?
-                //let if_freq = 56_520; // From radiolab TODO: find the exact RadioLab formula
-                let if_freq = bandwidth/2;
+                // NBM lists IF freq as half the bandwidth? Is there a way to find the optimal?
+                // RadioLab does 1.25 * datarate = (4/5)*bandwidth below ~42.3 except for the weird
+                // flat bands at 3.6, 7.2, 14.4, 28.2, 43.2, and 57.6. Above 42.3 (so really above
+                // 57.6) it's datarate / 4.9 + 44.25 = bandwidth / 7.35 + 44.25
+                let if_freq = if channel.datarate < 42_300 {
+                    bandwidth * 4 / 5
+                } else {
+                    // bandwidth / 7.35 + 44.25 ~= (bandwidth + 325) * 5 / 37
+                    (bandwidth + 325) * 5 / 37
+                };
                 radio.IFFREQ().write(
                     (if_freq * board.xtal.div() * 2_u64.pow(20) / board.xtal.freq)
                         .try_into()
