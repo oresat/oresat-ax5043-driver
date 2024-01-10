@@ -1,6 +1,6 @@
 // Intended to be run on the C3v6, takes data from UDP port 10015
 // and transmits it through the UHF AX5043
-use anyhow::{ensure, Context, Result};
+use anyhow::{bail, ensure, Context, Result};
 use ax5043::{config, config::PwrAmp, config::IRQ, config::*};
 use ax5043::{registers, registers::*, Registers, RX, TX};
 use clap::Parser;
@@ -306,7 +306,11 @@ fn transmit(radio: &mut Registers, buf: &[u8], src: SocketAddr) -> Result<()> {
 
     _ = radio.PLLRANGINGA().read()?; // sticky lock bit ~ IRQPLLUNLIOCK, gate
     _ = radio.POWSTICKYSTAT().read()?; // sticky lock bit ~ IRQPLLUNLIOCK, gate
-    let thresh: usize = radio.FIFOTHRESH().read()?.into();
+    // FIXME: I experienced some crashes that probably occured because FIFOTHRESH returned the
+    // wrong value. Once 0, once too big (but not measured). Lets hard code it for now to be safe
+    // for flight.
+    //let thresh: usize = radio.FIFOTHRESH().read()?.into();
+    let thresh: usize = 128;
 
     let pa_on = FIFOChunkTX::TXCTRL(TXCtrl::SETPA | TXCtrl::PASTATE);
     /* FIXME: this is the recommended preamble
@@ -330,7 +334,16 @@ fn transmit(radio: &mut Registers, buf: &[u8], src: SocketAddr) -> Result<()> {
     // TODO: integrate recv
     // TODO: maybe FIFOChunkTX::to_data -> Vec? It knows how big it should be
     let header_size = 3; // size of FIFOChunkTX::DATA header
-    let mut packet: Vec<FIFOChunkTX> = buf.chunks(thresh - header_size).map(|x| FIFOChunkTX::DATA {
+    // I witnessed thresh read as 0 once, which crashed the driver. Having thresh (FIFOTHRESH)
+    // return 0 makes no sense, but lets guard against it anyway.
+    let Some(chunksize) = thresh.checked_sub(header_size) else {
+        radio.PWRMODE().write(PwrMode {
+            flags: PwrFlags::XOEN | PwrFlags::REFEN,
+            mode: PwrModes::POWEROFF,
+        })?;
+        bail!("FIFOTHRESH returned 0. Weird");
+    };
+    let mut packet: Vec<FIFOChunkTX> = buf.chunks(chunksize).map(|x| FIFOChunkTX::DATA {
         flags: FIFODataTXFlags::empty(),
         data: x.to_vec(),
     }).collect();
@@ -347,7 +360,7 @@ fn transmit(radio: &mut Registers, buf: &[u8], src: SocketAddr) -> Result<()> {
 
     println!("UHF SEND {} from {:?}: {:X?}", buf.len(), src, packet);
 
-    for chunk in packet {
+    'outer: for chunk in packet {
         radio.FIFODATATX().write(chunk)?;
         radio.FIFOCMD().write(FIFOCmd {
             mode: FIFOCmds::COMMIT,
@@ -357,6 +370,17 @@ fn transmit(radio: &mut Registers, buf: &[u8], src: SocketAddr) -> Result<()> {
             let stat = radio.FIFOSTAT().read()?;
             if stat.contains(FIFOStat::OVER) || stat.contains(FIFOStat::UNDER) {
                 println!("chunk: {:?}", stat);
+                // FIXME: I saw this happen once and then hang? We should probably abandon ship
+                // here. Possibly set the abort bit?
+                radio.FIFOCMD().write(FIFOCmd {
+                    mode: FIFOCmds::CLEAR_ERROR,
+                    auto_commit: false,
+                })?;
+                radio.FIFOCMD().write(FIFOCmd {
+                    mode: FIFOCmds::CLEAR_DATA,
+                    auto_commit: false,
+                })?;
+                break 'outer;
             }
             if stat.contains(FIFOStat::FREE_THR) {
                 break;
@@ -494,6 +518,15 @@ fn main() -> Result<()> {
             match event.token() {
                 BEACON => {
                     radio.IRQMASK().write(ax5043::registers::IRQ::empty())?;
+                    // PM p. 12: The FIFO should be emptied before the PWRMODE is set to POWERDOWN
+                    radio.FIFOCMD().write(FIFOCmd {
+                        mode: FIFOCmds::CLEAR_ERROR,
+                        auto_commit: false,
+                    })?;
+                    radio.FIFOCMD().write(FIFOCmd {
+                        mode: FIFOCmds::CLEAR_DATA,
+                        auto_commit: false,
+                    })?;
                     // See errata - PWRMODE must transition through off for FIFO to work
                     radio.PWRMODE().write(PwrMode {
                         flags: PwrFlags::XOEN | PwrFlags::REFEN,
@@ -550,6 +583,15 @@ fn main() -> Result<()> {
                 }
                 DOWNLINK => {
                     radio.IRQMASK().write(ax5043::registers::IRQ::empty())?;
+                    // PM p. 12: The FIFO should be emptied before the PWRMODE is set to POWERDOWN
+                    radio.FIFOCMD().write(FIFOCmd {
+                        mode: FIFOCmds::CLEAR_ERROR,
+                        auto_commit: false,
+                    })?;
+                    radio.FIFOCMD().write(FIFOCmd {
+                        mode: FIFOCmds::CLEAR_DATA,
+                        auto_commit: false,
+                    })?;
                     // See errata - PWRMODE must transition through off for FIFO to work
                     radio.PWRMODE().write(PwrMode {
                         flags: PwrFlags::XOEN | PwrFlags::REFEN,
