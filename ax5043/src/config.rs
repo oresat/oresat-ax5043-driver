@@ -1,5 +1,9 @@
 use crate::*;
 
+fn div_nearest(dividend: u64, divisor: u64) -> u64 {
+    (dividend + (divisor >> 1)) / divisor
+}
+
 #[derive(Copy, Clone, Default)]
 pub enum SysClk {
     Zero,
@@ -545,7 +549,7 @@ fn to_freq(carrier: u64, xtal: u64) -> u32 {
     //
     // It is strongly recommended to always set bit 0 to avoid spectral tones.
     // FIXME: does this math math right?
-    (((carrier << 24) / xtal) | 0x01).try_into().unwrap()
+    (div_nearest(carrier << 24, xtal) | 0x01).try_into().unwrap()
 }
 
 impl Synthesizer {
@@ -868,9 +872,9 @@ impl ChannelParameters {
                     halfspeed: false,
                 })?;
                 radio.FSKDEV().write(
-                    (deviation * 2_u64.pow(24) / board.xtal.freq)
-                        .try_into()
-                        .unwrap(),
+                    div_nearest(deviation * 2_u64.pow(24), board.xtal.freq)
+                    .try_into()
+                    .unwrap(),
                 )?;
             }
             Modulation::GMSK { .. } => {
@@ -880,7 +884,7 @@ impl ChannelParameters {
                 })?;
                 // m = 0.5, fskdev = 0.5 * f_dev, 1/(0.5*0.5) = 4
                 radio.FSKDEV().write(
-                    ((self.datarate / 4) * 2_u64.pow(24) / board.xtal.freq)
+                    div_nearest(self.datarate * 2_u64.pow(22), board.xtal.freq)
                         .try_into()
                         .unwrap(),
                 )?;
@@ -1004,7 +1008,7 @@ impl TXParameters {
         }
 
         radio.TXRATE().write(
-            (channel.datarate * 2_u64.pow(24) / board.xtal.freq)
+            div_nearest(channel.datarate * 2_u64.pow(24), board.xtal.freq)
                 .try_into()
                 .unwrap(),
         )?;
@@ -1081,15 +1085,15 @@ impl RXParameters {
                     (bandwidth + 325) * 5 / 37
                 };
                 radio.IFFREQ().write(
-                    (if_freq * board.xtal.div() * 2_u64.pow(20) / board.xtal.freq)
+                    div_nearest(if_freq * board.xtal.div() * 2_u64.pow(20), board.xtal.freq)
                         .try_into()
                         .unwrap(),
                 )?;
 
                 // TODO: see note table 96
                 radio.RXDATARATE().write(
-                    (2u64.pow(7) * board.xtal.freq
-                        / (channel.datarate * board.xtal.div() * decimation))
+                    div_nearest(2u64.pow(7) * board.xtal.freq,
+                        channel.datarate * board.xtal.div() * decimation)
                         .try_into()
                         .unwrap(),
                 )?;
@@ -1101,7 +1105,7 @@ impl RXParameters {
                 let max_rf_offset = bandwidth/4 ; // bw/4 Upper bound - difference between tx and rx fcarriers. see note pm table 98
                 //let max_rf_offset = 873; // From radiolab
                 radio.MAXRFOFFSET().write(MaxRFOffset {
-                    offset: (max_rf_offset * 2u64.pow(24) / board.xtal.freq)
+                    offset: div_nearest(max_rf_offset * 2u64.pow(24), board.xtal.freq)
                         .try_into()
                         .unwrap(),
                     correction: freq_offs_corr,
