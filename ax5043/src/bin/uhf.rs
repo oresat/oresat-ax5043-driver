@@ -600,7 +600,7 @@ fn main() -> Result<()> {
                         mode: PwrModes::POWEROFF,
                     })?;
 
-                    let channel = ChannelParameters {
+                    let mut channel = ChannelParameters {
                         modulation: config::Modulation::GMSK {
                             ramp: config::SlowRamp::Bits1,
                             bt: BT(0.5),
@@ -637,7 +637,7 @@ fn main() -> Result<()> {
                     }
 
                     channel.datarate = 96_000;
-                    channel.write(&mut radio, &board);
+                    channel.write(&mut radio, &board)?;
                     radio.PWRMODE().write(PwrMode {
                         flags: PwrFlags::XOEN | PwrFlags::REFEN,
                         mode: PwrModes::RX,
