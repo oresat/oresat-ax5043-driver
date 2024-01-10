@@ -879,7 +879,7 @@ impl ChannelParameters {
             }
             Modulation::GMSK { .. } => {
                 radio.MODULATION().write(crate::Modulation {
-                    mode: ModulationMode::FSK,
+                    mode: ModulationMode::MSK,
                     halfspeed: false,
                 })?;
                 // m = 0.5, fskdev = 0.5 * f_dev, 1/(0.5*0.5) = 4
