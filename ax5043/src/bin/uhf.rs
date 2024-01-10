@@ -473,12 +473,13 @@ fn main() -> Result<()> {
     registry.register(&mut SourceFd(&uhf_irq.as_raw_fd()), IRQ, Interest::READABLE)?;
 
     let spi0 = ax5043::open(args.spi)?;
-    //let mut status = Status::empty();
-    //let mut callback = |_: &_, _, s, _: &_| {
+    //let mut status = ax5043::Status::empty();
+    //let mut callback = |_: &_, addr, s, data: &_| {
     //    if s != status {
     //        println!("TX Status change: {:?}", s);
     //        status = s;
     //    }
+    //    println!("{:04X}: {:?}", addr, data);
     //};
     let mut callback = |_: &_, _, _, _: &_| {};
 
@@ -570,6 +571,7 @@ fn main() -> Result<()> {
                         }
                     }
 
+                    channel.datarate = 96_000;
                     channel.bitorder = BitOrder::MSBFirst;
                     channel.write(&mut radio, &board)?;
 
@@ -608,7 +610,7 @@ fn main() -> Result<()> {
                             fec: config::FEC {},
                         },
                         crc: CRC::CCITT { initial: 0xFFFF },
-                        datarate: 96_000,
+                        datarate: 9_600,
                         bitorder: BitOrder::MSBFirst,
                     }.write(&mut radio, &board)?;
 
@@ -634,6 +636,8 @@ fn main() -> Result<()> {
                         }
                     }
 
+                    channel.datarate = 96_000;
+                    channel.write(&mut radio, &board);
                     radio.PWRMODE().write(PwrMode {
                         flags: PwrFlags::XOEN | PwrFlags::REFEN,
                         mode: PwrModes::RX,
