@@ -9,7 +9,7 @@ shift
 #path=""
 
 user="debian" # password: tmppwd
-host="oresat-c3.local"
+host="c3.oresat.org"
 path="ax5043"
 
 target="$user@$host"
