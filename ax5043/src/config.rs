@@ -1406,3 +1406,148 @@ impl RXParameterSet {
         Ok(())
     }
 }
+
+pub struct PatternMatch0 {
+    pub pat: u32,
+    pub len: u8,
+    pub raw: bool,
+    pub min: u8,
+    pub max: u8,
+}
+
+
+impl PatternMatch0 {
+    pub fn write(&self, radio: &mut Registers) -> Result<()> {
+        // I believe that the bitstream is marched rightward through MATCHxPAT until it matches in
+        // more than MATCHxMAX positions or less than MATCHxMIN positions. I assume non-contiguous
+        // MIN = 1 would mean match in exatly 0 positions witch is unlikely, probably an inverted
+        // pattern sequence.
+        if self.len > 31 {
+            return Err(Error::Invalid);
+        }
+        if self.min > self.len {
+            return Err(Error::Invalid);
+        }
+        if self.max > self.len {
+            return Err(Error::Invalid);
+        }
+        if self.min > self.max {
+            // Not strictly an error but probably not intended
+            return Err(Error::Invalid);
+        }
+
+        // PM page 66: LSB received first, patterns of length less than 32 must be MSB aligned.
+        // FIXME: does this mean it has to be left shifted?
+        radio.MATCH0PAT().write(self.pat)?;
+        // the length in bits of the pattern is MATCH0LEN + 1
+        radio.MATCH0LEN().write(MatchLen {
+            len: self.len,
+            raw: self.raw,
+        })?;
+
+        radio.MATCH0MIN().write(self.min)?;
+        radio.MATCH0MAX().write(self.max)?;
+
+        Ok(())
+    }
+}
+
+pub struct PatternMatch1 {
+    pub pat: u16,
+    pub len: u8,
+    pub raw: bool,
+    pub min: u8,
+    pub max: u8,
+}
+
+
+impl PatternMatch1 {
+    pub fn write(&self, radio: &mut Registers) -> Result<()> {
+        if self.len > 15 {
+            return Err(Error::Invalid);
+        }
+        if self.min > self.len {
+            return Err(Error::Invalid);
+        }
+        if self.max > self.len {
+            return Err(Error::Invalid);
+        }
+        if self.min > self.max {
+            // Not strictly an error but probably not intended
+            return Err(Error::Invalid);
+        }
+
+        radio.MATCH1PAT().write(self.pat)?;
+        radio.MATCH1LEN().write(MatchLen {
+            len: self.len,
+            raw: self.raw,
+        })?;
+
+        radio.MATCH1MIN().write(self.min)?;
+        radio.MATCH1MAX().write(self.max)?;
+
+        Ok(())
+    }
+}
+
+
+pub struct Preamble1 {
+    pub pattern: PatternMatch1,
+    pub timeout: TMG,
+    pub set: RxParamSet,
+}
+
+pub struct Preamble2 {
+    pub pattern: PatternMatch0,
+    pub timeout: TMG,
+    pub set: RxParamSet,
+}
+
+pub struct Preamble3 {
+    pub timeout: TMG,
+    pub set: RxParamSet,
+}
+
+// see PM pg 19 Figure 13. FIXME: what is TXPREAMBLE1? only mentioned in this diagram. Is it
+// missing -MGR-?
+// TODO: TMGRX{AGC,RSSI} units PKTMISC flag
+pub struct RXParameterStages { // TODO: Should this just be merged with RXParameters?
+    pub preamble1: Option<Preamble1>,
+    pub preamble2: Option<Preamble2>,
+    pub preamble3: Option<Preamble3>,
+    pub packet: RxParamSet,
+}
+
+impl RXParameterStages {
+    pub fn write(&self, radio: &mut Registers) -> Result<()> {
+        match &self.preamble1 {
+            Some(p) => {
+                p.pattern.write(radio)?;
+                radio.TMGRXPREAMBLE1().write(p.timeout)?;
+            }
+            None => radio.TMGRXPREAMBLE1().write(TMG {m: 0, e: 0})?,
+        }
+
+        match &self.preamble2 {
+            Some(p) => {
+                p.pattern.write(radio)?;
+                radio.TMGRXPREAMBLE2().write(p.timeout)?;
+            }
+            None => radio.TMGRXPREAMBLE2().write(TMG {m: 0, e: 0})?,
+        }
+        match &self.preamble3 {
+            Some(p) => {
+                radio.TMGRXPREAMBLE3().write(p.timeout)?;
+            }
+            None => radio.TMGRXPREAMBLE3().write(TMG {m: 0, e: 0})?,
+        }
+
+        radio.RXPARAMSETS().write(RxParamSets(
+            self.preamble1.as_ref().map(|x| x.set).unwrap_or(RxParamSet::Set0),
+            self.preamble2.as_ref().map(|x| x.set).unwrap_or(RxParamSet::Set0),
+            self.preamble3.as_ref().map(|x| x.set).unwrap_or(RxParamSet::Set0),
+            self.packet,
+        ))?;
+        Ok(())
+    }
+}

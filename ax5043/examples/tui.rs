@@ -23,6 +23,7 @@ use ax5043::registers::*;
 use ax5043::tui::*;
 use ax5043::*;
 
+
 // FIXME: Default isn't really the way to go, maybe ::new()?
 
 #[derive(Debug)]
@@ -583,13 +584,6 @@ fn main() -> Result<()> {
     state.borrow_mut().packet_controller = PacketController::new(&mut radio)?;
     state.borrow_mut().packet_format = PacketFormat::new(&mut radio)?;
 
-    // Expect 32 bit preamble
-    //radio.MATCH0PAT().write(0x7E7E_7E7E)?;
-    //radio.MATCH0LEN().write(MatchLen { len: 31, raw: true})?;
-    //radio.TMGRXPREAMBLE1().write(TMG { m: 1, e: 6, })?;
-    //radio.TMGRXPREAMBLE3().write(TMG { m: 1, e: 6, })?;
-    //radio.TMGRXRSSI().write(TMG { m: 1, e: 6, })?;
-    //radio.TMGRXAGC().write(TMG { m: 1, e: 6, })?;
 
     let chip = Chip::new("gpiochip0")?;
     let opts = Options::input([16])

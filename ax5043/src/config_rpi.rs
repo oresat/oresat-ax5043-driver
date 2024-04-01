@@ -123,7 +123,8 @@ pub fn configure_radio_rx(radio: &mut Registers) -> Result<(Board, ChannelParame
         frequency_leak: 0,
     }.write(radio, &board, &channel)?;
 
-    let set0 = RXParameterSet {
+    // Set 0
+    RXParameterSet {
         agc: RXParameterAGC::new(&board, &channel),
         gain: RXParameterGain {
             time: TimeGain {
@@ -152,10 +153,10 @@ pub fn configure_radio_rx(radio: &mut Registers) -> Result<(Board, ChannelParame
         freq_dev: 0,
         decay: 0b0110,
         baseband_offset: RXParameterBasebandOffset { a: 0, b: 0 },
-    };
-    set0.write0(radio)?;
+    }.write0(radio)?;
 
-    let set1 = RXParameterSet {
+    // Set 1
+    RXParameterSet {
         agc: RXParameterAGC::new(&board, &channel),
         gain: RXParameterGain {
             time: TimeGain {
@@ -184,10 +185,10 @@ pub fn configure_radio_rx(radio: &mut Registers) -> Result<(Board, ChannelParame
         freq_dev: 0x32,
         decay: 0b0110,
         baseband_offset: RXParameterBasebandOffset { a: 0, b: 0 },
-    };
-    set1.write1(radio)?;
+    }.write1(radio)?;
 
-    let set3 = RXParameterSet {
+    // Set 3
+    RXParameterSet {
         agc: RXParameterAGC::off(),
         gain: RXParameterGain {
             time: TimeGain {
@@ -216,23 +217,35 @@ pub fn configure_radio_rx(radio: &mut Registers) -> Result<(Board, ChannelParame
         freq_dev: 0x32,
         decay: 0b0110,
         baseband_offset: RXParameterBasebandOffset { a: 0, b: 0 },
-    };
-    set3.write3(radio)?;
+    }.write3(radio)?;
 
-    radio.RXPARAMSETS().write(RxParamSets(
-        RxParamSet::Set0,
-        RxParamSet::Set1,
-        RxParamSet::Set3,
-        RxParamSet::Set3,
-    ))?;
+    RXParameterStages {
+        preamble1: Some(Preamble1 {
+            pattern: PatternMatch1 {
+                pat: 0x1111,
+                len: 15,
+                raw: false,
+                min: 0,
+                max: 15,
+            },
+            timeout: TMG { m: 0x17, e: 5},
+            set: RxParamSet::Set0,
+        }),
+        preamble2: Some(Preamble2 {
+            pattern: PatternMatch0 {
+                pat: 0x1111_1111,
+                len: 31,
+                raw: false,
+                min: 0,
+                max: 31,
+            },
+            timeout: TMG { m: 0x17, e: 0 },
+            set: RxParamSet::Set1,
+        }),
+        preamble3: None,
+        packet: RxParamSet::Set3,
+    }.write(radio)?;
 
-    radio.MATCH1PAT().write(0x7E7E)?;
-    radio.MATCH1LEN().write(MatchLen {
-        len: 0xA,
-        raw: false,
-    })?;
-    radio.MATCH1MAX().write(0xA)?;
-    radio.TMGRXPREAMBLE2().write(TMG { m: 0x17, e: 0 })?;
 
     radio.PKTMAXLEN().write(0xFF)?;
     radio.PKTLENCFG().write(PktLenCfg { pos: 0, bits: 0xF })?;

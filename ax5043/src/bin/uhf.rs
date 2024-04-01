@@ -217,12 +217,21 @@ pub fn configure_radio_rx(radio: &mut Registers) -> Result<(Board, ChannelParame
         RxParamSet::Set3,
     ))?;
 
-    radio.MATCH1PAT().write(0x7E)?;
-    radio.MATCH1LEN().write(MatchLen {
-        len: 0xA,
+    //let pattern0 = PatternMatch {
+
+    //};
+    //pattern0.write(radio)?;
+
+    let pattern1 = PatternMatch1 {
+        pat: 0x7E7E,
+        len: 15,
         raw: false,
-    })?;
-    radio.MATCH1MAX().write(0xA)?;
+        min: 0,
+        max: 15,
+    };
+    pattern1.write(radio)?;
+
+    // TODO: set TMGRXPREAMBLEx off of expected bitrate + preamble length?
     radio.TMGRXPREAMBLE2().write(TMG { m: 0x17, e: 0 })?;
 
     radio.PKTMAXLEN().write(0xFF)?;

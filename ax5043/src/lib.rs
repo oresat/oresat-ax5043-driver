@@ -74,6 +74,8 @@ pub enum Error {
     Status([u8; 2]),
     #[error("Autoranging failed")]
     Autorange, // TODO: A vs B
+    #[error("Invalid config setting")]
+    Invalid, // FIXME: this is a generic catchall, should always be made specific
 }
 
 type Result<T> = std::result::Result<T, Error>;
