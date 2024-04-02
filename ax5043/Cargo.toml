@@ -9,25 +9,25 @@ license = "GPL-3.0-or-later"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-anyhow = "1.0.75"
+anyhow = "1.0.81"
 ax5043_derive = { path = "../ax5043_derive" }
-bitflags = "2.3.1"
-clap = { version = "4.2.2", features = ["derive"] }
+bitflags = "2.5.0"
+clap = { version = "4.5.4", features = ["derive"] }
 crc = "3.0.1"
 gpiod = "0.2.3"
-mio = { version = "0.8.8", features = ["net", "os-poll", "os-ext"] }
+mio = { version = "0.8.11", features = ["net", "os-poll", "os-ext"] }
 mio-signals = "0.2.0"
-num_enum = "0.7.0"
-ratatui = "0.23"
+num_enum = "0.7.2"
+ratatui = "0.26"
 spidev = "0.6.0"
-thiserror = "1.0.50"
+thiserror = "1.0.58"
 
 [dev-dependencies]
 crossterm = "0.27"
-itertools = "0.12.0"
+itertools = "0.12.1"
 proptest = "1.4.0"
 proptest-derive = "0.4.0"
-timerfd = "1.5.0"
+timerfd = "1.6.0"
 
 [package.metadata.deb]
 maintainer-scripts = "debian/"

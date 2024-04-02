@@ -34,6 +34,10 @@ Fresh Raspbian install
   - Raspberry Pi OS (32-bit)
   - Internal SD Card Reader
 
+`sudo apt install rpi-imager`
+
+Be sure to check the advanced settings for ssh, wifi, and other useful settings
+
 On the SD card mounted on my laptop
 - `touch <mountpoint>/boot/ssh` to enable ssh
 - uncomment `dtparam=spi=on` in <mountpoint>/boot/config.txt to enable SPI0

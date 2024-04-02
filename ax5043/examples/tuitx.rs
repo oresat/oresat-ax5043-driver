@@ -46,7 +46,7 @@ impl Default for UIState {
     }
 }
 
-fn ui<B: Backend>(f: &mut Frame<B>, state: &UIState) {
+fn ui(f: &mut Frame, state: &UIState) {
     let chunks = Layout::default()
         .direction(Direction::Vertical)
         .margin(1)

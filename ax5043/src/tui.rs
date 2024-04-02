@@ -69,18 +69,17 @@ impl PacketFormat {
                 Cell::from(self.lenoffset.to_string()),
                 Cell::from(self.maxlen.to_string()),
             ]),
+        ], [
+            Constraint::Max(10),
+            Constraint::Min(30),
+            Constraint::Min(10),
+            Constraint::Min(10),
         ])
         .block(
             Block::default()
                 .borders(Borders::ALL)
                 .title("Packet Format"),
         )
-        .widths(&[
-            Constraint::Max(10),
-            Constraint::Min(30),
-            Constraint::Min(10),
-            Constraint::Min(10),
-        ])
     }
 }
 
@@ -157,7 +156,7 @@ impl PacketController {
         })
     }
 
-    pub fn widget<B: Backend>(&self, f: &mut Frame<B>, area: Rect){
+    pub fn widget(&self, f: &mut Frame, area: Rect){
         let layout = Layout::default()
             .direction(Direction::Vertical)
             .margin(0)
@@ -206,8 +205,7 @@ impl PacketController {
                 Cell::from(self.bgnd_rssi_thr.to_string()),
                 Cell::from(self.pkt_chunk_size.to_string()),
             ]),
-        ])
-         .widths(&[
+        ], [
             Constraint::Max(10),
             Constraint::Max(10),
             Constraint::Max(10),
@@ -233,8 +231,7 @@ impl PacketController {
                 Cell::from(format!("{:?}", self.pkt_store_flags)),
                 Cell::from(format!("{:?}", self.pkt_accept_flags)),
             ]),
-        ])
-        .widths(&[
+        ], [
             Constraint::Max(30),
             Constraint::Max(30),
             Constraint::Max(50),
@@ -352,9 +349,12 @@ impl Synthesizer {
                 Cell::from(""),
                 Cell::from(format!("{:?}", self.vcodiv)),
             ]),
+        ], [
+            Constraint::Max(5),
+            Constraint::Max(13),
+            Constraint::Max(80)
         ])
         .block(Block::default().borders(Borders::ALL).title("Synthesizer"))
-        .widths(&[Constraint::Max(5), Constraint::Max(13), Constraint::Max(80)])
     }
 }
 
@@ -607,13 +607,7 @@ impl RXParameterSet {
                 Cell::from(self.baseband_offset.a.to_string()),
                 Cell::from(self.baseband_offset.b.to_string()),
             ]),
-        ])
-        .block(
-            Block::default()
-                .borders(Borders::ALL)
-                .title("RX Parameter Set"),
-        )
-        .widths(&[
+        ], [
             Constraint::Max(5),
             Constraint::Max(8),
             Constraint::Max(9),
@@ -630,6 +624,11 @@ impl RXParameterSet {
             Constraint::Max(15),
             Constraint::Max(15),
         ])
+        .block(
+            Block::default()
+                .borders(Borders::ALL)
+                .title("RX Parameter Set"),
+        )
         .style(*active)
     }
 }
@@ -741,13 +740,7 @@ impl RXParams {
                 Cell::from(format!("{:?}", self.rxparamset.2)),
                 Cell::from(format!("{:?}", self.rxparamset.3)),
             ]),
-        ])
-        .block(
-            Block::default()
-                .borders(Borders::ALL)
-                .title("RX Parameters"),
-        )
-        .widths(&[
+        ], [
             Constraint::Max(11),
             Constraint::Max(10),
             Constraint::Max(11),
@@ -755,6 +748,11 @@ impl RXParams {
             Constraint::Max(14),
             Constraint::Max(15),
         ])
+        .block(
+            Block::default()
+                .borders(Borders::ALL)
+                .title("RX Parameters"),
+        )
     }
 }
 
@@ -776,13 +774,12 @@ impl PwrMode {
                 Cell::from("REFEN").style(onoff(&self.flags, PwrFlags::REFEN)),
                 Cell::from("XOEN" ).style(onoff(&self.flags, PwrFlags::XOEN)),
             ]),
-        ])
-        .block(Block::default().borders(Borders::ALL).title("PWRMODE"))
-        .widths(&[
+        ], [
             Constraint::Length(8),
             Constraint::Length(5),
             Constraint::Length(4),
         ])
+        .block(Block::default().borders(Borders::ALL).title("PWRMODE"))
         .style(Style::default().fg(Color::White))
     }
 }
@@ -801,9 +798,7 @@ impl PowStat {
                 Cell::from("REF"     ).style(onoff(self, PowStat::REF)),
                 Cell::from("SUM"     ).style(onoff(self, PowStat::SUM))
             ]),
-        ])
-        .block(Block::default().borders(Borders::ALL).title("POWSTAT"))
-        .widths(&[
+        ], [
             Constraint::Max(3),
             Constraint::Max(8),
             Constraint::Max(6),
@@ -813,6 +808,7 @@ impl PowStat {
             Constraint::Max(3),
             Constraint::Max(3),
         ])
+        .block(Block::default().borders(Borders::ALL).title("POWSTAT"))
     }
 }
 
@@ -837,9 +833,7 @@ impl IRQ {
                 Cell::from("FIFOTHRFREE" ).style(onoff(self, IRQ::FIFOTHRFREE)),
                 Cell::from("FIFOERROR"   ).style(onoff(self, IRQ::FIFOERROR)),
             ]),
-        ])
-        .block(Block::default().borders(Borders::ALL).title("IRQ"))
-        .widths(&[
+        ], [
             Constraint::Max(12),
             Constraint::Max(11),
             Constraint::Max(10),
@@ -849,6 +843,7 @@ impl IRQ {
             Constraint::Max(5),
             Constraint::Max(10),
         ])
+        .block(Block::default().borders(Borders::ALL).title("IRQ"))
     }
 }
 
@@ -873,9 +868,7 @@ impl Status {
                 Cell::from("LPOSC_INTERRUPT" ).style(onoff(self, Status::LPOSC_INTERRUPT)),
                 Cell::from("GPADC_INTERRUPT" ).style(onoff(self, Status::GPADC_INTERRUPT)),
             ]),
-        ])
-        .block(Block::default().borders(Borders::ALL).title("STATUS"))
-        .widths(&[
+        ], [
             Constraint::Max(5),
             Constraint::Max(8),
             Constraint::Max(9),
@@ -892,6 +885,7 @@ impl Status {
             Constraint::Max(15),
             Constraint::Max(15),
         ])
+        .block(Block::default().borders(Borders::ALL).title("STATUS"))
     }
 }
 
@@ -906,23 +900,21 @@ impl RadioEvent {
                 Cell::from("PARAMSET").style(onoff(self, RadioEvent::RXPARAMSETCHG)),
                 Cell::from("FRAMECLK").style(onoff(self, RadioEvent::FRAMECLK)),
             ]),
-        ])
-        .block(Block::default().borders(Borders::ALL).title("Radio Event"))
-        .widths(&[
+        ], [
             Constraint::Max(4),
             Constraint::Max(7),
             Constraint::Max(5),
             Constraint::Max(8),
             Constraint::Max(8),
         ])
+        .block(Block::default().borders(Borders::ALL).title("Radio Event"))
     }
 }
 
 impl RadioState {
     pub fn widget<'a>(&self) -> Table<'a> {
-        Table::new(vec![Row::new([Cell::from(format!("{self:?}"))])])
+        Table::new(vec![Row::new([Cell::from(format!("{self:?}"))])], [Constraint::Max(13)])
             .block(Block::default().borders(Borders::ALL).title("Radio State"))
-            .widths(&[Constraint::Max(13)])
     }
 }
 
@@ -966,13 +958,12 @@ impl TXParameters {
                 Cell::from("tx power coef b:"),
                 Cell::from(format!("{:X?}", self.b)),
             ]),
-        ])
+        ], [Constraint::Max(100), Constraint::Max(60)])
         .block(
             Block::default()
                 .borders(Borders::ALL)
                 .title("TX Parameters"),
         )
-        .widths(&[Constraint::Max(100), Constraint::Max(60)])
     }
 }
 
@@ -1022,13 +1013,12 @@ impl ChannelParameters {
                 Cell::from(format!("{:?}", self.framing)),
                 Cell::from(format!("{:X?}", self.crcinit)),
             ]),
-        ])
+        ], [Constraint::Max(100), Constraint::Max(60)])
         .block(
             Block::default()
                 .borders(Borders::ALL)
                 .title("Channel Parameters"),
         )
-        .widths(&[Constraint::Max(100), Constraint::Max(60)])
     }
 }
 
