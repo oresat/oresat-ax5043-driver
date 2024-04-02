@@ -10,7 +10,6 @@ license = "GPL-3.0-or-later"
 
 [dependencies]
 anyhow = "1.0.81"
-ax5043_derive = { path = "../ax5043_derive" }
 bitflags = "2.5.0"
 clap = { version = "4.5.4", features = ["derive"] }
 crc = "3.0.1"
