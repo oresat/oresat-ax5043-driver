@@ -9,7 +9,7 @@ use mio_signals::{Signal, Signals};
 use ratatui::{
     backend::CrosstermBackend,
     prelude::*,
-    widgets::{Block, Borders, Sparkline, Paragraph, BorderType},
+    widgets::*,
     Terminal,
 };
 use std::{
@@ -82,44 +82,6 @@ impl Default for UIState {
 }
 
 impl UIState {
-    fn sparkline<'a, T>(&self, name: T, unit: T, data: &'a [u64]) -> Sparkline<'a>
-    where
-        T: AsRef<str> + std::fmt::Display,
-    {
-        let min = data.iter().min().unwrap_or(&0);
-        let max = data.iter().max().unwrap_or(&0);
-        let name: &str = name.as_ref();
-        Sparkline::default()
-            .block(
-                Block::default()
-                    .title(format!("{name} ({min} {unit} - {max} {unit})"))
-                    .borders(Borders::ALL),
-            )
-            .data(data)
-            .style(self.spark)
-    }
-
-    fn spark_signed<'a, T>(
-        &self,
-        name: T,
-        unit: T,
-        data: &'a [u64],
-        min: i64,
-        max: i64,
-    ) -> Sparkline<'a>
-    where
-        T: AsRef<str> + std::fmt::Display,
-    {
-        Sparkline::default()
-            .block(
-                Block::default()
-                    .title(format!("{name} ({min} {unit} - {max} {unit})"))
-                    .borders(Borders::ALL),
-            )
-            .data(data)
-            .style(self.spark)
-    }
-
     fn rx_params<'a>(&self, data: &'a [u64], last: RxParamCurSet) -> Sparkline<'a> {
         Sparkline::default()
             .block(Block::default().borders(Borders::ALL).title(format!(
@@ -128,6 +90,38 @@ impl UIState {
             )))
             .data(data)
             .style(self.spark)
+    }
+
+    fn chart<'a, T>(&self, f: &mut Frame, area: Rect, name: T, unit:T, data: &'a [f64])
+        where T: AsRef<str> + std::fmt::Display,
+    {
+        let min = data.iter().copied().fold(f64::NAN, f64::min).round();
+        let max = data.iter().copied().fold(f64::NAN, f64::max).round();
+        let values = data.iter()
+            .enumerate()
+            .map(|(i, v)| (i as f64, *v))
+            .collect::<Vec<(f64, f64)>>();
+        let set = vec![Dataset::default()
+            .graph_type(GraphType::Line)
+            .marker(symbols::Marker::Braille)
+            .style(Style::default().fg(Color::Red))
+            .data(&values),
+        ];
+
+        let x_axis = Axis::default()
+            .bounds([0.0, data.len() as f64]);
+
+        let y_axis = Axis::default()
+            .bounds([min, max])
+            .labels(vec![min.to_string().into(), max.to_string().into()]);
+
+        let chart = Chart::new(set)
+            .block(Block::default().title(format!("{} ({})", name, unit)))
+            .style(Style::default().fg(Color::Black).bg(Color::White))
+            .x_axis(x_axis)
+            .y_axis(y_axis);
+
+        f.render_widget(chart, area);
     }
 }
 
@@ -188,7 +182,7 @@ fn ui(f: &mut Frame, state: &UIState) {
 
     f.render_widget(state.synthesizer.widget(), parameters[0]);
     state.packet_controller.widget(f, parameters[1]);
-    let packets = Paragraph::new(state.packets.iter().map(|x| format!("{}: {} {:?}", x.0, x.1, x.2)).join("\n"))
+    let packets = Paragraph::new(state.packets.iter().map(|x| format!("{}: {} {:02X?}", x.0, x.1, x.2)).join("\n"))
     .style(Style::default().fg(Color::Yellow))
     .block(
         Block::default()
@@ -218,144 +212,20 @@ fn ui(f: &mut Frame, state: &UIState) {
                 Constraint::Percentage(10),
                 Constraint::Percentage(10),
                 Constraint::Percentage(10),
-                Constraint::Percentage(10),
                 Constraint::Min(0),
             ]
             .as_ref(),
         )
         .split(rx[0]);
-    let data = &state
-        .rx
-        .iter()
-        .map(|r| i64::from(r.rssi))
-        .collect::<Vec<i64>>();
-    let min: i64 = *data.iter().min().unwrap_or(&0);
-    let max: i64 = *data.iter().max().unwrap_or(&0);
-    let data = &data
-        .iter()
-        .map(|x| u64::try_from(x - min).unwrap())
-        .collect::<Vec<u64>>();
-    f.render_widget(state.spark_signed("RSSI", "dB", data, min, max), sparks[0]);
 
-    f.render_widget(
-        state.sparkline(
-            "Background RSSI",
-            "dB",
-            &state
-                .rx
-                .iter()
-                .map(|r| u64::from(r.bgndrssi))
-                .collect::<Vec<u64>>(),
-        ),
-        sparks[1],
-    );
-
-    let data = &state
-        .rx
-        .iter()
-        .map(|r| i64::from(r.agccounter))
-        .collect::<Vec<i64>>();
-    let min: i64 = *data.iter().min().unwrap_or(&0);
-    let max: i64 = *data.iter().max().unwrap_or(&0);
-    let data = &data
-        .iter()
-        .map(|x| u64::try_from(x - min).unwrap())
-        .collect::<Vec<u64>>();
-    f.render_widget(
-        state.spark_signed("AGC Counter", "dB", data, min, max),
-        sparks[2],
-    );
-
-    f.render_widget(
-        state.sparkline(
-            "Amplitude",
-            "",
-            &state
-                .rx
-                .iter()
-                .map(|r| u64::from(r.ampl))
-                .collect::<Vec<u64>>(),
-        ),
-        sparks[3],
-    );
-
-    let data = &state
-        .rx
-        .iter()
-        .map(|r| i64::from(r.rffreq))
-        .collect::<Vec<i64>>();
-    let min: i64 = *data.iter().min().unwrap_or(&0);
-    let max: i64 = *data.iter().max().unwrap_or(&0);
-    let data = &data
-        .iter()
-        .map(|x| u64::try_from(x - min).unwrap())
-        .collect::<Vec<u64>>();
-    f.render_widget(
-        state.spark_signed("RF Frequency", "Hz", data, min, max),
-        sparks[4],
-    );
-
-    f.render_widget(
-        state.sparkline(
-            "Phase",
-            "",
-            &state
-                .rx
-                .iter()
-                .map(|r| u64::from(r.phase))
-                .collect::<Vec<u64>>(),
-        ),
-        sparks[5],
-    );
-
-    let data = &state
-        .rx
-        .iter()
-        .map(|r| i64::from(r.datarate))
-        .collect::<Vec<i64>>();
-    let min: i64 = *data.iter().min().unwrap_or(&0);
-    let max: i64 = *data.iter().max().unwrap_or(&0);
-    let data = &data
-        .iter()
-        .map(|x| u64::try_from(x - min).unwrap())
-        .collect::<Vec<u64>>();
-    f.render_widget(
-        state.spark_signed("Δ Data Rate", "bits/s", data, min, max),
-        sparks[6],
-    );
-
-    let data = &state
-        .rx
-        .iter()
-        .map(|r| i64::from(r.fskdemod))
-        .collect::<Vec<i64>>();
-    let min: i64 = *data.iter().min().unwrap_or(&0);
-    let max: i64 = *data.iter().max().unwrap_or(&0);
-    let data = &data
-        .iter()
-        .map(|x| u64::try_from(x - min).unwrap())
-        .collect::<Vec<u64>>();
-    f.render_widget(
-        state.spark_signed("FSK Demodulation", "", data, min, max),
-        sparks[7],
-    );
-
-    let data = &state
-        .rx
-        .iter()
-        .map(|r| i64::from(r.freq))
-        .collect::<Vec<i64>>();
-    let min: i64 = *data.iter().min().unwrap_or(&0);
-    let max: i64 = *data.iter().max().unwrap_or(&0);
-    let data = &data
-        .iter()
-        .map(|x| u64::try_from(x - min).unwrap())
-        .collect::<Vec<u64>>();
-    f.render_widget(
-        state.spark_signed("Frequency", "Hz", data, min, max),
-        sparks[8],
-    );
-    //f.render_widget(state.sparkline("Frequency", "Hz", &state.rx.iter().map(|r| u64::from(r.freq)).collect::<Vec<u64>>()), sparks[8]);
+    state.chart(f, sparks[0], "RSSI", "dB", &state.rx.iter().map(|r| r.rssi).collect::<Vec<f64>>());
+    state.chart(f, sparks[1], "AGC Counter", "dB", &state.rx.iter().map(|r| r.agccounter).collect::<Vec<f64>>());
+    state.chart(f, sparks[2], "Amplitude", "", &state.rx.iter().map(|r| r.ampl).collect::<Vec<f64>>());
+    state.chart(f, sparks[3], "RF Frequency", "Hz", &state.rx.iter().map(|r| r.rffreq).collect::<Vec<f64>>());
+    state.chart(f, sparks[4], "Phase", "", &state.rx.iter().map(|r| r.phase).collect::<Vec<f64>>());
+    state.chart(f, sparks[5], "Δ Data Rate", "bits/s", &state.rx.iter().map(|r| r.datarate).collect::<Vec<f64>>());
+    state.chart(f, sparks[6], "FSK Demodulation", "", &state.rx.iter().map(|r| r.fskdemod).collect::<Vec<f64>>());
+    state.chart(f, sparks[7], "Frequency", "Hz", &state.rx.iter().map(|r| r.freq).collect::<Vec<f64>>());
 
     f.render_widget(
         state.rx_params(
@@ -366,7 +236,7 @@ fn ui(f: &mut Frame, state: &UIState) {
                 .collect::<Vec<u64>>(),
             state.rx.back().unwrap_or(&RXState::default()).paramcurset,
         ),
-        sparks[9],
+        sparks[8],
     );
     f.render_widget(state.status.widget(), chunks[2]);
 }
@@ -396,30 +266,28 @@ pub fn ax5043_listen(radio: &mut Registers) -> Result<()> {
 }
 
 struct RXState {
-    rssi: i64,
-    bgndrssi: u8,
-    agccounter: i32,
-    datarate: i32,
-    ampl: u16,
-    phase: u16,
-    fskdemod: i32,
-    rffreq: i32,
-    freq: i64,
+    rssi: f64,
+    agccounter: f64,
+    datarate: f64,
+    ampl: f64,
+    phase: f64,
+    fskdemod: f64,
+    rffreq: f64,
+    freq: f64,
     paramcurset: RxParamCurSet,
 }
 
 impl Default for RXState {
     fn default() -> Self {
         Self {
-            rssi: 0,
-            bgndrssi: 0,
-            agccounter: 0,
-            datarate: 0,
-            ampl: 0,
-            phase: 0,
-            fskdemod: 0,
-            rffreq: 0,
-            freq: 0,
+            rssi: 0.0,
+            agccounter: 0.0,
+            datarate: 0.0,
+            ampl: 0.0,
+            phase: 0.0,
+            fskdemod: 0.0,
+            rffreq: 0.0,
+            freq: 0.0,
             paramcurset: RxParamCurSet {
                 index: 0,
                 number: RxParamSet::Set0,
@@ -431,20 +299,19 @@ impl Default for RXState {
 
 // TODO: FRAMING::FRMRX
 
-fn get_signal(radio: &mut Registers, _channel: &config::ChannelParameters) -> Result<RXState> {
+fn get_signal(radio: &mut Registers, channel: &config::ChannelParameters) -> Result<RXState> {
     let signal = radio.SIGNALSTR().read()?;
     let track = radio.RXTRACKING().read()?;
 
     Ok(RXState {
-        rssi: i64::from(signal.rssi),
-        bgndrssi: signal.bgndrssi,
-        agccounter: (i32::from(signal.agccounter) * 4) / 3,
-        datarate: track.datarate,
-        ampl: track.ampl,
-        phase: track.phase,
-        fskdemod: track.fskdemod.0.into(),
-        rffreq: track.rffreq.0,
-        freq: i64::from(track.freq) * 9600 / 2i64.pow(16), //channel.datarate
+        rssi: f64::from(signal.rssi),
+        agccounter: (f64::from(signal.agccounter) * 4.0) / 3.0,
+        datarate: f64::from(track.datarate),
+        ampl: f64::from(track.ampl),
+        phase: f64::from(track.phase),
+        fskdemod: f64::from(track.fskdemod.0),
+        rffreq: f64::from(track.rffreq.0),
+        freq: f64::from(track.freq) * channel.datarate as f64 / 2f64.powf(16.0),
         paramcurset: radio.RXPARAMCURSET().read()?,
     })
 }
