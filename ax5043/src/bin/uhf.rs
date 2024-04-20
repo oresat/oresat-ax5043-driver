@@ -250,14 +250,14 @@ fn process_chunk(chunk: FIFOChunkRX, packet: &mut Vec<u8>, uplink: &mut UdpSocke
     if let FIFOChunkRX::DATA{flags, ref data} = chunk {
         //println!("{:02X?}", chunk);
         if flags.intersects(FIFODataRXFlags::ABORT | FIFODataRXFlags::SIZEFAIL | FIFODataRXFlags::ADDRFAIL | FIFODataRXFlags::CRCFAIL | FIFODataRXFlags::RESIDUE) {
-            println!("UHF REJECTED {:02X?}", chunk);
+            println!("UHF REJECTED {:?} {:02X?} ...+{}", flags, data[0], data.len());
             packet.clear();
             return Ok(());
         }
 
         if flags.contains(FIFODataRXFlags::PKTSTART) {
             if !packet.is_empty() {
-                println!("UHF PKT RESTART {:02X?}", chunk);
+                println!("UHF PKT RESTART {:?} {:02X?} ...+{}", flags, data[0], data.len());
             }
             packet.clear();
         }

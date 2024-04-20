@@ -1493,18 +1493,18 @@ impl PatternMatch1 {
 
 pub struct Preamble1 {
     pub pattern: PatternMatch1,
-    pub timeout: TMG,
+    pub timeout: TMG, // between 0 and 3968 bits
     pub set: RxParamSet,
 }
 
 pub struct Preamble2 {
     pub pattern: PatternMatch0,
-    pub timeout: TMG,
+    pub timeout: TMG, // between 0 and 3968 bits
     pub set: RxParamSet,
 }
 
 pub struct Preamble3 {
-    pub timeout: TMG,
+    pub timeout: TMG, // between 0 and 3968 bits
     pub set: RxParamSet,
 }
 

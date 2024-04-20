@@ -8,7 +8,6 @@
 use bitflags::bitflags;
 use num_enum::{IntoPrimitive, TryFromPrimitive};
 use std::{fmt, ops::{Index, Range}};
-// FIXME: use ax5043_derive::{Serialize, Deserialize};
 #[cfg(test)] use proptest::prelude::*;
 #[cfg(test)] use proptest_derive::Arbitrary;
 

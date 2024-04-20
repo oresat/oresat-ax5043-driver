@@ -16,7 +16,7 @@ pub mod tui;
 // bits AsIs/Preserve/Update?, DontCare, RW, RO, WO, W1C, RC, S?
 //
 // idea:
-// ax5043.write(PwrMode { PwrMode::POWEROFF | PwrMode::TXEN | PwrMode::REFEN });
+// ax5043.write(PwrMode { POWEROFF | TXEN | REFEN });
 // enum PwrMode: u8 {
 //     7 => RST,
 //     6 => REFEN,
@@ -37,6 +37,31 @@ pub mod tui;
 //
 //TODO: write has all fields of register? write(flags, mode)?
 //TODO: write(u8/u16/u32 for direct hex)?
+//TODO:
+//   write(val: T) where T: Reg
+//   impl<PwrMode> write(val: PwrMode)
+//   impl<PowStat> write(val: PowStat)
+//   This has a dowwnside that we need a unique type per register, no sharing.
+//
+//   What about an address wrapper around the types then?
+//    PWRMODE(PwrMode{ })
+//   Kinda boilerplate.
+//   Do write(PwrMode) where unambiguous, but fall back to write(PWRMODE(PwrMode))?
+//
+//    construct inner type from values?
+//    POWERMODE {
+//      const addr: 0x002_u16
+//      val: PwrMode
+//    }
+//    impl Into<POWERMODE> for PwrMode {}
+//    write(POWEROFF | TXEN | REFEN)
+//
+//    REG<const A: u16, T> {
+//      const addr: A
+//      val: T
+//    }
+//    impl Into<REG<0x002, PwrMode>> for PwrMode {}
+//
 
 bitflags! {
     #[derive(Clone, Copy, Debug, PartialEq)]
