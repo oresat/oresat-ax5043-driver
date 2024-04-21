@@ -1,8 +1,25 @@
 use crate::*;
+#[cfg(test)] use proptest::prelude::*;
 
 fn div_nearest(dividend: u64, divisor: u64) -> u64 {
     (dividend + (divisor >> 1)) / divisor
 }
+
+#[cfg(test)]
+proptest! {
+    #[test]
+    fn div_even(n: u8) {
+        let v = u64::from(n);
+        assert_eq!(v, div_nearest(v*2, 2));
+    }
+
+    #[test]
+    fn div_odd(n: u8) {
+        let v = u64::from(n);
+        assert_eq!(v+1, div_nearest((v+1)*2, 2));
+    }
+}
+
 
 #[derive(Copy, Clone, Default)]
 pub enum SysClk {
