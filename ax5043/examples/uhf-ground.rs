@@ -119,14 +119,8 @@ pub fn configure_radio_rx(radio: &mut Registers) -> Result<(Board, ChannelParame
     let set0 = RXParameterSet {
         agc: RXParameterAGC::new(&board, &channel),
         gain: RXParameterGain {
-            time: TimeGain {
-                mantissa: 0xF,
-                exponent: 8,
-            },
-            datarate: DRGain {
-                mantissa: 0xF,
-                exponent: 2,
-            },
+            time: Float4 { m: 0xF, e: 8 },
+            datarate: Float4 { m: 0xF, e: 2 },
             phase: 0b0011,
             filter: 0b11,
             baseband: RXParameterFreq {
@@ -151,14 +145,8 @@ pub fn configure_radio_rx(radio: &mut Registers) -> Result<(Board, ChannelParame
     let set1 = RXParameterSet {
         agc: RXParameterAGC::new(&board, &channel),
         gain: RXParameterGain {
-            time: TimeGain {
-                mantissa: 0xF,
-                exponent: 6,
-            },
-            datarate: DRGain {
-                mantissa: 0xF,
-                exponent: 1,
-            },
+            time: Float4 { m: 0xF, e: 6 },
+            datarate: Float4 { m: 0xF, e: 1 },
             phase: 0b0011,
             filter: 0b11,
             baseband: RXParameterFreq {
@@ -183,14 +171,8 @@ pub fn configure_radio_rx(radio: &mut Registers) -> Result<(Board, ChannelParame
     let set3 = RXParameterSet {
         agc: RXParameterAGC::off(),
         gain: RXParameterGain {
-            time: TimeGain {
-                mantissa: 0xF,
-                exponent: 5,
-            },
-            datarate: DRGain {
-                mantissa: 0xF,
-                exponent: 0,
-            },
+            time: Float4 { m: 0xF, e: 5 },
+            datarate: Float4 { m: 0xF, e: 0 },
             phase: 0b0011,
             filter: 0b11,
             baseband: RXParameterFreq {
@@ -225,7 +207,7 @@ pub fn configure_radio_rx(radio: &mut Registers) -> Result<(Board, ChannelParame
         raw: false,
     })?;
     radio.MATCH1MAX().write(0xA)?;
-    radio.TMGRXPREAMBLE2().write(TMG { m: 0x17, e: 0 })?;
+    radio.TMGRXPREAMBLE2().write(Float5 { m: 0x17, e: 0 })?;
 
     radio.PKTMAXLEN().write(0xFF)?;
     radio.PKTLENCFG().write(PktLenCfg { pos: 0, bits: 0xF })?;

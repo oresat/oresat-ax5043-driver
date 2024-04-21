@@ -1206,8 +1206,8 @@ pub struct RXParameterFreq {
 }
 
 pub struct RXParameterGain {
-    pub time: TimeGain,
-    pub datarate: DRGain,
+    pub time: Float4,
+    pub datarate: Float4,
     pub phase: u8,
     pub filter: u8,
     pub baseband: RXParameterFreq,
@@ -1415,7 +1415,6 @@ pub struct PatternMatch0 {
     pub max: u8,
 }
 
-
 impl PatternMatch0 {
     pub fn write(&self, radio: &mut Registers) -> Result<()> {
         // I believe that the bitstream is marched rightward through MATCHxPAT until it matches in
@@ -1460,7 +1459,6 @@ pub struct PatternMatch1 {
     pub max: u8,
 }
 
-
 impl PatternMatch1 {
     pub fn write(&self, radio: &mut Registers) -> Result<()> {
         if self.len > 15 {
@@ -1490,21 +1488,20 @@ impl PatternMatch1 {
     }
 }
 
-
 pub struct Preamble1 {
     pub pattern: PatternMatch1,
-    pub timeout: TMG, // between 0 and 3968 bits
+    pub timeout: Float5, // between 0 and 3968 bits
     pub set: RxParamSet,
 }
 
 pub struct Preamble2 {
     pub pattern: PatternMatch0,
-    pub timeout: TMG, // between 0 and 3968 bits
+    pub timeout: Float5, // between 0 and 3968 bits
     pub set: RxParamSet,
 }
 
 pub struct Preamble3 {
-    pub timeout: TMG, // between 0 and 3968 bits
+    pub timeout: Float5, // between 0 and 3968 bits
     pub set: RxParamSet,
 }
 
@@ -1525,7 +1522,7 @@ impl RXParameterStages {
                 p.pattern.write(radio)?;
                 radio.TMGRXPREAMBLE1().write(p.timeout)?;
             }
-            None => radio.TMGRXPREAMBLE1().write(TMG {m: 0, e: 0})?,
+            None => radio.TMGRXPREAMBLE1().write(Float5::new(0))?,
         }
 
         match &self.preamble2 {
@@ -1533,13 +1530,13 @@ impl RXParameterStages {
                 p.pattern.write(radio)?;
                 radio.TMGRXPREAMBLE2().write(p.timeout)?;
             }
-            None => radio.TMGRXPREAMBLE2().write(TMG {m: 0, e: 0})?,
+            None => radio.TMGRXPREAMBLE2().write(Float5::new(0))?,
         }
         match &self.preamble3 {
             Some(p) => {
                 radio.TMGRXPREAMBLE3().write(p.timeout)?;
             }
-            None => radio.TMGRXPREAMBLE3().write(TMG {m: 0, e: 0})?,
+            None => radio.TMGRXPREAMBLE3().write(Float5::new(0))?,
         }
 
         radio.RXPARAMSETS().write(RxParamSets(

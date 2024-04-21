@@ -35,7 +35,6 @@ impl<const S: usize> Index<Range<usize>> for Reg<S> {
     }
 }
 
-
 impl<const S: usize> From<[u8; S]> for Reg<S> {
     fn from(item: [u8; S]) -> Self {
         Self(item)
@@ -200,6 +199,105 @@ proptest! {
         assert_eq!(n, Reg32::from(n).try_into().unwrap());
     }
 }
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Float<const M: u8> {
+    // m width/e width where m + e = 8
+    // The ax5043 uses both 5/3 and 4/4 formats
+    // 5/3 max value = 31 * 2^7 = 3968
+    // 4/4 max value = 15 * 2^15 = 491520
+    // 2/6 would require u64
+    // 1/7 would require u128, but only represents powers of 2
+    pub m: u8,
+    pub e: u8,
+}
+
+impl<const M: u8> Float<M> {
+    pub fn new(val: u32) -> Self {
+        let msb: u8 = (u32::BITS - val.leading_zeros()).try_into().unwrap();
+        let e = msb.saturating_sub(M); // FIXME: check if greater than e bits
+        let m = (val >> e).try_into().unwrap();
+        Self { m, e }
+    }
+}
+
+impl<const M: u8> From<Float<M>> for u32 {
+    fn from(value: Float<M>) -> Self {
+        u32::from(value.m) * 2u32.pow(value.e.into())
+    }
+}
+
+
+
+impl<const M: u8> fmt::Display for Float<M> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let power = ["⁰", "¹", "²", "³", "⁴", "⁵", "⁶", "⁷", "⁸", "⁹"];
+        write!(f, "{}⋅2{}", self.m, power[usize::from(self.e)])
+    }
+}
+
+pub type Float4 = Float<4>;
+// The AX5043 does Mantissa high for Float4, but Exponent high for Float5
+// so each type needs its own impl
+impl TryFrom<Reg8> for Float4 {
+    type Error = Reg8;
+    fn try_from(item: Reg8) -> Result<Self, Self::Error> {
+        Ok(Self {
+            e: item[0] & ((1 << 4) - 1),
+            m: (item[0] >> 4) & ((1 << (8 - 4)) - 1),
+        })
+    }
+}
+
+impl From<Float4> for Reg8 {
+    fn from(item: Float4) -> Self {
+        (item.e | item.m << 4).into()
+    }
+}
+
+pub type Float5 = Float<5>;
+
+impl TryFrom<Reg8> for Float5 {
+    type Error = Reg8;
+    fn try_from(item: Reg8) -> Result<Self, Self::Error> {
+        Ok(Self {
+            m: item[0] & ((1 << 5) - 1),
+            e: (item[0] >> 5) & ((1 << (8 - 5)) - 1),
+        })
+    }
+}
+
+impl From<Float5> for Reg8 {
+    fn from(item: Float5) -> Self {
+        (item.m | item.e << 5).into()
+    }
+}
+
+#[cfg(test)]
+proptest! {
+    #[test]
+    fn float4_convert(n: u32) {
+        let shift = (u32::BITS - n.leading_zeros()).saturating_sub(4);
+        assert_eq!(n & 0xF << shift, Float4::new(n).into());
+    }
+
+    #[test]
+    fn float5_convert(n: u32) {
+        let shift = (u32::BITS - n.leading_zeros()).saturating_sub(5);
+        assert_eq!(n & 0x1F << shift, Float5::new(n).into());
+    }
+}
+
+#[test]
+fn float4_zero() {
+    assert_eq!(0u32, Float4::new(0).into());
+}
+
+#[test]
+fn float5_zero() {
+    assert_eq!(0u32, Float5::new(0).into());
+}
+
 
 #[derive(Clone, Copy, Debug, PartialEq, IntoPrimitive, TryFromPrimitive)]
 #[cfg_attr(test, derive(Arbitrary))]
@@ -1431,7 +1529,6 @@ impl TryFrom<Reg<16>> for RXTracking {
     }
 }
 
-
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct MaxRFOffset {
     pub offset: u32,
@@ -1576,49 +1673,6 @@ impl TryFrom<Reg8> for AGCMinMax {
 impl From<AGCMinMax> for Reg8 {
     fn from(item: AGCMinMax) -> Self {
         (item.min | item.max << 3).into()
-    }
-}
-
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub struct TimeGain {
-    pub exponent: u8,
-    pub mantissa: u8,
-}
-
-impl TryFrom<Reg8> for TimeGain {
-    type Error = Reg8;
-    fn try_from(item: Reg8) -> Result<Self, Self::Error> {
-        Ok(Self {
-            exponent: item[0] & 0x0F,
-            mantissa: (item[0] & 0xF0) >> 4,
-        })
-    }
-}
-
-impl From<TimeGain> for Reg8 {
-    fn from(item: TimeGain) -> Self {
-        (item.exponent | item.mantissa << 4).into()
-    }
-}
-
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub struct DRGain {
-    pub exponent: u8,
-    pub mantissa: u8,
-}
-
-impl TryFrom<Reg8> for DRGain {
-    type Error = Reg8;
-    fn try_from(item: Reg8) -> Result<Self, Self::Error> {
-        Ok(Self {
-            exponent: item[0] & 0x0F,
-            mantissa: (item[0] & 0xF0) >> 4,
-        })
-    }
-}
-impl From<DRGain> for Reg8 {
-    fn from(item: DRGain) -> Self {
-        (item.exponent | item.mantissa << 4).into()
     }
 }
 
@@ -2062,36 +2116,6 @@ impl TryFrom<Reg8> for MatchLen {
 impl From<MatchLen> for Reg8 {
     fn from(item: MatchLen) -> Self {
         (item.len | if item.raw { 0x80 } else { 0 }).into()
-    }
-}
-
-// FIXME: merge with TimeGain, parameterize over m width
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub struct TMG {
-    pub e: u8,
-    pub m: u8,
-}
-
-impl TryFrom<Reg8> for TMG {
-    type Error = Reg8;
-    fn try_from(item: Reg8) -> Result<Self, Self::Error> {
-        Ok(Self {
-            m: item[0] & 0x1F,
-            e: (item[0] >> 5) & 0x7,
-        })
-    }
-}
-
-impl From<TMG> for Reg8 {
-    fn from(item: TMG) -> Self {
-        (item.m | item.e << 5).into()
-    }
-}
-
-impl fmt::Display for TMG {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let power = ["⁰", "¹", "²", "³", "⁴", "⁵", "⁶", "⁷", "⁸", "⁹"];
-        write!(f, "{}⋅2{}", self.m, power[usize::from(self.e)])
     }
 }
 

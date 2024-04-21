@@ -456,8 +456,8 @@ registers! {
         AGCTARGET0:     u8          [0x121, 1, ReadWrite], // AGC Target
         AGCAHYST0:      AGCHyst     [0x122, 1, ReadWrite], // AGC Digital Threshold Range
         AGCMINMAX0:     AGCMinMax   [0x123, 1, ReadWrite], // AGC Digital Minimum/Maximum Set Points
-        TIMEGAIN0:      TimeGain    [0x124, 1, ReadWrite], // Timing Gain
-        DRGAIN0:        DRGain      [0x125, 1, ReadWrite], // Data Rate Gain
+        TIMEGAIN0:      Float4      [0x124, 1, ReadWrite], // Timing Gain
+        DRGAIN0:        Float4      [0x125, 1, ReadWrite], // Data Rate Gain
         PHASEGAIN0:     PhaseGain   [0x126, 1, ReadWrite], // Filter Index, Phase Gain
         FREQGAINA0:     FreqGainA   [0x127, 1, ReadWrite], // Frequency Gain A
         FREQGAINB0:     FreqGainB   [0x128, 1, ReadWrite], // Frequency Gain B
@@ -472,8 +472,8 @@ registers! {
         AGCTARGET1:     u8          [0x131, 1, ReadWrite], // AGC Target
         AGCAHYST1:      AGCHyst     [0x132, 1, ReadWrite], // AGC Digital Threshold Range
         AGCMINMAX1:     AGCMinMax   [0x133, 1, ReadWrite], // AGC Digital Minimum/Maximum Set Points
-        TIMEGAIN1:      TimeGain    [0x134, 1, ReadWrite], // Timing Gain
-        DRGAIN1:        DRGain      [0x135, 1, ReadWrite], // Data Rate Gain
+        TIMEGAIN1:      Float4      [0x134, 1, ReadWrite], // Timing Gain
+        DRGAIN1:        Float4      [0x135, 1, ReadWrite], // Data Rate Gain
         PHASEGAIN1:     PhaseGain   [0x136, 1, ReadWrite], // Filter Index, Phase Gain
         FREQGAINA1:     FreqGainA   [0x137, 1, ReadWrite], // Frequency Gain A
         FREQGAINB1:     FreqGainB   [0x138, 1, ReadWrite], // Frequency Gain B
@@ -488,8 +488,8 @@ registers! {
         AGCTARGET2:     u8          [0x141, 1, ReadWrite], // AGC Target
         AGCAHYST2:      AGCHyst     [0x142, 1, ReadWrite], // AGC Digital Threshold Range
         AGCMINMAX2:     AGCMinMax   [0x143, 1, ReadWrite], // AGC Digital Minimum/Maximum Set Points
-        TIMEGAIN2:      TimeGain    [0x144, 1, ReadWrite], // Timing Gain
-        DRGAIN2:        DRGain      [0x145, 1, ReadWrite], // Data Rate Gain
+        TIMEGAIN2:      Float4      [0x144, 1, ReadWrite], // Timing Gain
+        DRGAIN2:        Float4      [0x145, 1, ReadWrite], // Data Rate Gain
         PHASEGAIN2:     PhaseGain   [0x146, 1, ReadWrite], // Filter Index, Phase Gain
         FREQGAINA2:     FreqGainA   [0x147, 1, ReadWrite], // Frequency Gain A
         FREQGAINB2:     FreqGainB   [0x148, 1, ReadWrite], // Frequency Gain B
@@ -504,8 +504,8 @@ registers! {
         AGCTARGET3:     u8          [0x151, 1,ReadWrite],  // AGC Target
         AGCAHYST3:      AGCHyst     [0x152, 1,ReadWrite],  // AGC Digital Threshold Range
         AGCMINMAX3:     AGCMinMax   [0x153, 1,ReadWrite],  // AGC Digital Minimum/Maximum Set Points
-        TIMEGAIN3:      TimeGain    [0x154, 1,ReadWrite],  // Timing Gain
-        DRGAIN3:        DRGain      [0x155, 1,ReadWrite],  // Data Rate Gain
+        TIMEGAIN3:      Float4      [0x154, 1,ReadWrite],  // Timing Gain
+        DRGAIN3:        Float4      [0x155, 1,ReadWrite],  // Data Rate Gain
         PHASEGAIN3:     PhaseGain   [0x156, 1,ReadWrite],  // Filter Index, Phase Gain
         FREQGAINA3:     FreqGainA   [0x157, 1,ReadWrite],  // Frequency Gain A
         FREQGAINB3:     FreqGainB   [0x158, 1,ReadWrite],  // Frequency Gain B
@@ -553,17 +553,17 @@ registers! {
         MATCH1MIN:      u8          [0x21D, 1, ReadWrite], // Pattern Match Unit 1, Minimum Match
         MATCH1MAX:      u8          [0x21E, 1, ReadWrite], // Pattern Match Unit 1, Maximum Match
         /* Packet Controller */
-        TMGTXBOOST:     TMG         [0x220, 1, ReadWrite], // Transmit PLL Boost Time
-        TMGTXSETTLE:    TMG         [0x221, 1, ReadWrite], // Transmit PLL (post Boost) Settling Time
-        TMGRXBOOST:     TMG         [0x223, 1, ReadWrite], // Receive PLL Boost Time
-        TMGRXSETTLE:    TMG         [0x224, 1, ReadWrite], // Receive PLL (post Boost) Settling Time
-        TMGRXOFFSACQ:   TMG         [0x225, 1, ReadWrite], // Receive Baseband DC Offset Acquisition Time
-        TMGRXCOARSEAGC: TMG         [0x226, 1, ReadWrite], // Receive Coarse AGC Time
-        TMGRXAGC:       TMG         [0x227, 1, ReadWrite], // Receiver AGC Settling Time
-        TMGRXRSSI:      TMG         [0x228, 1, ReadWrite], // Receiver RSSI Settling Time
-        TMGRXPREAMBLE1: TMG         [0x229, 1, ReadWrite], // Receiver Preamble 1 Timeout
-        TMGRXPREAMBLE2: TMG         [0x22A, 1, ReadWrite], // Receiver Preamble 2 Timeout
-        TMGRXPREAMBLE3: TMG         [0x22B, 1, ReadWrite], // Receiver Preamble 3 Timeout
+        TMGTXBOOST:     Float5      [0x220, 1, ReadWrite], // Transmit PLL Boost Time
+        TMGTXSETTLE:    Float5      [0x221, 1, ReadWrite], // Transmit PLL (post Boost) Settling Time
+        TMGRXBOOST:     Float5      [0x223, 1, ReadWrite], // Receive PLL Boost Time
+        TMGRXSETTLE:    Float5      [0x224, 1, ReadWrite], // Receive PLL (post Boost) Settling Time
+        TMGRXOFFSACQ:   Float5      [0x225, 1, ReadWrite], // Receive Baseband DC Offset Acquisition Time
+        TMGRXCOARSEAGC: Float5      [0x226, 1, ReadWrite], // Receive Coarse AGC Time
+        TMGRXAGC:       Float5      [0x227, 1, ReadWrite], // Receiver AGC Settling Time
+        TMGRXRSSI:      Float5      [0x228, 1, ReadWrite], // Receiver RSSI Settling Time
+        TMGRXPREAMBLE1: Float5      [0x229, 1, ReadWrite], // Receiver Preamble 1 Timeout
+        TMGRXPREAMBLE2: Float5      [0x22A, 1, ReadWrite], // Receiver Preamble 2 Timeout
+        TMGRXPREAMBLE3: Float5      [0x22B, 1, ReadWrite], // Receiver Preamble 3 Timeout
         RSSIREFERENCE:  i8          [0x22C, 1, ReadWrite], // RSSI Offset
         RSSIABSTHR:     u8          [0x22D, 1, ReadWrite], // RSSI Absolute Threshold
         BGNDRSSIGAIN:   u8          [0x22E, 1, ReadWrite], // Background RSSI Averaging Time Constant
@@ -789,14 +789,8 @@ impl Registers<'_> {
             AGCTARGET0: 0x76,
             AGCAHYST0: AGCHyst { hyst: 0 },
             AGCMINMAX0: AGCMinMax { min: 0, max: 0 },
-            TIMEGAIN0: TimeGain {
-                exponent: 0x8,
-                mantissa: 0xF,
-            },
-            DRGAIN0: DRGain {
-                exponent: 2,
-                mantissa: 0xF,
-            },
+            TIMEGAIN0: Float4 { e: 0x8, m: 0xF },
+            DRGAIN0: Float4 { e: 2, m: 0xF },
             PHASEGAIN0: PhaseGain { gain: 3, filter: 3 },
             FREQGAINA0: FreqGainA {
                 gain: 0xF,
@@ -831,14 +825,8 @@ impl Registers<'_> {
             AGCTARGET1: 0x76,
             AGCAHYST1: AGCHyst { hyst: 0 },
             AGCMINMAX1: AGCMinMax { min: 0, max: 0 },
-            TIMEGAIN1: TimeGain {
-                exponent: 0x6,
-                mantissa: 0xF,
-            },
-            DRGAIN1: DRGain {
-                exponent: 0x1,
-                mantissa: 0xF,
-            },
+            TIMEGAIN1: Float4 { e: 0x6, m: 0xF },
+            DRGAIN1: Float4 { e: 0x1, m: 0xF },
             PHASEGAIN1: PhaseGain { gain: 3, filter: 3 },
             FREQGAINA1: FreqGainA {
                 gain: 0xF,
@@ -873,14 +861,8 @@ impl Registers<'_> {
             AGCTARGET2: 0x76,
             AGCAHYST2: AGCHyst { hyst: 0 },
             AGCMINMAX2: AGCMinMax { min: 0, max: 0 },
-            TIMEGAIN2: TimeGain {
-                exponent: 0x5,
-                mantissa: 0xF,
-            },
-            DRGAIN2: DRGain {
-                exponent: 0x0,
-                mantissa: 0xF,
-            },
+            TIMEGAIN2: Float4 { e: 0x5, m: 0xF },
+            DRGAIN2: Float4 { e: 0x0, m: 0xF },
             PHASEGAIN2: PhaseGain { gain: 3, filter: 3 },
             FREQGAINA2: FreqGainA {
                 gain: 0xF,
@@ -915,14 +897,8 @@ impl Registers<'_> {
             AGCTARGET3: 0x76,
             AGCAHYST3: AGCHyst { hyst: 0 },
             AGCMINMAX3: AGCMinMax { min: 0, max: 0 },
-            TIMEGAIN3: TimeGain {
-                exponent: 0x5,
-                mantissa: 0xF,
-            },
-            DRGAIN3: DRGain {
-                exponent: 0x0,
-                mantissa: 0xF,
-            },
+            TIMEGAIN3: Float4 { e: 0x5, m: 0xF },
+            DRGAIN3: Float4 { e: 0x0, m: 0xF },
             PHASEGAIN3: PhaseGain { gain: 3, filter: 3 },
             FREQGAINA3: FreqGainA {
                 gain: 0xF,
@@ -993,17 +969,17 @@ impl Registers<'_> {
             MATCH1LEN: MatchLen { len: 0, raw: false },
             MATCH1MIN: 0,
             MATCH1MAX: 0xF,
-            TMGTXBOOST: TMG { e: 1, m: 0x12 },
-            TMGTXSETTLE: TMG { e: 0, m: 0x0A },
-            TMGRXBOOST: TMG { e: 1, m: 0x12 },
-            TMGRXSETTLE: TMG { e: 0, m: 0x14 },
-            TMGRXOFFSACQ: TMG { e: 3, m: 0x13 },
-            TMGRXCOARSEAGC: TMG { e: 1, m: 0x19 },
-            TMGRXAGC: TMG { e: 0, m: 0 },
-            TMGRXRSSI: TMG { e: 0, m: 0 },
-            TMGRXPREAMBLE1: TMG { e: 0, m: 0 },
-            TMGRXPREAMBLE2: TMG { e: 0, m: 0 },
-            TMGRXPREAMBLE3: TMG { e: 0, m: 0 },
+            TMGTXBOOST: Float5 { e: 1, m: 0x12 },
+            TMGTXSETTLE: Float5 { e: 0, m: 0x0A },
+            TMGRXBOOST: Float5 { e: 1, m: 0x12 },
+            TMGRXSETTLE: Float5 { e: 0, m: 0x14 },
+            TMGRXOFFSACQ: Float5 { e: 3, m: 0x13 },
+            TMGRXCOARSEAGC: Float5 { e: 1, m: 0x19 },
+            TMGRXAGC: Float5 { e: 0, m: 0 },
+            TMGRXRSSI: Float5 { e: 0, m: 0 },
+            TMGRXPREAMBLE1: Float5 { e: 0, m: 0 },
+            TMGRXPREAMBLE2: Float5 { e: 0, m: 0 },
+            TMGRXPREAMBLE3: Float5 { e: 0, m: 0 },
             RSSIREFERENCE: 0,
             RSSIABSTHR: 0,
             BGNDRSSIGAIN: 0,

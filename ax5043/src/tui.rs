@@ -84,17 +84,17 @@ impl PacketFormat {
 }
 
 pub struct PacketController {
-    tmg_tx_boost: TMG,
-    tmg_tx_settle: TMG,
-    tmg_rx_boost: TMG,
-    tmg_rx_settle: TMG,
-    tmg_rx_offsacq: TMG,
-    tmg_rx_coarseagc: TMG,
-    tmg_rx_agc: TMG,
-    tmg_rx_rssi: TMG,
-    tmg_rx_preamble1: TMG,
-    tmg_rx_preamble2: TMG,
-    tmg_rx_preamble3: TMG,
+    tmg_tx_boost: Float5,
+    tmg_tx_settle: Float5,
+    tmg_rx_boost: Float5,
+    tmg_rx_settle: Float5,
+    tmg_rx_offsacq: Float5,
+    tmg_rx_coarseagc: Float5,
+    tmg_rx_agc: Float5,
+    tmg_rx_rssi: Float5,
+    tmg_rx_preamble1: Float5,
+    tmg_rx_preamble2: Float5,
+    tmg_rx_preamble3: Float5,
     rssi_reference: i8,
     rssi_abs_thr: u8,
     bgnd_rssi_gain: u8,
@@ -108,17 +108,17 @@ pub struct PacketController {
 impl Default for PacketController {
     fn default() -> Self {
         Self {
-            tmg_tx_boost: TMG { e: 0, m: 0 },
-            tmg_tx_settle: TMG { e: 0, m: 0 },
-            tmg_rx_boost: TMG { e: 0, m: 0 },
-            tmg_rx_settle: TMG { e: 0, m: 0 },
-            tmg_rx_offsacq: TMG { e: 0, m: 0 },
-            tmg_rx_coarseagc: TMG { e: 0, m: 0 },
-            tmg_rx_agc: TMG { e: 0, m: 0 },
-            tmg_rx_rssi: TMG { e: 0, m: 0 },
-            tmg_rx_preamble1: TMG { e: 0, m: 0 },
-            tmg_rx_preamble2: TMG { e: 0, m: 0 },
-            tmg_rx_preamble3: TMG { e: 0, m: 0 },
+            tmg_tx_boost: Float5::new(0),
+            tmg_tx_settle: Float5::new(0),
+            tmg_rx_boost: Float5::new(0),
+            tmg_rx_settle: Float5::new(0),
+            tmg_rx_offsacq: Float5::new(0),
+            tmg_rx_coarseagc: Float5::new(0),
+            tmg_rx_agc: Float5::new(0),
+            tmg_rx_rssi: Float5::new(0),
+            tmg_rx_preamble1: Float5::new(0),
+            tmg_rx_preamble2: Float5::new(0),
+            tmg_rx_preamble3: Float5::new(0),
             rssi_reference: 0,
             rssi_abs_thr: 0,
             bgnd_rssi_gain: 0,
@@ -418,8 +418,8 @@ impl RXParameterSet {
                 max: agcmina.max,
             },
             gain: RXParameterGain {
-                time: timegan.exponent,
-                rate: dargain.exponent,
+                time: timegan.e,
+                rate: dargain.e,
                 phase: phasegn.gain,
                 filter: phasegn.filter,
                 baseband: RXParameterFreq {
@@ -458,8 +458,8 @@ impl RXParameterSet {
                 max: agcmina.max,
             },
             gain: RXParameterGain {
-                time: timegan.exponent,
-                rate: dargain.exponent,
+                time: timegan.e,
+                rate: dargain.e,
                 phase: phasegn.gain,
                 filter: phasegn.filter,
                 baseband: RXParameterFreq {
@@ -498,8 +498,8 @@ impl RXParameterSet {
                 max: agcmina.max,
             },
             gain: RXParameterGain {
-                time: timegan.exponent,
-                rate: dargain.exponent,
+                time: timegan.e,
+                rate: dargain.e,
                 phase: phasegn.gain,
                 filter: phasegn.filter,
                 baseband: RXParameterFreq {
@@ -538,8 +538,8 @@ impl RXParameterSet {
                 max: agcmina.max,
             },
             gain: RXParameterGain {
-                time: timegan.exponent,
-                rate: dargain.exponent,
+                time: timegan.e,
+                rate: dargain.e,
                 phase: phasegn.gain,
                 filter: phasegn.filter,
                 baseband: RXParameterFreq {

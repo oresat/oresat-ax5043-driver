@@ -127,14 +127,8 @@ pub fn configure_radio_rx(radio: &mut Registers) -> Result<(Board, ChannelParame
     RXParameterSet {
         agc: RXParameterAGC::new(&board, &channel),
         gain: RXParameterGain {
-            time: TimeGain {
-                mantissa: 0xF,
-                exponent: 8,
-            },
-            datarate: DRGain {
-                mantissa: 0xF,
-                exponent: 2,
-            },
+            time: Float4 { m: 0xF, e: 8 },
+            datarate: Float4 { m: 0xF, e: 2 },
             phase: 0b0011,
             filter: 0b11,
             baseband: RXParameterFreq {
@@ -159,14 +153,8 @@ pub fn configure_radio_rx(radio: &mut Registers) -> Result<(Board, ChannelParame
     RXParameterSet {
         agc: RXParameterAGC::new(&board, &channel),
         gain: RXParameterGain {
-            time: TimeGain {
-                mantissa: 0xF,
-                exponent: 6,
-            },
-            datarate: DRGain {
-                mantissa: 0xF,
-                exponent: 1,
-            },
+            time: Float4 { m: 0xF, e: 6 },
+            datarate: Float4 { m: 0xF, e: 1 },
             phase: 0b0011,
             filter: 0b11,
             baseband: RXParameterFreq {
@@ -189,16 +177,10 @@ pub fn configure_radio_rx(radio: &mut Registers) -> Result<(Board, ChannelParame
 
     // Set 3
     RXParameterSet {
-        agc: RXParameterAGC::off(),
+        agc: RXParameterAGC::new(&board, &channel),
         gain: RXParameterGain {
-            time: TimeGain {
-                mantissa: 0xF,
-                exponent: 5,
-            },
-            datarate: DRGain {
-                mantissa: 0xF,
-                exponent: 0,
-            },
+            time: Float4 { m: 0xF, e: 5 },
+            datarate: Float4 { m: 0xF, e: 0 },
             phase: 0b0011,
             filter: 0b11,
             baseband: RXParameterFreq {
@@ -228,7 +210,7 @@ pub fn configure_radio_rx(radio: &mut Registers) -> Result<(Board, ChannelParame
                 min: 0,
                 max: 15,
             },
-            timeout: TMG { m: 0x17, e: 5},
+            timeout: Float5 { m: 0x17, e: 5 },
             set: RxParamSet::Set0,
         }),
         preamble2: Some(Preamble2 {
@@ -239,7 +221,7 @@ pub fn configure_radio_rx(radio: &mut Registers) -> Result<(Board, ChannelParame
                 min: 0,
                 max: 31,
             },
-            timeout: TMG { m: 0x17, e: 0 },
+            timeout: Float5 { m: 0x17, e: 0 },
             set: RxParamSet::Set1,
         }),
         preamble3: None,

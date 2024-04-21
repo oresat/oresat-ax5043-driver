@@ -117,14 +117,8 @@ pub fn configure_radio_rx(radio: &mut Registers) -> Result<(Board, ChannelParame
     let set0 = RXParameterSet {
         agc: RXParameterAGC::new(&board, &channel),
         gain: RXParameterGain {
-            time: TimeGain {
-                mantissa: 0xA,
-                exponent: 9,
-            },
-            datarate: DRGain {
-                mantissa: 0xA,
-                exponent: 3,
-            },
+            time: Float4 { m: 0xA, e: 9 },
+            datarate: Float4 { m: 0xA, e: 3 },
             phase: 0b0011,
             filter: 0b10,
             baseband: RXParameterFreq {
@@ -149,14 +143,8 @@ pub fn configure_radio_rx(radio: &mut Registers) -> Result<(Board, ChannelParame
     let set1 = RXParameterSet {
         agc: RXParameterAGC::new(&board, &channel),
         gain: RXParameterGain {
-            time: TimeGain {
-                mantissa: 0xA,
-                exponent: 7,
-            },
-            datarate: DRGain {
-                mantissa: 0xA,
-                exponent: 2,
-            },
+            time: Float4 { m: 0xA, e: 7 },
+            datarate: Float4 { m: 0xA, e: 2 },
             phase: 0b0011,
             filter: 0b10,
             baseband: RXParameterFreq {
@@ -181,14 +169,8 @@ pub fn configure_radio_rx(radio: &mut Registers) -> Result<(Board, ChannelParame
     let set3 = RXParameterSet {
         agc: RXParameterAGC::off(),
         gain: RXParameterGain {
-            time: TimeGain {
-                mantissa: 0xA,
-                exponent: 6,
-            },
-            datarate: DRGain {
-                mantissa: 0xA,
-                exponent: 1,
-            },
+            time: Float4 { m: 0xA, e: 6 },
+            datarate: Float4 { m: 0xA, e: 1 },
             phase: 0b0011,
             filter: 0b10,
             baseband: RXParameterFreq {
@@ -232,7 +214,7 @@ pub fn configure_radio_rx(radio: &mut Registers) -> Result<(Board, ChannelParame
     pattern1.write(radio)?;
 
     // TODO: set TMGRXPREAMBLEx off of expected bitrate + preamble length?
-    radio.TMGRXPREAMBLE2().write(TMG { m: 0x17, e: 0 })?;
+    radio.TMGRXPREAMBLE2().write(Float5 { m: 0x17, e: 0 })?;
 
     radio.PKTMAXLEN().write(0xFF)?;
     radio.PKTLENCFG().write(PktLenCfg { pos: 0, bits: 0xF })?;
