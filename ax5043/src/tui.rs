@@ -44,37 +44,40 @@ impl PacketFormat {
     }
 
     pub fn widget<'a>(&self) -> Table<'a> {
-        Table::new(vec![
-            Row::new(vec![
-                Cell::from("Addr pos"),
-                Cell::from("Addr flags"),
-                Cell::from("len pos"),
-                Cell::from("len bits"),
-            ]),
-            Row::new(vec![
-                Cell::from(format!("{}", self.addrcfg.addr_pos)),
-                Cell::from(format!("{:?}", self.addrcfg.flags)),
-                Cell::from(self.lencfg.pos.to_string()),
-                Cell::from(self.lencfg.bits.to_string()),
-            ]),
-            Row::new(vec![
-                Cell::from("Addr"),
-                Cell::from("Mask"),
-                Cell::from("len off"),
-                Cell::from("len max"),
-            ]),
-            Row::new(vec![
-                Cell::from(self.addr.to_string()),
-                Cell::from(self.addrmask.to_string()),
-                Cell::from(self.lenoffset.to_string()),
-                Cell::from(self.maxlen.to_string()),
-            ]),
-        ], [
-            Constraint::Max(10),
-            Constraint::Min(30),
-            Constraint::Min(10),
-            Constraint::Min(10),
-        ])
+        Table::new(
+            vec![
+                Row::new(vec![
+                    Cell::from("Addr pos"),
+                    Cell::from("Addr flags"),
+                    Cell::from("len pos"),
+                    Cell::from("len bits"),
+                ]),
+                Row::new(vec![
+                    Cell::from(format!("{}", self.addrcfg.addr_pos)),
+                    Cell::from(format!("{:?}", self.addrcfg.flags)),
+                    Cell::from(self.lencfg.pos.to_string()),
+                    Cell::from(self.lencfg.bits.to_string()),
+                ]),
+                Row::new(vec![
+                    Cell::from("Addr"),
+                    Cell::from("Mask"),
+                    Cell::from("len off"),
+                    Cell::from("len max"),
+                ]),
+                Row::new(vec![
+                    Cell::from(self.addr.to_string()),
+                    Cell::from(self.addrmask.to_string()),
+                    Cell::from(self.lenoffset.to_string()),
+                    Cell::from(self.maxlen.to_string()),
+                ]),
+            ],
+            [
+                Constraint::Max(10),
+                Constraint::Min(30),
+                Constraint::Min(10),
+                Constraint::Min(10),
+            ],
+        )
         .block(
             Block::default()
                 .borders(Borders::ALL)
@@ -156,96 +159,100 @@ impl PacketController {
         })
     }
 
-    pub fn widget(&self, f: &mut Frame, area: Rect){
+    pub fn widget(&self, f: &mut Frame, area: Rect) {
         let layout = Layout::default()
             .direction(Direction::Vertical)
             .margin(0)
             .constraints([Constraint::Min(4), Constraint::Min(2)].as_ref())
             .split(area);
 
+        let upper = Table::new(
+            vec![
+                Row::new(vec![
+                    Cell::from("TX Boost"),
+                    Cell::from("Settle"),
+                    Cell::from("RX Boost"),
+                    Cell::from("Settle"),
+                    Cell::from("ACQ Offs"),
+                    Cell::from("Coarse AGC"),
+                    Cell::from("AGC"),
+                    Cell::from("RSSI"),
+                    Cell::from("Pmbl 1"),
+                    Cell::from("2"),
+                    Cell::from("3"),
+                ]),
+                Row::new(vec![
+                    Cell::from(self.tmg_tx_boost.to_string()),
+                    Cell::from(self.tmg_tx_settle.to_string()),
+                    Cell::from(self.tmg_rx_boost.to_string()),
+                    Cell::from(self.tmg_rx_settle.to_string()),
+                    Cell::from(self.tmg_rx_offsacq.to_string()),
+                    Cell::from(self.tmg_rx_coarseagc.to_string()),
+                    Cell::from(self.tmg_rx_agc.to_string()),
+                    Cell::from(self.tmg_rx_rssi.to_string()),
+                    Cell::from(self.tmg_rx_preamble1.to_string()),
+                    Cell::from(self.tmg_rx_preamble2.to_string()),
+                    Cell::from(self.tmg_rx_preamble3.to_string()),
+                ]),
+                Row::new(vec![
+                    Cell::from("RSSI Ref"),
+                    Cell::from("Abs Thr"),
+                    Cell::from("BGND Gain"),
+                    Cell::from("BGND thr"),
+                    Cell::from("Chunk"),
+                ]),
+                Row::new(vec![
+                    Cell::from(self.rssi_reference.to_string()),
+                    Cell::from(self.rssi_abs_thr.to_string()),
+                    Cell::from(self.bgnd_rssi_gain.to_string()),
+                    Cell::from(self.bgnd_rssi_thr.to_string()),
+                    Cell::from(self.pkt_chunk_size.to_string()),
+                ]),
+            ],
+            [
+                Constraint::Max(10),
+                Constraint::Max(10),
+                Constraint::Max(10),
+                Constraint::Max(10),
+                Constraint::Max(10),
+                Constraint::Max(10),
+                Constraint::Max(10),
+                Constraint::Max(10),
+                Constraint::Max(10),
+                Constraint::Max(6),
+                Constraint::Max(6),
+                Constraint::Max(6),
+            ],
+        );
 
-        let upper = Table::new(vec![
-            Row::new(vec![
-                Cell::from("TX Boost"),
-                Cell::from("Settle"),
-                Cell::from("RX Boost"),
-                Cell::from("Settle"),
-                Cell::from("ACQ Offs"),
-                Cell::from("Coarse AGC"),
-                Cell::from("AGC"),
-                Cell::from("RSSI"),
-                Cell::from("Pmbl 1"),
-                Cell::from("2"),
-                Cell::from("3"),
-            ]),
-            Row::new(vec![
-                Cell::from(self.tmg_tx_boost.to_string()),
-                Cell::from(self.tmg_tx_settle.to_string()),
-                Cell::from(self.tmg_rx_boost.to_string()),
-                Cell::from(self.tmg_rx_settle.to_string()),
-                Cell::from(self.tmg_rx_offsacq.to_string()),
-                Cell::from(self.tmg_rx_coarseagc.to_string()),
-                Cell::from(self.tmg_rx_agc.to_string()),
-                Cell::from(self.tmg_rx_rssi.to_string()),
-                Cell::from(self.tmg_rx_preamble1.to_string()),
-                Cell::from(self.tmg_rx_preamble2.to_string()),
-                Cell::from(self.tmg_rx_preamble3.to_string()),
-            ]),
-            Row::new(vec![
-                Cell::from("RSSI Ref"),
-                Cell::from("Abs Thr"),
-                Cell::from("BGND Gain"),
-                Cell::from("BGND thr"),
-                Cell::from("Chunk"),
-            ]),
-            Row::new(vec![
-                Cell::from(self.rssi_reference.to_string()),
-                Cell::from(self.rssi_abs_thr.to_string()),
-                Cell::from(self.bgnd_rssi_gain.to_string()),
-                Cell::from(self.bgnd_rssi_thr.to_string()),
-                Cell::from(self.pkt_chunk_size.to_string()),
-            ]),
-        ], [
-            Constraint::Max(10),
-            Constraint::Max(10),
-            Constraint::Max(10),
-            Constraint::Max(10),
-            Constraint::Max(10),
-            Constraint::Max(10),
-            Constraint::Max(10),
-            Constraint::Max(10),
-            Constraint::Max(10),
-            Constraint::Max(6),
-            Constraint::Max(6),
-            Constraint::Max(6),
-        ]);
-
-        let lower = Table::new(vec![
-            Row::new(vec![
-                Cell::from("Misc Flag"),
-                Cell::from("Store Flg"),
-                Cell::from("Acc Flags"),
-            ]),
-            Row::new(vec![
-                Cell::from(format!("{:?}", self.pkt_misc_flags)),
-                Cell::from(format!("{:?}", self.pkt_store_flags)),
-                Cell::from(format!("{:?}", self.pkt_accept_flags)),
-            ]),
-        ], [
-            Constraint::Max(30),
-            Constraint::Max(30),
-            Constraint::Max(50),
-        ]);
+        let lower = Table::new(
+            vec![
+                Row::new(vec![
+                    Cell::from("Misc Flag"),
+                    Cell::from("Store Flg"),
+                    Cell::from("Acc Flags"),
+                ]),
+                Row::new(vec![
+                    Cell::from(format!("{:?}", self.pkt_misc_flags)),
+                    Cell::from(format!("{:?}", self.pkt_store_flags)),
+                    Cell::from(format!("{:?}", self.pkt_accept_flags)),
+                ]),
+            ],
+            [
+                Constraint::Max(30),
+                Constraint::Max(30),
+                Constraint::Max(50),
+            ],
+        );
 
         f.render_widget(upper, layout[0]);
         f.render_widget(lower, layout[1]);
         //FIXME: border?
-//       .block(
-//            Block::default()
-//                .borders(Borders::ALL)
-//                .title("Packet Controller"),
-//        )
-
+        // .block(
+        //      Block::default()
+        //          .borders(Borders::ALL)
+        //          .title("Packet Controller"),
+        //  )
     }
 }
 
@@ -317,43 +324,42 @@ impl Synthesizer {
          * freq a/b
          */
 
-        Table::new(vec![
-            Row::new(vec![
-                Cell::from(""),
-                Cell::from("Freq"),
-                Cell::from("Ranging"),
-            ]),
-            Row::new(vec![
-                Cell::from("A"),
-                Cell::from(format!("{} Hz", self.freqa)),
-                Cell::from(format!("{:?}", self.ranginga)),
-            ]),
-            Row::new(vec![
-                Cell::from("B"),
-                Cell::from(format!("{} Hz", self.freqb)),
-                Cell::from(format!("{:?}", self.rangingb)),
-            ]),
-            Row::new(vec![Cell::from(""), Cell::from("CPI"), Cell::from("Loop")]),
-            Row::new(vec![
-                Cell::from("PLL"),
-                Cell::from(format!("{:?}", self.cpi)),
-                Cell::from(format!("{:?}", self.pllloop)),
-            ]),
-            Row::new(vec![
-                Cell::from("Boost"),
-                Cell::from(format!("{:?}", self.cpiboost)),
-                Cell::from(format!("{:?}", self.pllloopboost)),
-            ]),
-            Row::new(vec![
-                Cell::from(""),
-                Cell::from(""),
-                Cell::from(format!("{:?}", self.vcodiv)),
-            ]),
-        ], [
-            Constraint::Max(5),
-            Constraint::Max(13),
-            Constraint::Max(80)
-        ])
+        Table::new(
+            vec![
+                Row::new(vec![
+                    Cell::from(""),
+                    Cell::from("Freq"),
+                    Cell::from("Ranging"),
+                ]),
+                Row::new(vec![
+                    Cell::from("A"),
+                    Cell::from(format!("{} Hz", self.freqa)),
+                    Cell::from(format!("{:?}", self.ranginga)),
+                ]),
+                Row::new(vec![
+                    Cell::from("B"),
+                    Cell::from(format!("{} Hz", self.freqb)),
+                    Cell::from(format!("{:?}", self.rangingb)),
+                ]),
+                Row::new(vec![Cell::from(""), Cell::from("CPI"), Cell::from("Loop")]),
+                Row::new(vec![
+                    Cell::from("PLL"),
+                    Cell::from(format!("{:?}", self.cpi)),
+                    Cell::from(format!("{:?}", self.pllloop)),
+                ]),
+                Row::new(vec![
+                    Cell::from("Boost"),
+                    Cell::from(format!("{:?}", self.cpiboost)),
+                    Cell::from(format!("{:?}", self.pllloopboost)),
+                ]),
+                Row::new(vec![
+                    Cell::from(""),
+                    Cell::from(""),
+                    Cell::from(format!("{:?}", self.vcodiv)),
+                ]),
+            ],
+            [Constraint::Max(5), Constraint::Max(13), Constraint::Max(80)],
+        )
         .block(Block::default().borders(Borders::ALL).title("Synthesizer"))
     }
 }
@@ -562,68 +568,71 @@ impl RXParameterSet {
     }
 
     pub fn widget<'a>(&self, active: &Style) -> Table<'a> {
-        Table::new(vec![
-            Row::new(vec![
-                "AGC", "attack", "decay", "target", "ahyst", "min", "max",
-            ]),
-            Row::new(vec![
-                Cell::from(""),
-                Cell::from(self.agc.attack.to_string()),
-                Cell::from(self.agc.decay.to_string()),
-                Cell::from(self.agc.target.to_string()),
-                Cell::from(self.agc.ahyst.to_string()),
-                Cell::from(self.agc.min.to_string()),
-                Cell::from(self.agc.max.to_string()),
-            ]),
-            Row::new(vec![
-                "Gain",
-                "time",
-                "rate",
-                "phase",
-                "filt",
-                "BB gain phase",
-                "BB gain freq",
-                "RF gain freq",
-                "RF gain phase",
-                "ampl",
-            ]),
-            Row::new(vec![
-                Cell::from(""),
-                Cell::from(self.gain.time.to_string()),
-                Cell::from(self.gain.rate.to_string()),
-                Cell::from(self.gain.phase.to_string()),
-                Cell::from(self.gain.filter.to_string()),
-                Cell::from(self.gain.baseband.freq.to_string()),
-                Cell::from(self.gain.baseband.phase.to_string()),
-                Cell::from(self.gain.rf.freq.to_string()),
-                Cell::from(self.gain.rf.phase.to_string()),
-                Cell::from(self.gain.amplitude.to_string()),
-            ]),
-            Row::new(vec!["", "freq dev", "decay", "BBR block A", "BBR block B"]),
-            Row::new(vec![
-                Cell::from(""),
-                Cell::from(self.freq_dev.to_string()),
-                Cell::from(self.decay.to_string()),
-                Cell::from(self.baseband_offset.a.to_string()),
-                Cell::from(self.baseband_offset.b.to_string()),
-            ]),
-        ], [
-            Constraint::Max(5),
-            Constraint::Max(8),
-            Constraint::Max(9),
-            Constraint::Max(10),
-            Constraint::Max(14),
-            Constraint::Max(15),
-            Constraint::Max(9),
-            Constraint::Max(10),
-            Constraint::Max(8),
-            Constraint::Max(13),
-            Constraint::Max(11),
-            Constraint::Max(16),
-            Constraint::Max(16),
-            Constraint::Max(15),
-            Constraint::Max(15),
-        ])
+        Table::new(
+            vec![
+                Row::new(vec![
+                    "AGC", "attack", "decay", "target", "ahyst", "min", "max",
+                ]),
+                Row::new(vec![
+                    Cell::from(""),
+                    Cell::from(self.agc.attack.to_string()),
+                    Cell::from(self.agc.decay.to_string()),
+                    Cell::from(self.agc.target.to_string()),
+                    Cell::from(self.agc.ahyst.to_string()),
+                    Cell::from(self.agc.min.to_string()),
+                    Cell::from(self.agc.max.to_string()),
+                ]),
+                Row::new(vec![
+                    "Gain",
+                    "time",
+                    "rate",
+                    "phase",
+                    "filt",
+                    "BB gain phase",
+                    "BB gain freq",
+                    "RF gain freq",
+                    "RF gain phase",
+                    "ampl",
+                ]),
+                Row::new(vec![
+                    Cell::from(""),
+                    Cell::from(self.gain.time.to_string()),
+                    Cell::from(self.gain.rate.to_string()),
+                    Cell::from(self.gain.phase.to_string()),
+                    Cell::from(self.gain.filter.to_string()),
+                    Cell::from(self.gain.baseband.freq.to_string()),
+                    Cell::from(self.gain.baseband.phase.to_string()),
+                    Cell::from(self.gain.rf.freq.to_string()),
+                    Cell::from(self.gain.rf.phase.to_string()),
+                    Cell::from(self.gain.amplitude.to_string()),
+                ]),
+                Row::new(vec!["", "freq dev", "decay", "BBR block A", "BBR block B"]),
+                Row::new(vec![
+                    Cell::from(""),
+                    Cell::from(self.freq_dev.to_string()),
+                    Cell::from(self.decay.to_string()),
+                    Cell::from(self.baseband_offset.a.to_string()),
+                    Cell::from(self.baseband_offset.b.to_string()),
+                ]),
+            ],
+            [
+                Constraint::Max(5),
+                Constraint::Max(8),
+                Constraint::Max(9),
+                Constraint::Max(10),
+                Constraint::Max(14),
+                Constraint::Max(15),
+                Constraint::Max(9),
+                Constraint::Max(10),
+                Constraint::Max(8),
+                Constraint::Max(13),
+                Constraint::Max(11),
+                Constraint::Max(16),
+                Constraint::Max(16),
+                Constraint::Max(15),
+                Constraint::Max(15),
+            ],
+        )
         .block(
             Block::default()
                 .borders(Borders::ALL)
@@ -707,47 +716,50 @@ impl RXParams {
     }
 
     pub fn widget<'a>(&self) -> Table<'a> {
-        Table::new(vec![
-            Row::new(vec!["IF Freq", "Max Δ", "Baseband", "Bitrate", "Max Δ"]),
-            Row::new(vec![
-                Cell::from(format!("{} Hz", self.iffreq)),
-                Cell::from(format!("{} Hz", self.maxrfoffset)),
-                Cell::from(format!("{} Hz", self.baseband)),
-                Cell::from(format!("{} bit/s", self.bitrate)),
-                Cell::from(format!("{} bit/s", self.maxdroffset)),
-            ]),
-            Row::new(vec!["FSK Dev Max", "Min", "AFSK Space", "Mark", "Ctrl"]),
-            Row::new(vec![
-                Cell::from(format!("{} Hz", self.fskdevmax)),
-                Cell::from(format!("{} Hz", self.fskdevmin)),
-                Cell::from(self.afskspace.to_string()),
-                Cell::from(self.afskmark.to_string()),
-                Cell::from(self.afskctrl.to_string()),
-            ]),
-            Row::new(vec![
-                "Ampl Filt",
-                "Freq Leak",
-                "RX 0",
-                "RX 1",
-                "RX 2",
-                "RX 3",
-            ]),
-            Row::new(vec![
-                Cell::from(self.amplfilt.to_string()),
-                Cell::from(self.freqleak.to_string()),
-                Cell::from(format!("{:?}", self.rxparamset.0)),
-                Cell::from(format!("{:?}", self.rxparamset.1)),
-                Cell::from(format!("{:?}", self.rxparamset.2)),
-                Cell::from(format!("{:?}", self.rxparamset.3)),
-            ]),
-        ], [
-            Constraint::Max(11),
-            Constraint::Max(10),
-            Constraint::Max(11),
-            Constraint::Max(10),
-            Constraint::Max(14),
-            Constraint::Max(15),
-        ])
+        Table::new(
+            vec![
+                Row::new(vec!["IF Freq", "Max Δ", "Baseband", "Bitrate", "Max Δ"]),
+                Row::new(vec![
+                    Cell::from(format!("{} Hz", self.iffreq)),
+                    Cell::from(format!("{} Hz", self.maxrfoffset)),
+                    Cell::from(format!("{} Hz", self.baseband)),
+                    Cell::from(format!("{} bit/s", self.bitrate)),
+                    Cell::from(format!("{} bit/s", self.maxdroffset)),
+                ]),
+                Row::new(vec!["FSK Dev Max", "Min", "AFSK Space", "Mark", "Ctrl"]),
+                Row::new(vec![
+                    Cell::from(format!("{} Hz", self.fskdevmax)),
+                    Cell::from(format!("{} Hz", self.fskdevmin)),
+                    Cell::from(self.afskspace.to_string()),
+                    Cell::from(self.afskmark.to_string()),
+                    Cell::from(self.afskctrl.to_string()),
+                ]),
+                Row::new(vec![
+                    "Ampl Filt",
+                    "Freq Leak",
+                    "RX 0",
+                    "RX 1",
+                    "RX 2",
+                    "RX 3",
+                ]),
+                Row::new(vec![
+                    Cell::from(self.amplfilt.to_string()),
+                    Cell::from(self.freqleak.to_string()),
+                    Cell::from(format!("{:?}", self.rxparamset.0)),
+                    Cell::from(format!("{:?}", self.rxparamset.1)),
+                    Cell::from(format!("{:?}", self.rxparamset.2)),
+                    Cell::from(format!("{:?}", self.rxparamset.3)),
+                ]),
+            ],
+            [
+                Constraint::Max(11),
+                Constraint::Max(10),
+                Constraint::Max(11),
+                Constraint::Max(10),
+                Constraint::Max(14),
+                Constraint::Max(15),
+            ],
+        )
         .block(
             Block::default()
                 .borders(Borders::ALL)
@@ -913,8 +925,11 @@ impl RadioEvent {
 
 impl RadioState {
     pub fn widget<'a>(&self) -> Table<'a> {
-        Table::new(vec![Row::new([Cell::from(format!("{self:?}"))])], [Constraint::Max(13)])
-            .block(Block::default().borders(Borders::ALL).title("Radio State"))
+        Table::new(
+            vec![Row::new([Cell::from(format!("{self:?}"))])],
+            [Constraint::Max(13)],
+        )
+        .block(Block::default().borders(Borders::ALL).title("Radio State"))
     }
 }
 
@@ -945,20 +960,23 @@ impl TXParameters {
         })
     }
     pub fn widget<'a>(&self) -> Table<'a> {
-        Table::new(vec![
-            Row::new([
-                Cell::from(format!("{:?}", self.modcfgf)),
-                Cell::from(format!("Deviation {:?} Hz", self.fskdev)),
-            ]),
-            Row::new([
-                Cell::from(format!("{:?}", self.modcfga)),
-                Cell::from(format!("{:?} bits/s", self.txrate)),
-            ]),
-            Row::new([
-                Cell::from("tx power coef b:"),
-                Cell::from(format!("{:X?}", self.b)),
-            ]),
-        ], [Constraint::Max(100), Constraint::Max(60)])
+        Table::new(
+            vec![
+                Row::new([
+                    Cell::from(format!("{:?}", self.modcfgf)),
+                    Cell::from(format!("Deviation {:?} Hz", self.fskdev)),
+                ]),
+                Row::new([
+                    Cell::from(format!("{:?}", self.modcfga)),
+                    Cell::from(format!("{:?} bits/s", self.txrate)),
+                ]),
+                Row::new([
+                    Cell::from("tx power coef b:"),
+                    Cell::from(format!("{:X?}", self.b)),
+                ]),
+            ],
+            [Constraint::Max(100), Constraint::Max(60)],
+        )
         .block(
             Block::default()
                 .borders(Borders::ALL)
@@ -1004,16 +1022,19 @@ impl ChannelParameters {
     }
 
     pub fn widget<'a>(&self) -> Table<'a> {
-        Table::new(vec![
-            Row::new([
-                Cell::from(format!("{:?}", self.modulation)),
-                Cell::from(format!("{:?}", self.encoding)),
-            ]),
-            Row::new([
-                Cell::from(format!("{:?}", self.framing)),
-                Cell::from(format!("{:X?}", self.crcinit)),
-            ]),
-        ], [Constraint::Max(100), Constraint::Max(60)])
+        Table::new(
+            vec![
+                Row::new([
+                    Cell::from(format!("{:?}", self.modulation)),
+                    Cell::from(format!("{:?}", self.encoding)),
+                ]),
+                Row::new([
+                    Cell::from(format!("{:?}", self.framing)),
+                    Cell::from(format!("{:X?}", self.crcinit)),
+                ]),
+            ],
+            [Constraint::Max(100), Constraint::Max(60)],
+        )
         .block(
             Block::default()
                 .borders(Borders::ALL)
