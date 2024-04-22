@@ -20,7 +20,6 @@ proptest! {
     }
 }
 
-
 #[derive(Copy, Clone, Default)]
 pub enum SysClk {
     Zero,
@@ -552,7 +551,6 @@ pub struct Synthesizer {
     // Table 8. Depends also on vcosel
     // PLLVCODIV::{VCOSEL,VCO2INT} from phys layout
     // PLLRANGING::VCOR{A,B} saved, otherwise 8. also has status
-
     pub vco_current: Control<u8>, //depends on VCO, auto or manual, readback VCOIR, see AND9858/D for manual cal
     pub lock_detector_delay: Control<LockDetector>, // auto or manual, readback PLLLOCKDET::LOCKDETDLYR
     pub ranging_clock: RangingClock, // less than one tenth the loop filter bandwidth. Derive?
@@ -1053,7 +1051,7 @@ impl TXParameters {
 pub enum RXParameters {
     MSK {
         // MODULATION::RX_HALFSPEED
-        //max_dr_offset: u64,
+        max_dr_offset: u64,
         freq_offs_corr: bool,
         ampl_filter: u8,
         frequency_leak: u8,
@@ -1061,18 +1059,9 @@ pub enum RXParameters {
 }
 
 impl RXParameters {
-    pub fn write(
-        self,
-        radio: &mut Registers,
-        board: &config::Board,
-        channel: &config::ChannelParameters,
-    ) -> Result<Self> {
+    pub fn decimation(&self, board: &Board, channel: &ChannelParameters) -> u64 {
         match self {
-            Self::MSK {
-                freq_offs_corr,
-                ampl_filter,
-                frequency_leak,
-            } => {
+            Self::MSK { .. } => {
                 // modulation index: m = 0.5;
                 // bandwidth = (1+m) * datarate (Carson's rule)
                 // TODO: Radiolab lists bandwidth always as 1.5*datarate, does not compensate for m
@@ -1083,12 +1072,44 @@ impl RXParameters {
                 // fcoeff = 0.221497
                 // 1/fcoeff = 4.51...  ~=  9/2
                 let fbaseband_min = bandwidth * 9 / 2; // FIXME: this math makes fbaseband_min slightly too small
+
                 //pick decimation such that fbaseband is at least fbaseband_min
                 //integer devision ensures that decimation value will always pick higher fbaseband
                 //TODO: we can pick a filter such that this is closer
-                let decimation = board.xtal.freq / (board.xtal.div() * 2_u64.pow(4) * fbaseband_min);
+                board.xtal.freq / (board.xtal.div() * 2_u64.pow(4) * fbaseband_min)
+            }
+        }
+    }
+
+    pub fn rxdatarate(&self, board: &Board, channel: &ChannelParameters) -> u64 {
+        match self {
+            Self::MSK { .. } => {
+                // TODO: see note table 96
+                div_nearest(
+                    2u64.pow(7) * board.xtal.freq,
+                    channel.datarate * board.xtal.div() * self.decimation(board, channel),
+                )
+            }
+        }
+    }
+
+    pub fn write(
+        self,
+        radio: &mut Registers,
+        board: &Board,
+        channel: &ChannelParameters,
+    ) -> Result<Self> {
+        match self {
+            Self::MSK {
+                max_dr_offset,
+                freq_offs_corr,
+                ampl_filter,
+                frequency_leak,
+            } => {
+                let decimation = self.decimation(board, channel);
                 radio.DECIMATION().write(decimation.try_into().unwrap())?; // TODO: 7bits max
-                //Now that we have a fixed fbaseband, we can re-determine the bandwidth
+
+                // Now that we have a fixed fbaseband, we can re-determine the bandwidth
                 let fbaseband = board.xtal.freq / (board.xtal.div() * 2_u64.pow(4) * decimation);
                 let bandwidth = fbaseband * 2 / 9;
                 // NBM lists IF freq as half the bandwidth? Is there a way to find the optimal?
@@ -1107,19 +1128,18 @@ impl RXParameters {
                         .unwrap(),
                 )?;
 
-                // TODO: see note table 96
-                radio.RXDATARATE().write(
-                    div_nearest(2u64.pow(7) * board.xtal.freq,
-                        channel.datarate * board.xtal.div() * decimation)
-                        .try_into()
-                        .unwrap(),
-                )?;
+                radio
+                    .RXDATARATE()
+                    .write(self.rxdatarate(board, channel).try_into().unwrap())?;
 
-                //let droff = (2u64.pow(7) * board.xtal.freq * *max_dr_offset) / (board.xtal.div() * channel.datarate.pow(2) * decimation);
-                //radio.MAXDROFFSET.write(droff.try_into().unwrap())?;
-                radio.MAXDROFFSET().write(0)?;
+                let droff = (2u64.pow(7) * board.xtal.freq * max_dr_offset)
+                    / (board.xtal.div() * channel.datarate.pow(2) * decimation);
+                radio.MAXDROFFSET().write(droff.try_into().unwrap())?;
+                //radio.MAXDROFFSET().write(0)?;
 
-                let max_rf_offset = bandwidth/4 ; // bw/4 Upper bound - difference between tx and rx fcarriers. see note pm table 98
+                // bw/4 Upper bound - difference between tx and rx fcarriers. see note pm table 98
+                let max_rf_offset = bandwidth / 4;
+
                 //let max_rf_offset = 873; // From radiolab
                 radio.MAXRFOFFSET().write(MaxRFOffset {
                     offset: div_nearest(max_rf_offset * 2u64.pow(24), board.xtal.freq)
@@ -1161,7 +1181,6 @@ const AGCGAIN_LOOP_SCALE: [u64; 15] = [
     1_647_150,
 ];
 
-
 pub struct RXParameterAGC {
     attack: u8,
     decay: u8,
@@ -1182,7 +1201,7 @@ impl RXParameterAGC {
             let f3db = board.xtal.freq / (board.xtal.div() * AGCGAIN_LOOP_SCALE[a]);
             if f3db < channel.datarate {
                 attack = a;
-                break
+                break;
             }
         }
 
@@ -1191,7 +1210,7 @@ impl RXParameterAGC {
             let f3db = board.xtal.freq / (board.xtal.div() * AGCGAIN_LOOP_SCALE[d]);
             if f3db * 10 < channel.datarate {
                 decay = d;
-                break
+                break;
             }
         }
 
@@ -1206,7 +1225,8 @@ impl RXParameterAGC {
     }
 
     pub fn off() -> Self {
-        Self { // attack/decay value F disables AGC
+        Self {
+            // attack/decay value F disables AGC
             attack: 0xF,
             decay: 0xF,
             target: 0x84,
@@ -1223,12 +1243,12 @@ pub struct RXParameterFreq {
 }
 
 pub struct RXParameterGain {
-    pub time: Float4,
-    pub datarate: Float4,
+    pub time_corr_frac: u32, // should be at least 4. bit sampling timing, see pm p 16
+    pub datarate_corr_frac: u32, // should be at least 64,
     pub phase: u8,
     pub filter: u8,
-    pub baseband: RXParameterFreq,
-    pub rf: RXParameterFreq,
+    pub baseband: Option<RXParameterFreq>,
+    pub rf: Option<RXParameterFreq>,
     pub amplitude: u8,
     pub deviation_update: bool, // FIXME below decay?
     pub ampl_agc_jump_correction: bool,
@@ -1249,7 +1269,13 @@ pub struct RXParameterSet {
 }
 
 impl RXParameterSet {
-    pub fn write0(&self, radio: &mut Registers) -> Result<()> {
+    pub fn write0(
+        &self,
+        radio: &mut Registers,
+        board: &Board,
+        channel: &ChannelParameters,
+        rxp: &RXParameters,
+    ) -> Result<()> {
         radio.AGCGAIN0().write(AGCGain {
             attack: self.agc.attack,
             decay: self.agc.decay,
@@ -1262,27 +1288,63 @@ impl RXParameterSet {
             min: self.agc.min,
             max: self.agc.max,
         })?;
-        radio.TIMEGAIN0().write(self.gain.time)?;
-        radio.DRGAIN0().write(self.gain.datarate)?;
+
+        // enusre RXDATARATE - TIMEGAINx ≥ 2^12
+        // What does that even mean? The raw register values? the symbols line up but that doesn't
+        // make any sense
+        // ensure time_corr_frac >= 4
+        // derive max reasonable time_corr_frac to inform type
+
+        let rxdatarate = rxp.rxdatarate(board, channel);
+        // FIXME: Min(abs(dr/corr))
+        let timegain = Float4::new(rxdatarate / u64::from(self.gain.time_corr_frac));
+        assert!(rxdatarate - u64::from(timegain) >= 2 ^ 12);
+        assert!(rxdatarate - u64::from(u8::try_from(Reg8::from(timegain)).unwrap()) >= 2 ^ 12);
+        radio.TIMEGAIN0().write(timegain)?;
+
+        //ensure datarate_corr_frac >= 64
+        // FIXME: Min(abs(..))
+        let drgain = Float4::new(rxdatarate / u64::from(self.gain.datarate_corr_frac));
+        radio.DRGAIN0().write(drgain)?;
         radio.PHASEGAIN0().write(PhaseGain {
             gain: self.gain.phase,
             filter: self.gain.filter,
         })?;
-        radio.FREQGAINA0().write(FreqGainA {
-            gain: self.gain.baseband.phase,
-            flags: FreqGainAFlags::empty(),
-        })?;
-        radio.FREQGAINB0().write(FreqGainB {
-            gain: self.gain.baseband.freq,
-            flags: FreqGainBFlags::empty(),
-        })?;
-        radio.FREQGAINC0().write(FreqGainC {
-            gain: self.gain.rf.phase,
-        })?;
-        radio.FREQGAIND0().write(FreqGainD {
-            gain: self.gain.rf.freq,
-            freeze: false,
-        })?;
+        if let Some(RXParameterFreq { phase, freq }) = self.gain.baseband {
+            radio.FREQGAINA0().write(FreqGainA {
+                gain: phase,
+                flags: FreqGainAFlags::empty(),
+            })?;
+            radio.FREQGAINB0().write(FreqGainB {
+                gain: freq,
+                flags: FreqGainBFlags::empty(),
+            })?;
+        } else {
+            radio.FREQGAINA0().write(FreqGainA {
+                gain: 0x0F,
+                flags: FreqGainAFlags::empty(),
+            })?;
+            radio.FREQGAINB0().write(FreqGainB {
+                gain: 0x1F,
+                flags: FreqGainBFlags::empty(),
+            })?;
+        }
+
+        // FIXME: Turning this on also enables baseband loop, even if bb is disabled?
+        if let Some(RXParameterFreq { phase, freq }) = self.gain.rf {
+            radio.FREQGAINC0().write(FreqGainC { gain: phase })?;
+            radio.FREQGAIND0().write(FreqGainD {
+                gain: freq,
+                freeze: false,
+            })?;
+        } else {
+            radio.FREQGAINC0().write(FreqGainC { gain: 0x1F })?;
+            radio.FREQGAIND0().write(FreqGainD {
+                gain: 0x1F,
+                freeze: false,
+            })?;
+        }
+
         radio.AMPLGAIN0().write(AmplGain {
             gain: self.gain.amplitude,
             flags: if self.gain.ampl_agc_jump_correction {
@@ -1307,7 +1369,13 @@ impl RXParameterSet {
         Ok(())
     }
 
-    pub fn write1(&self, radio: &mut Registers) -> Result<()> {
+    pub fn write1(
+        &self,
+        radio: &mut Registers,
+        board: &Board,
+        channel: &ChannelParameters,
+        rxp: &RXParameters,
+    ) -> Result<()> {
         radio.AGCGAIN1().write(AGCGain {
             attack: self.agc.attack,
             decay: self.agc.decay,
@@ -1320,27 +1388,58 @@ impl RXParameterSet {
             min: self.agc.min,
             max: self.agc.max,
         })?;
-        radio.TIMEGAIN1().write(self.gain.time)?;
-        radio.DRGAIN1().write(self.gain.datarate)?;
+
+        let rxdatarate = rxp.rxdatarate(board, channel);
+        // FIXME: Min(abs(dr/corr))
+        let tgain = Float4::new(rxdatarate / u64::from(self.gain.time_corr_frac));
+        assert!(rxdatarate - u64::from(tgain) >= 2 ^ 12);
+        assert!(rxdatarate - u64::from(u8::try_from(Reg8::from(tgain)).unwrap()) >= 2 ^ 12);
+        radio.TIMEGAIN1().write(tgain)?;
+
+        //ensure datarate_corr_frac >= 64
+        // FIXME: Min(abs(..))
+        let drgain = Float4::new(rxdatarate / u64::from(self.gain.datarate_corr_frac));
+        radio.DRGAIN1().write(drgain)?;
+
         radio.PHASEGAIN1().write(PhaseGain {
             gain: self.gain.phase,
             filter: self.gain.filter,
         })?;
-        radio.FREQGAINA1().write(FreqGainA {
-            gain: self.gain.baseband.phase,
-            flags: FreqGainAFlags::empty(),
-        })?;
-        radio.FREQGAINB1().write(FreqGainB {
-            gain: self.gain.baseband.freq,
-            flags: FreqGainBFlags::empty(),
-        })?;
-        radio.FREQGAINC1().write(FreqGainC {
-            gain: self.gain.rf.phase,
-        })?;
-        radio.FREQGAIND1().write(FreqGainD {
-            gain: self.gain.rf.freq,
-            freeze: false,
-        })?;
+
+        if let Some(RXParameterFreq { phase, freq }) = self.gain.baseband {
+            radio.FREQGAINA1().write(FreqGainA {
+                gain: phase,
+                flags: FreqGainAFlags::empty(),
+            })?;
+            radio.FREQGAINB1().write(FreqGainB {
+                gain: freq,
+                flags: FreqGainBFlags::empty(),
+            })?;
+        } else {
+            radio.FREQGAINA1().write(FreqGainA {
+                gain: 0b1111,
+                flags: FreqGainAFlags::empty(),
+            })?;
+            radio.FREQGAINB1().write(FreqGainB {
+                gain: 0b1_1111,
+                flags: FreqGainBFlags::empty(),
+            })?;
+        }
+
+        if let Some(RXParameterFreq { phase, freq }) = self.gain.rf {
+            radio.FREQGAINC1().write(FreqGainC { gain: phase })?;
+            radio.FREQGAIND1().write(FreqGainD {
+                gain: freq,
+                freeze: false,
+            })?;
+        } else {
+            radio.FREQGAINC1().write(FreqGainC { gain: 0x1F })?;
+            radio.FREQGAIND1().write(FreqGainD {
+                gain: 0x1F,
+                freeze: false,
+            })?;
+        }
+
         radio.AMPLGAIN1().write(AmplGain {
             gain: self.gain.amplitude,
             flags: if self.gain.ampl_agc_jump_correction {
@@ -1365,7 +1464,13 @@ impl RXParameterSet {
         Ok(())
     }
 
-    pub fn write3(&self, radio: &mut Registers) -> Result<()> {
+    pub fn write3(
+        &self,
+        radio: &mut Registers,
+        board: &Board,
+        channel: &ChannelParameters,
+        rxp: &RXParameters,
+    ) -> Result<()> {
         radio.AGCGAIN3().write(AGCGain {
             attack: self.agc.attack,
             decay: self.agc.decay,
@@ -1378,27 +1483,57 @@ impl RXParameterSet {
             min: self.agc.min,
             max: self.agc.max,
         })?;
-        radio.TIMEGAIN3().write(self.gain.time)?;
-        radio.DRGAIN3().write(self.gain.datarate)?;
+
+        let rxdatarate = rxp.rxdatarate(board, channel);
+        // FIXME: Min(abs(dr/corr))
+        let tgain = Float4::new(rxdatarate / u64::from(self.gain.time_corr_frac));
+        assert!(rxdatarate - u64::from(tgain) >= 2 ^ 12);
+        assert!(rxdatarate - u64::from(u8::try_from(Reg8::from(tgain)).unwrap()) >= 2 ^ 12);
+        radio.TIMEGAIN3().write(tgain)?;
+
+        //ensure datarate_corr_frac >= 64
+        // FIXME: Min(abs(..))
+        let drgain = Float4::new(rxdatarate / u64::from(self.gain.datarate_corr_frac));
+        radio.DRGAIN3().write(drgain)?;
         radio.PHASEGAIN3().write(PhaseGain {
             gain: self.gain.phase,
             filter: self.gain.filter,
         })?;
-        radio.FREQGAINA3().write(FreqGainA {
-            gain: self.gain.baseband.phase,
-            flags: FreqGainAFlags::empty(),
-        })?;
-        radio.FREQGAINB3().write(FreqGainB {
-            gain: self.gain.baseband.freq,
-            flags: FreqGainBFlags::empty(),
-        })?;
-        radio.FREQGAINC3().write(FreqGainC {
-            gain: self.gain.rf.phase,
-        })?;
-        radio.FREQGAIND3().write(FreqGainD {
-            gain: self.gain.rf.freq,
-            freeze: false,
-        })?;
+
+        if let Some(RXParameterFreq { phase, freq }) = self.gain.baseband {
+            radio.FREQGAINA3().write(FreqGainA {
+                gain: phase,
+                flags: FreqGainAFlags::empty(),
+            })?;
+            radio.FREQGAINB3().write(FreqGainB {
+                gain: freq,
+                flags: FreqGainBFlags::empty(),
+            })?;
+        } else {
+            radio.FREQGAINA3().write(FreqGainA {
+                gain: 0b1111,
+                flags: FreqGainAFlags::empty(),
+            })?;
+            radio.FREQGAINB3().write(FreqGainB {
+                gain: 0b1_1111,
+                flags: FreqGainBFlags::empty(),
+            })?;
+        }
+
+        if let Some(RXParameterFreq { phase, freq }) = self.gain.rf {
+            radio.FREQGAINC3().write(FreqGainC { gain: phase })?;
+            radio.FREQGAIND3().write(FreqGainD {
+                gain: freq,
+                freeze: false,
+            })?;
+        } else {
+            radio.FREQGAINC3().write(FreqGainC { gain: 0x1F })?;
+            radio.FREQGAIND3().write(FreqGainD {
+                gain: 0x1F,
+                freeze: false,
+            })?;
+        }
+
         radio.AMPLGAIN3().write(AmplGain {
             gain: self.gain.amplitude,
             flags: if self.gain.ampl_agc_jump_correction {
@@ -1525,7 +1660,8 @@ pub struct Preamble3 {
 // see PM pg 19 Figure 13. FIXME: what is TXPREAMBLE1? only mentioned in this diagram. Is it
 // missing -MGR-?
 // TODO: TMGRX{AGC,RSSI} units PKTMISC flag
-pub struct RXParameterStages { // TODO: Should this just be merged with RXParameters?
+pub struct RXParameterStages {
+    // TODO: Should this just be merged with RXParameters?
     pub preamble1: Option<Preamble1>,
     pub preamble2: Option<Preamble2>,
     pub preamble3: Option<Preamble3>,

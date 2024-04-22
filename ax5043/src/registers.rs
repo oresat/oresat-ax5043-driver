@@ -15,7 +15,7 @@ use std::{fmt, ops::{Index, Range}};
 // registers are big endian
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Reg<const S: usize>(pub [u8; S]);
-type Reg8 = Reg<1>;
+pub type Reg8 = Reg<1>;
 type Reg16 = Reg<2>;
 type Reg24 = Reg<3>;
 type Reg32 = Reg<4>;
@@ -213,21 +213,19 @@ pub struct Float<const M: u8> {
 }
 
 impl<const M: u8> Float<M> {
-    pub fn new(val: u32) -> Self {
-        let msb: u8 = (u32::BITS - val.leading_zeros()).try_into().unwrap();
+    pub fn new(val: u64) -> Self {
+        let msb: u8 = (u64::BITS - val.leading_zeros()).try_into().unwrap();
         let e = msb.saturating_sub(M); // FIXME: check if greater than e bits
         let m = (val >> e).try_into().unwrap();
         Self { m, e }
     }
 }
 
-impl<const M: u8> From<Float<M>> for u32 {
+impl<const M: u8> From<Float<M>> for u64 {
     fn from(value: Float<M>) -> Self {
-        u32::from(value.m) * 2u32.pow(value.e.into())
+        u64::from(value.m) * 2u64.pow(value.e.into())
     }
 }
-
-
 
 impl<const M: u8> fmt::Display for Float<M> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
@@ -297,7 +295,6 @@ fn float4_zero() {
 fn float5_zero() {
     assert_eq!(0u32, Float5::new(0).into());
 }
-
 
 #[derive(Clone, Copy, Debug, PartialEq, IntoPrimitive, TryFromPrimitive)]
 #[cfg_attr(test, derive(Arbitrary))]
@@ -1456,6 +1453,26 @@ impl TryFrom<Reg<4>> for SignalStr {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
+pub struct TrkPhase(pub i16); // TRKPHASE is a signed 12 bit value
+
+impl TryFrom<Reg16> for TrkPhase {
+    type Error = Reg16;
+    fn try_from(item: Reg16) -> Result<Self, Self::Error> {
+        Ok(Self(
+            (((i16::from(item[0])) << 8 | i16::from(item[1]))
+             << 4) // for sign extension. The register only sign extends
+             >> 4, // out to 12 bits even though we can read 16
+        ))
+    }
+}
+
+impl From<TrkPhase> for Reg16 {
+    fn from(item: TrkPhase) -> Self {
+        item.0.into()
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub struct TrkRFFreq(pub i32); // TRKRFFREQ is a signed 20 bit value
 
 impl TryFrom<Reg24> for TrkRFFreq {
@@ -1499,7 +1516,7 @@ impl From<TrkFSKDemod> for Reg16 {
 pub struct RXTracking {
     pub datarate: i32,
     pub ampl: u16,
-    pub phase: u16,
+    pub phase: TrkPhase,
     pub rffreq: TrkRFFreq,
     pub freq: i16,
     pub fskdemod: TrkFSKDemod,

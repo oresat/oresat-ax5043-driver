@@ -25,7 +25,8 @@ fn config(radio: &mut Registers) -> Result<(Board, ChannelParameters)> {
             pin: DACPin::PwrAmp,
         },
         adc: ADC::ADC1,
-    }.write(radio)?;
+    }
+    .write(radio)?;
 
     let synth = Synthesizer {
         freq_a: 436_500_000,
@@ -43,19 +44,21 @@ fn config(radio: &mut Registers) -> Result<(Board, ChannelParameters)> {
         vco_current: Control::Automatic,
         lock_detector_delay: Control::Automatic, // readback PLLLOCKDET::LOCKDETDLYR
         ranging_clock: RangingClock::XtalDiv1024, // less than one tenth the loop filter bandwidth. Derive?
-    }.write(radio, &board)?;
+    }
+    .write(radio, &board)?;
 
     let channel = ChannelParameters {
         modulation: Modulation::GMSK {
             ramp: SlowRamp::Bits1,
-            bt: BT(0.3),
+            bt: BT(0.5),
         },
         encoding: Encoding::NRZI | Encoding::SCRAM,
         framing: Framing::HDLC { fec: FEC {} },
         crc: CRC::CCITT { initial: 0xFFFF },
         datarate: 9_600,
         bitorder: BitOrder::LSBFirst,
-    }.write(radio, &board)?;
+    }
+    .write(radio, &board)?;
 
     synth.autorange(radio)?;
 
@@ -76,7 +79,8 @@ pub fn configure_radio_tx(radio: &mut Registers) -> Result<config::Board> {
         },
         plllock_gate: true,
         brownout_gate: true,
-    }.write(radio, &board, &channel)?;
+    }
+    .write(radio, &board, &channel)?;
 
     // As far as I can tell PLLUNLOCK and PLLRNGDONE have no way to clear/are level triggered
     // radio.IRQMASK.write(registers::IRQ::XTALREADY | registers::IRQ::RADIOCTRL)?;
@@ -116,29 +120,33 @@ pub fn configure_radio_rx(radio: &mut Registers) -> Result<(Board, ChannelParame
     })?;
     radio.PLLCPI().write(0x10)?;
 
-    RXParameters::MSK {
-        //max_dr_offset: 0, // TODO derived from what?
+    let rxp = RXParameters::MSK {
+        //max_dr_offset: 50, // TODO derived from what?
+        max_dr_offset: 0,
         freq_offs_corr: true,
         ampl_filter: 0,
         frequency_leak: 0,
-    }.write(radio, &board, &channel)?;
+    }
+    .write(radio, &board, &channel)?;
 
     // Set 0
     RXParameterSet {
         agc: RXParameterAGC::new(&board, &channel),
         gain: RXParameterGain {
-            time: Float4 { m: 0xF, e: 8 },
-            datarate: Float4 { m: 0xF, e: 2 },
+            time_corr_frac: 4,
+            datarate_corr_frac: 255,
             phase: 0b0011,
             filter: 0b11,
-            baseband: RXParameterFreq {
-                phase: 0b1111,
-                freq: 0b1_1111,
-            },
-            rf: RXParameterFreq {
-                phase: 0b0_1010,
-                freq: 0b0_1010,
-            },
+            //baseband: None,
+            baseband: Some(RXParameterFreq {
+                phase: 0x0A,
+                freq: 0x0A,
+            }),
+            rf: None,
+            //rf: Some(RXParameterFreq {
+            //   phase: 0x0A,
+            //   freq: 0x0A,
+            //}),
             amplitude: 0b0110,
             deviation_update: true,
             ampl_agc_jump_correction: false,
@@ -147,24 +155,27 @@ pub fn configure_radio_rx(radio: &mut Registers) -> Result<(Board, ChannelParame
         freq_dev: 0,
         decay: 0b0110,
         baseband_offset: RXParameterBasebandOffset { a: 0, b: 0 },
-    }.write0(radio)?;
+    }
+    .write0(radio, &board, &channel, &rxp)?;
 
     // Set 1
     RXParameterSet {
         agc: RXParameterAGC::new(&board, &channel),
         gain: RXParameterGain {
-            time: Float4 { m: 0xF, e: 6 },
-            datarate: Float4 { m: 0xF, e: 1 },
+            time_corr_frac: 16,
+            datarate_corr_frac: 512,
             phase: 0b0011,
             filter: 0b11,
-            baseband: RXParameterFreq {
-                phase: 0b1111,
-                freq: 0b1_1111,
-            },
-            rf: RXParameterFreq {
-                phase: 0b0_1010,
-                freq: 0b0_1010,
-            },
+            //baseband: None,
+            baseband: Some(RXParameterFreq {
+                phase: 0x0A,
+                freq: 0x0A,
+            }),
+            rf: None,
+            //rf: Some(RXParameterFreq {
+            //    phase: 0x0A,
+            //    freq: 0x0A,
+            //}),
             amplitude: 0b0110,
             deviation_update: true,
             ampl_agc_jump_correction: false,
@@ -173,24 +184,27 @@ pub fn configure_radio_rx(radio: &mut Registers) -> Result<(Board, ChannelParame
         freq_dev: 0x32,
         decay: 0b0110,
         baseband_offset: RXParameterBasebandOffset { a: 0, b: 0 },
-    }.write1(radio)?;
+    }
+    .write1(radio, &board, &channel, &rxp)?;
 
     // Set 3
     RXParameterSet {
         agc: RXParameterAGC::new(&board, &channel),
         gain: RXParameterGain {
-            time: Float4 { m: 0xF, e: 5 },
-            datarate: Float4 { m: 0xF, e: 0 },
+            time_corr_frac: 32,
+            datarate_corr_frac: 1024,
             phase: 0b0011,
             filter: 0b11,
-            baseband: RXParameterFreq {
-                phase: 0b1111,
-                freq: 0b1_1111,
-            },
-            rf: RXParameterFreq {
-                phase: 0b0_1101,
-                freq: 0b0_1101,
-            },
+            //baseband: None,
+            baseband: Some(RXParameterFreq {
+                phase: 0x0D,
+                freq: 0x0D,
+            }),
+            rf: None,
+            //rf: Some(RXParameterFreq {
+            //    phase: 0x0D,
+            //    freq: 0x0D,
+            //}),
             amplitude: 0b0110,
             deviation_update: true,
             ampl_agc_jump_correction: false,
@@ -199,7 +213,8 @@ pub fn configure_radio_rx(radio: &mut Registers) -> Result<(Board, ChannelParame
         freq_dev: 0x32,
         decay: 0b0110,
         baseband_offset: RXParameterBasebandOffset { a: 0, b: 0 },
-    }.write3(radio)?;
+    }
+    .write3(radio, &board, &channel, &rxp)?;
 
     RXParameterStages {
         preamble1: Some(Preamble1 {
@@ -226,7 +241,8 @@ pub fn configure_radio_rx(radio: &mut Registers) -> Result<(Board, ChannelParame
         }),
         preamble3: None,
         packet: RxParamSet::Set3,
-    }.write(radio)?;
+    }
+    .write(radio)?;
 
 
     radio.PKTMAXLEN().write(0xFF)?;
@@ -236,7 +252,7 @@ pub fn configure_radio_rx(radio: &mut Registers) -> Result<(Board, ChannelParame
     radio.PKTCHUNKSIZE().write(0x09)?;
     radio.PKTACCEPTFLAGS().write(PktAcceptFlags::LRGP)?;
 
-    radio.RSSIREFERENCE().write(64)?;
+    radio.RSSIREFERENCE().write(0)?;
 
     Ok((board, channel))
 }

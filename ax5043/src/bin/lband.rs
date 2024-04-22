@@ -99,28 +99,26 @@ pub fn configure_radio_rx(radio: &mut Registers) -> Result<(Board, ChannelParame
     })?;
     radio.PLLCPI().write(0x10)?;
 
-    RXParameters::MSK {
-        //max_dr_offset: 0, // TODO derived from what?
+    let rxp = RXParameters::MSK {
+        max_dr_offset: 0, // TODO derived from what?
         freq_offs_corr: true,
         ampl_filter: 0,
         frequency_leak: 0,
-    }.write(radio, &board, &channel)?;
+    }
+    .write(radio, &board, &channel)?;
 
     let set0 = RXParameterSet {
         agc: RXParameterAGC::new(&board, &channel),
         gain: RXParameterGain {
-            time: Float4 { m: 0x8, e: 9 },
-            datarate: Float4 { m: 0x8, e: 3 },
+            time_corr_frac: 4,
+            datarate_corr_frac: 255,
             phase: 0b0011,
             filter: 0b11,
-            baseband: RXParameterFreq {
-                phase: 0b1111,
-                freq: 0b1_1111,
-            },
-            rf: RXParameterFreq {
-                phase: 0b0_0110,
-                freq: 0b0_0110,
-            },
+            baseband: Some(RXParameterFreq {
+                phase: 0x06,
+                freq: 0x06,
+            }),
+            rf: None,
             amplitude: 0b0110,
             deviation_update: true,
             ampl_agc_jump_correction: false,
@@ -130,23 +128,20 @@ pub fn configure_radio_rx(radio: &mut Registers) -> Result<(Board, ChannelParame
         decay: 0b0110,
         baseband_offset: RXParameterBasebandOffset { a: 0, b: 0 },
     };
-    set0.write0(radio)?;
+    set0.write0(radio, &board, &channel, &rxp)?;
 
     let set1 = RXParameterSet {
         agc: RXParameterAGC::new(&board, &channel),
         gain: RXParameterGain {
-            time: Float4 { m: 0x8, e: 7 },
-            datarate: Float4 { m: 0x8, e: 2 },
+            time_corr_frac: 16,
+            datarate_corr_frac: 512,
             phase: 0b0011,
             filter: 0b11,
-            baseband: RXParameterFreq {
-                phase: 0b1111,
-                freq: 0b1_1111,
-            },
-            rf: RXParameterFreq {
-                phase: 0b0_0110,
-                freq: 0b0_0110,
-            },
+            baseband: Some(RXParameterFreq {
+                phase: 0x06,
+                freq: 0x06,
+            }),
+            rf: None,
             amplitude: 0b0110,
             deviation_update: true,
             ampl_agc_jump_correction: false,
@@ -156,23 +151,20 @@ pub fn configure_radio_rx(radio: &mut Registers) -> Result<(Board, ChannelParame
         decay: 0b0110,
         baseband_offset: RXParameterBasebandOffset { a: 0, b: 0 },
     };
-    set1.write1(radio)?;
+    set1.write1(radio, &board, &channel, &rxp)?;
 
     let set3 = RXParameterSet {
         agc: RXParameterAGC::off(),
         gain: RXParameterGain {
-            time: Float4 { m: 0x8, e: 6 },
-            datarate: Float4 { m: 0x8, e: 1 },
+            time_corr_frac: 32,
+            datarate_corr_frac: 1024,
             phase: 0b0011,
             filter: 0b11,
-            baseband: RXParameterFreq {
-                phase: 0b1111,
-                freq: 0b1_1111,
-            },
-            rf: RXParameterFreq {
-                phase: 0b0_1010,
-                freq: 0b0_1010,
-            },
+            baseband: Some(RXParameterFreq {
+                phase: 0x0A,
+                freq: 0x0A,
+            }),
+            rf: None,
             amplitude: 0b0110,
             deviation_update: true,
             ampl_agc_jump_correction: false,
@@ -182,22 +174,35 @@ pub fn configure_radio_rx(radio: &mut Registers) -> Result<(Board, ChannelParame
         decay: 0b0110,
         baseband_offset: RXParameterBasebandOffset { a: 0, b: 0 },
     };
-    set3.write3(radio)?;
+    set3.write3(radio, &board, &channel, &rxp)?;
 
-    radio.RXPARAMSETS().write(RxParamSets(
-        RxParamSet::Set0,
-        RxParamSet::Set1,
-        RxParamSet::Set3,
-        RxParamSet::Set3,
-    ))?;
-
-    radio.MATCH1PAT().write(0x7E7E)?;
-    radio.MATCH1LEN().write(MatchLen {
-        len: 0xA,
-        raw: false,
-    })?;
-    radio.MATCH1MAX().write(0xA)?;
-    radio.TMGRXPREAMBLE2().write(Float5 { m: 0x17, e: 1 })?;
+    // TODO: set timeout (TMGRXPREAMBLEx) off of expected bitrate + preamble length?
+    RXParameterStages {
+        preamble1: Some(Preamble1 {
+            pattern: PatternMatch1 {
+                pat: 0x1111,
+                len: 15,
+                raw: false,
+                min: 0,
+                max: 15,
+            },
+            timeout: Float5 { m: 0x17, e: 5 },
+            set: RxParamSet::Set0,
+        }),
+        preamble2: Some(Preamble2 {
+            pattern: PatternMatch0 {
+                pat: 0x1111_1111,
+                len: 31,
+                raw: false,
+                min: 0,
+                max: 31,
+            },
+            timeout: Float5 { m: 0x17, e: 2 },
+            set: RxParamSet::Set1,
+        }),
+        preamble3: None,
+        packet: RxParamSet::Set3,
+    }.write(radio)?;
 
     radio.PKTMAXLEN().write(0xFF)?;
     radio.PKTLENCFG().write(PktLenCfg { pos: 0, bits: 0xF })?;
@@ -206,7 +211,7 @@ pub fn configure_radio_rx(radio: &mut Registers) -> Result<(Board, ChannelParame
     radio.PKTCHUNKSIZE().write(0x09)?;
     radio.PKTACCEPTFLAGS().write(PktAcceptFlags::LRGP)?;
 
-    radio.RSSIREFERENCE().write(64)?;
+    radio.RSSIREFERENCE().write(32)?;
 
     Ok((board, channel))
 }

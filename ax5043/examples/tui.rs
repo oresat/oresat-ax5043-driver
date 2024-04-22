@@ -221,11 +221,11 @@ fn ui(f: &mut Frame, state: &UIState) {
     state.chart(f, sparks[0], "RSSI", "dB", &state.rx.iter().map(|r| r.rssi).collect::<Vec<f64>>());
     state.chart(f, sparks[1], "AGC Counter", "dB", &state.rx.iter().map(|r| r.agccounter).collect::<Vec<f64>>());
     state.chart(f, sparks[2], "Amplitude", "", &state.rx.iter().map(|r| r.ampl).collect::<Vec<f64>>());
-    state.chart(f, sparks[3], "RF Frequency", "Hz", &state.rx.iter().map(|r| r.rffreq).collect::<Vec<f64>>());
+    state.chart(f, sparks[3], "RF Frequency (carrier?)", "Δ Hz", &state.rx.iter().map(|r| r.rffreq).collect::<Vec<f64>>());
     state.chart(f, sparks[4], "Phase", "", &state.rx.iter().map(|r| r.phase).collect::<Vec<f64>>());
-    state.chart(f, sparks[5], "Δ Data Rate", "bits/s", &state.rx.iter().map(|r| r.datarate).collect::<Vec<f64>>());
+    state.chart(f, sparks[5], "Data Rate", "Δ bits/s", &state.rx.iter().map(|r| r.datarate).collect::<Vec<f64>>());
     state.chart(f, sparks[6], "FSK Demodulation", "", &state.rx.iter().map(|r| r.fskdemod).collect::<Vec<f64>>());
-    state.chart(f, sparks[7], "Frequency", "Hz", &state.rx.iter().map(|r| r.freq).collect::<Vec<f64>>());
+    state.chart(f, sparks[7], "Frequency (intermediate?)", "Δ Hz", &state.rx.iter().map(|r| r.freq).collect::<Vec<f64>>());
 
     f.render_widget(
         state.rx_params(
@@ -308,7 +308,7 @@ fn get_signal(radio: &mut Registers, channel: &config::ChannelParameters) -> Res
         agccounter: (f64::from(signal.agccounter) * 4.0) / 3.0,
         datarate: f64::from(track.datarate),
         ampl: f64::from(track.ampl),
-        phase: f64::from(track.phase),
+        phase: f64::from(track.phase.0),
         fskdemod: f64::from(track.fskdemod.0),
         rffreq: f64::from(track.rffreq.0),
         freq: f64::from(track.freq) * channel.datarate as f64 / 2f64.powf(16.0),

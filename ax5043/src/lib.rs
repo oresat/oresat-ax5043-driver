@@ -423,7 +423,7 @@ registers! {
         RXTRACKING:     RXTracking  [0x045,16, ReadOnly ], // Aggregate receiver tracking block
         TRKDATARATE:    i32         [0x045, 3, ReadOnly ], // Datarate Tracking
         TRKAMPL:        u16         [0x048, 2, ReadOnly ], // Amplitude Tracking - output of demodulator, this / AGCCOUNTER = RSSI
-        TRKPHASE:       u16         [0x04A, 2, ReadOnly ], // Phase Tracking
+        TRKPHASE:       TrkPhase    [0x04A, 2, ReadOnly ], // Phase Tracking
         TRKRFFREQ:      TrkRFFreq   [0x04D, 3, ReadWrite], // RF Frequency Tracking
         TRKFREQ:        i16         [0x050, 2, ReadWrite], // Frequency Tracking
         TRKFSKDEMOD:    TrkFSKDemod [0x052, 2, ReadOnly ], // FSK Demodulator Tracking
@@ -738,7 +738,7 @@ impl Registers<'_> {
             RXTRACKING: RXTracking {
                 datarate: 0,
                 ampl: 0,
-                phase: 0,
+                phase: TrkPhase(0),
                 rffreq: TrkRFFreq(0),
                 freq: 0,
                 fskdemod: TrkFSKDemod(0),
@@ -746,7 +746,7 @@ impl Registers<'_> {
             },
             TRKDATARATE: 0,
             TRKAMPL: 0,
-            TRKPHASE: 0,
+            TRKPHASE: TrkPhase(0),
             TRKRFFREQ: TrkRFFreq(0),
             TRKFREQ: 0,
             TRKFSKDEMOD: TrkFSKDemod(0),
