@@ -1263,7 +1263,7 @@ pub struct RXParameterBasebandOffset {
 pub struct RXParameterSet {
     pub agc: RXParameterAGC,
     pub gain: RXParameterGain,
-    pub freq_dev: u16,
+    pub freq_dev: Option<u16>,
     pub decay: u8,
     pub baseband_offset: RXParameterBasebandOffset,
 }
@@ -1357,7 +1357,21 @@ impl RXParameterSet {
                 AmplGainFlags::empty()
             },
         })?;
-        radio.FREQDEV0().write(self.freq_dev)?;
+
+        // From PM table 122:
+        // is kSF transmitter shaping and receiver filtering dependent
+        // constant. It is usually around k sf ≅ 0.8
+        //deviation = bitrate * 0.5 * m
+        //FREQDEV = deviation/bitrate * 2^8 * ksf
+        //FREQDEV = 0.5 * m * 2^8 * ksf
+        //FREQDEV = 2^6 * ksf =~ 31, for MSK only
+        //Emperical observaion shows this also depends on BT value
+        // FIXME specify freqdev in terms of ksf or just derive directly?
+        if let Some(f) = self.freq_dev {
+            radio.FREQDEV0().write(f)?;
+        } else {
+            radio.FREQDEV0().write(0)?;
+        }
         radio.FOURFSK0().write(FourFSK {
             decay: self.decay,
             update: self.gain.deviation_update,
@@ -1452,7 +1466,11 @@ impl RXParameterSet {
                 AmplGainFlags::empty()
             },
         })?;
-        radio.FREQDEV1().write(self.freq_dev)?;
+        if let Some(f) = self.freq_dev {
+            radio.FREQDEV1().write(f)?;
+        } else {
+            radio.FREQDEV1().write(0)?;
+        }
         radio.FOURFSK1().write(FourFSK {
             decay: self.decay,
             update: self.gain.deviation_update,
@@ -1546,7 +1564,13 @@ impl RXParameterSet {
                 AmplGainFlags::empty()
             },
         })?;
-        radio.FREQDEV3().write(self.freq_dev)?;
+        if let Some(f) = self.freq_dev {
+            radio.FREQDEV3().write(f)?;
+        } else {
+            radio.FREQDEV3().write(0)?;
+        }
+
+
         radio.FOURFSK3().write(FourFSK {
             decay: self.decay,
             update: self.gain.deviation_update,

@@ -133,7 +133,7 @@ pub fn configure_radio_rx(radio: &mut Registers) -> Result<(Board, ChannelParame
             ampl_agc_jump_correction: false,
             ampl_averaging: false,
         },
-        freq_dev: 0,
+        freq_dev: None,
         decay: 0b0110,
         baseband_offset: RXParameterBasebandOffset { a: 0, b: 0 },
     };
@@ -156,7 +156,7 @@ pub fn configure_radio_rx(radio: &mut Registers) -> Result<(Board, ChannelParame
             ampl_agc_jump_correction: false,
             ampl_averaging: false,
         },
-        freq_dev: 0x32,
+        freq_dev: Some(0x32),
         decay: 0b0110,
         baseband_offset: RXParameterBasebandOffset { a: 0, b: 0 },
     };
@@ -179,7 +179,7 @@ pub fn configure_radio_rx(radio: &mut Registers) -> Result<(Board, ChannelParame
             ampl_agc_jump_correction: false,
             ampl_averaging: false,
         },
-        freq_dev: 0x32,
+        freq_dev: Some(0x32),
         decay: 0b0110,
         baseband_offset: RXParameterBasebandOffset { a: 0, b: 0 },
     };
