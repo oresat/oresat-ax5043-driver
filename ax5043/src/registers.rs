@@ -556,6 +556,7 @@ bitflags! {
         const NRZI   = Self::INV.bits() | Self::DIFF.bits();
         const FM1    = Self::INV.bits() | Self::DIFF.bits() | Self::MANCH.bits();
         const FM0    = Self::DIFF.bits() | Self::MANCH.bits();
+        const NRZISCR = Self::NRZI.bits() | Self::SCRAM.bits();
     }
 }
 

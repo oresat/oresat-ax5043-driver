@@ -7,7 +7,7 @@ use std::net::{IpAddr, Ipv6Addr, SocketAddr, UdpSocket};
 use timerfd::{SetTimeFlags, TimerFd, TimerState};
 use gpiod::{Chip, EdgeDetect, Options};
 
-use ax5043::config_rpi::configure_radio_rx;
+use ax5043::config::rpi::configure_radio_rx;
 use ax5043::registers::*;
 use ax5043::*;
 

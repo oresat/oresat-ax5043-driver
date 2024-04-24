@@ -1,64 +1,12 @@
-use crate::{
-    config::{Framing, Modulation, SlowRamp, FEC, *},
-    *,
-};
+use crate::config::*;
 
 use anyhow::Result;
 
 fn config(radio: &mut Registers) -> Result<(Board, ChannelParameters)> {
-    #[rustfmt::skip]
-    let board = Board {
-        sysclk: Pin { mode: config::SysClk::Z,    pullup: true,  invert: false, },
-        dclk:   Pin { mode: config::DClk::Z,      pullup: true,  invert: false, },
-        data:   Pin { mode: config::Data::Z,      pullup: true,  invert: false, },
-        pwramp: Pin { mode: config::PwrAmp::TCXO, pullup: false, invert: false, },
-        irq:    Pin { mode: config::IRQ::IRQ,     pullup: false, invert: false, },
-        antsel: Pin { mode: config::AntSel::Z,    pullup: true,  invert: false, },
-        xtal: Xtal {
-            kind: XtalKind::TCXO,
-            freq: 48_000_000,
-            enable: XtalPin::AntSel,
-        },
-        vco: VCO::Internal,
-        filter: Filter::Internal,
-        dac: DAC {
-            pin: DACPin::PwrAmp,
-        },
-        adc: ADC::ADC1,
-    }
-    .write(radio)?;
 
-    let synth = Synthesizer {
-        freq_a: 436_500_000,
-        freq_b: 0,
-        active: FreqReg::A,
-        pll: PLL {
-            charge_pump_current: 0x02, // From spreadsheet
-            filter_bandwidth: LoopFilter::Internalx1,
-        },
-        boost: PLL {
-            charge_pump_current: 0xC8,                // Default value
-            filter_bandwidth: LoopFilter::Internalx5, // Default value
-        },
-        //vco_current: Manual(0x13), // depends on VCO, readback VCOIR, see AND9858/D for manual cal
-        vco_current: Control::Automatic,
-        lock_detector_delay: Control::Automatic, // readback PLLLOCKDET::LOCKDETDLYR
-        ranging_clock: RangingClock::XtalDiv1024, // less than one tenth the loop filter bandwidth. Derive?
-    }
-    .write(radio, &board)?;
-
-    let channel = ChannelParameters {
-        modulation: Modulation::GMSK {
-            ramp: SlowRamp::Bits1,
-            bt: BT(0.5),
-        },
-        encoding: Encoding::NRZI | Encoding::SCRAM,
-        framing: Framing::HDLC { fec: FEC {} },
-        crc: CRC::CCITT { initial: 0xFFFF },
-        datarate: 9_600,
-        bitorder: BitOrder::LSBFirst,
-    }
-    .write(radio, &board)?;
+    let board = board::RPI.write(radio)?;
+    let synth = synth::UHF_436_5.write(radio, &board)?;
+    let channel = channel::GMSK_9600_LSB.write(radio, &board)?;
 
     synth.autorange(radio)?;
 

@@ -1,5 +1,5 @@
 use anyhow::Result;
-use ax5043::{config, config::PwrAmp, config::IRQ, config::*, Status};
+use ax5043::{config, config::*, Status};
 use ax5043::{registers::*, Registers, RX, TX};
 use clap::Parser;
 use mio::net::UdpSocket;
@@ -10,57 +10,9 @@ use std::{
 };
 
 fn configure_radio(radio: &mut Registers) -> Result<Board> {
-    #[rustfmt::skip]
-    let board = Board {
-        sysclk: Pin { mode: SysClk::Z,      pullup: true,  invert: false, },
-        dclk:   Pin { mode: DClk::Z,        pullup: true,  invert: false, },
-        data:   Pin { mode: Data::Z,        pullup: true,  invert: false, },
-        pwramp: Pin { mode: PwrAmp::TCXO,   pullup: false, invert: false, },
-        irq:    Pin { mode: IRQ::IRQ,       pullup: false, invert: false, },
-        antsel: Pin { mode: AntSel::Z,      pullup: true,  invert: false, },
-        xtal: Xtal {
-            kind: XtalKind::TCXO,
-            freq: 48_000_000,
-            enable: XtalPin::AntSel,
-        },
-        vco: VCO::Internal,
-        filter: Filter::Internal,
-        dac: DAC { pin: DACPin::None },
-        adc: ADC::None,
-    }.write(radio)?;
-
-    let synth = Synthesizer {
-        freq_a: 505_000_000,
-        freq_b: 0,
-        active: FreqReg::A,
-        pll: PLL {
-            charge_pump_current: 0x02, // From spreadsheet
-            filter_bandwidth: LoopFilter::Internalx1,
-        },
-        boost: PLL {
-            charge_pump_current: 0xC8,                // Default value
-            filter_bandwidth: LoopFilter::Internalx5, // Default value
-        },
-        //vco_current: Manual(0x16), // depends on VCO, readback VCOIR, see AND9858/D for manual cal
-        vco_current: Control::Automatic,
-        lock_detector_delay: Control::Automatic, // readback PLLLOCKDET::LOCKDETDLYR
-        ranging_clock: RangingClock::XtalDiv8192, // less than one tenth the loop filter bandwidth. Derive?
-    }.write(radio, &board)?;
-
-
-    let channel = ChannelParameters {
-        modulation: config::Modulation::GMSK {
-            ramp: config::SlowRamp::Bits1,
-            bt: BT(0.5),
-        },
-        encoding: Encoding::NRZI | Encoding::SCRAM,
-        framing: config::Framing::HDLC {
-            fec: config::FEC {},
-        },
-        crc: CRC::CCITT { initial: 0xFFFF },
-        datarate: 60_000,
-        bitorder: BitOrder::MSBFirst,
-    }.write(radio, &board)?;
+    let board = config::board::RPI.write(radio)?;
+    let synth = config::synth::LBAND_DC_505.write(radio, &board)?;
+    let channel = config::channel::GMSK_60000.write(radio, &board)?;
 
     TXParameters {
         antenna: Antenna::SingleEnded,

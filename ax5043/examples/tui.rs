@@ -18,7 +18,7 @@ use std::{
 use gpiod::{Chip, EdgeDetect, Options};
 use timerfd::{SetTimeFlags, TimerFd, TimerState};
 use itertools::Itertools;
-use ax5043::config_rpi::configure_radio_rx;
+use ax5043::config::rpi::configure_radio_rx;
 use ax5043::registers::*;
 use ax5043::tui::*;
 use ax5043::*;

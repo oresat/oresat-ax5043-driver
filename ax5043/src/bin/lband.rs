@@ -1,5 +1,5 @@
 use anyhow::{ensure, Result};
-use ax5043::{config, config::PwrAmp, config::IRQ, config::*};
+use ax5043::{config, config::*};
 use ax5043::{registers::*, Registers, RX, TX};
 use clap::Parser;
 use crc::{Crc, CRC_16_GENIBUS}; // TODO: this CRC works but is it correct?
@@ -10,56 +10,9 @@ use std::{io::Write, os::fd::AsRawFd};
 use std::net::{IpAddr, Ipv4Addr, SocketAddr, UdpSocket};
 
 fn configure_radio(radio: &mut Registers) -> Result<(Board, ChannelParameters)> {
-    #[rustfmt::skip]
-    let board = Board {
-        sysclk: Pin { mode: SysClk::XtalDiv1, pullup: false, invert: false, },
-        dclk:   Pin { mode: DClk::Z,          pullup: true,  invert: false, },
-        data:   Pin { mode: Data::Z,          pullup: true,  invert: false, },
-        pwramp: Pin { mode: PwrAmp::PwrAmp,   pullup: false, invert: false, },
-        irq:    Pin { mode: IRQ::IRQ,         pullup: false, invert: false, },
-        antsel: Pin { mode: AntSel::Z,        pullup: true,  invert: false, },
-        xtal: Xtal {
-            kind: XtalKind::TCXO,
-            freq: 16_000_000,
-            enable: XtalPin::None,
-        },
-        vco: VCO::Internal,
-        filter: Filter::Internal,
-        dac: DAC { pin: DACPin::None },
-        adc: ADC::None,
-    }.write(radio)?;
-
-    let synth = Synthesizer {
-        freq_a: 457_000_000,
-        freq_b: 0,
-        active: FreqReg::A,
-        pll: PLL {
-            charge_pump_current: 0x02, // From spreadsheet
-            filter_bandwidth: LoopFilter::Internalx1,
-        },
-        boost: PLL {
-            charge_pump_current: 0xC8,                // Default value
-            filter_bandwidth: LoopFilter::Internalx5, // Default value
-        },
-        //vco_current: Manual(0x16), // depends on VCO, readback VCOIR, see AND9858/D for manual cal
-        vco_current: Control::Automatic,
-        lock_detector_delay: Control::Automatic, // readback PLLLOCKDET::LOCKDETDLYR
-        ranging_clock: RangingClock::XtalDiv1024, // less than one tenth the loop filter bandwidth. Derive?
-    }.write(radio, &board)?;
-
-    let channel = ChannelParameters {
-        modulation: config::Modulation::GMSK {
-            ramp: config::SlowRamp::Bits1,
-            bt: BT(0.5),
-        },
-        encoding: Encoding::NRZI | Encoding::SCRAM,
-        framing: config::Framing::HDLC {
-            fec: config::FEC {},
-        },
-        crc: CRC::CCITT { initial: 0xFFFF },
-        datarate: 60_000,
-        bitorder: BitOrder::MSBFirst,
-    }.write(radio, &board)?;
+    let board = config::board::C3_LBAND.write(radio)?;
+    let synth = config::synth::LBAND_DC_457.write(radio, &board)?;
+    let channel = config::channel::GMSK_60000.write(radio, &board)?;
 
     radio.FIFOTHRESH().write(128)?; // Half the FIFO size
 

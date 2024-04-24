@@ -1,4 +1,9 @@
 use crate::*;
+
+pub mod rpi;
+pub mod board;
+pub mod synth;
+pub mod channel;
 #[cfg(test)] use proptest::prelude::*;
 
 fn div_nearest(dividend: u64, divisor: u64) -> u64 {

@@ -10,7 +10,7 @@ use ratatui::{backend::CrosstermBackend, prelude::*, Terminal};
 use std::{backtrace::Backtrace, cell, io, os::fd::AsRawFd, panic, time::Duration};
 use timerfd::{SetTimeFlags, TimerFd, TimerState};
 
-use ax5043::config_rpi::configure_radio_tx;
+use ax5043::config::rpi::configure_radio_tx;
 use ax5043::{registers::*, tui::*, *};
 
 struct UIState {

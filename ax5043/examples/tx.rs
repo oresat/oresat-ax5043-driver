@@ -14,7 +14,7 @@ use std::{
 };
 use timerfd::{SetTimeFlags, TimerFd, TimerState};
 
-use ax5043::config_rpi::configure_radio_tx;
+use ax5043::config::rpi::configure_radio_tx;
 
 fn print_diff<S: AsRef<str> + Display, T: Flags + PartialEq + Debug + Copy>(
     name: S,
