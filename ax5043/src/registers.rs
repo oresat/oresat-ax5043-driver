@@ -274,26 +274,26 @@ impl From<Float5> for Reg8 {
 #[cfg(test)]
 proptest! {
     #[test]
-    fn float4_convert(n: u32) {
-        let shift = (u32::BITS - n.leading_zeros()).saturating_sub(4);
+    fn float4_convert(n: u64) {
+        let shift = (u64::BITS - n.leading_zeros()).saturating_sub(4);
         assert_eq!(n & 0xF << shift, Float4::new(n).into());
     }
 
     #[test]
-    fn float5_convert(n: u32) {
-        let shift = (u32::BITS - n.leading_zeros()).saturating_sub(5);
+    fn float5_convert(n: u64) {
+        let shift = (u64::BITS - n.leading_zeros()).saturating_sub(5);
         assert_eq!(n & 0x1F << shift, Float5::new(n).into());
     }
 }
 
 #[test]
 fn float4_zero() {
-    assert_eq!(0u32, Float4::new(0).into());
+    assert_eq!(0u64, Float4::new(0).into());
 }
 
 #[test]
 fn float5_zero() {
-    assert_eq!(0u32, Float5::new(0).into());
+    assert_eq!(0u64, Float5::new(0).into());
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, IntoPrimitive, TryFromPrimitive)]
