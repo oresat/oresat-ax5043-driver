@@ -36,23 +36,6 @@ pub fn ax5043_listen(radio: &mut Registers) -> Result<()> {
 
 // TODO: FRAMING::FRMRX
 
-fn get_signal(radio: &mut Registers, channel: &config::ChannelParameters) -> Result<RXState> {
-    let signal = radio.SIGNALSTR().read()?;
-    let track = radio.RXTRACKING().read()?;
-
-    Ok(RXState {
-        rssi: f64::from(signal.rssi),
-        agccounter: (f64::from(signal.agccounter) * 4.0) / 3.0,
-        datarate: f64::from(track.datarate),
-        ampl: f64::from(track.ampl),
-        phase: f64::from(track.phase.0),
-        fskdemod: f64::from(track.fskdemod.0),
-        rffreq: f64::from(track.rffreq.0),
-        freq: f64::from(track.freq) * channel.datarate as f64 / 2f64.powf(16.0),
-        paramcurset: radio.RXPARAMCURSET().read()?,
-    })
-}
-
 fn read_packet(radio: &mut Registers, uplink: &UdpSocket) -> Result<()> {
     let stat = radio.FIFOSTAT().read()?;
     if stat.contains(FIFOStat::OVER) {
@@ -164,7 +147,7 @@ fn main() -> Result<()> {
             match event.token() {
                 TELEMETRY => {
                     tfd.read();
-                    CommState::STATE(get_signal(&mut radio, &channel)?).send(&uplink)?;
+                    CommState::STATE(RXState::new(&mut radio, &channel)?).send(&uplink)?;
                     CommState::REGISTERS(StatusRegisters::new(&mut radio)?).send(&uplink)?;
                 }
                 IRQ => {
