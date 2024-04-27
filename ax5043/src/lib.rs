@@ -444,7 +444,7 @@ registers! {
         RXDATARATE:     u32         [0x103, 3, ReadWrite], // Receiver Datarate
         MAXDROFFSET:    u32         [0x106, 3, ReadWrite], // Maximum Receiver Datarate Offset
         MAXRFOFFSET:    MaxRFOffset [0x109, 3, ReadWrite], // Maximum Receiver RF Offset
-        FSKDMAX:        u16         [0x10C, 2, ReadWrite], // Four FSK Rx Deviation
+        FSKDMAX:        i16         [0x10C, 2, ReadWrite], // Four FSK Rx Deviation
         FSKDMIN:        i16         [0x10E, 2, ReadWrite], // Four FSK Rx Deviation
         AFSKSPACE:      u16         [0x110, 2, ReadWrite], // AFSK Space (0) Frequency
         AFSKMARK:       u16         [0x112, 2, ReadWrite], // AFSK Mark (1) Frequency

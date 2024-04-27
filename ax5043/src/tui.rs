@@ -749,7 +749,7 @@ pub struct RXParams {
     pub bitrate: u64,
     pub maxdroffset: u64,
     pub maxrfoffset: u64,
-    pub fskdevmax: u64,
+    pub fskdevmax: i64,
     pub fskdevmin: i64,
     pub afskspace: u16,
     pub afskmark: u16,
@@ -804,7 +804,8 @@ impl RXParams {
                 / (2_u64.pow(7) * board.xtal.freq),
             maxrfoffset: u64::from(radio.MAXRFOFFSET().read()?.offset) * board.xtal.freq
                 / 2_u64.pow(24), // TODO: xtal.div not part of this?
-            fskdevmax: u64::from(radio.FSKDMAX().read()?) * bitrate / (3 * 512), // TODO baudrate?
+            fskdevmax: i64::from(radio.FSKDMAX().read()?) * i64::try_from(bitrate).unwrap()
+                / (3 * 512), // TODO baudrate?
             fskdevmin: i64::from(radio.FSKDMIN().read()?) * i64::try_from(bitrate).unwrap()
                 / (-3 * 512), // TODO baudrate?
             afskspace: radio.AFSKSPACE().read()?,
