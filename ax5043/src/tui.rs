@@ -83,6 +83,26 @@ pub struct RXState {
     pub paramcurset: RxParamCurSet,
 }
 
+impl RXState {
+    pub fn new(radio: &mut Registers, channel: &config::ChannelParameters) -> Result<RXState> {
+        let signal = radio.SIGNALSTR().read()?;
+        let track = radio.RXTRACKING().read()?;
+
+        Ok(RXState {
+            rssi: f64::from(signal.rssi),
+            agccounter: (f64::from(signal.agccounter) * 4.0) / 3.0,
+            datarate: f64::from(track.datarate),
+            ampl: f64::from(track.ampl),
+            phase: f64::from(track.phase.0),
+            fskdemod: f64::from(track.fskdemod.0),
+            rffreq: f64::from(track.rffreq.0),
+            freq: f64::from(track.freq) * channel.datarate as f64 / 2f64.powf(16.0),
+            paramcurset: radio.RXPARAMCURSET().read()?,
+        })
+    }
+}
+
+
 #[derive(Debug, Serialize, Deserialize)]
 pub struct PacketFormat {
     addrcfg: PktAddrCfg,
