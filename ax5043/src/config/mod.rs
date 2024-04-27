@@ -1,10 +1,12 @@
 use crate::*;
+use serde::{Deserialize, Serialize};
 
-pub mod rpi;
 pub mod board;
-pub mod synth;
 pub mod channel;
-#[cfg(test)] use proptest::prelude::*;
+pub mod rpi;
+pub mod synth;
+#[cfg(test)]
+use proptest::prelude::*;
 
 fn div_nearest(dividend: u64, divisor: u64) -> u64 {
     (dividend + (divisor >> 1)) / divisor
@@ -25,7 +27,7 @@ proptest! {
     }
 }
 
-#[derive(Copy, Clone, Default)]
+#[derive(Copy, Clone, Debug, Default, Serialize, Deserialize)]
 pub enum SysClk {
     Zero,
     One,
@@ -72,7 +74,7 @@ impl From<SysClk> for PFSysClkMode {
     }
 }
 
-#[derive(Copy, Clone, Default)]
+#[derive(Copy, Clone, Debug, Default, Serialize, Deserialize)]
 pub enum DClk {
     Zero,
     One,
@@ -99,7 +101,7 @@ impl From<DClk> for PFDClkMode {
     }
 }
 
-#[derive(Copy, Clone, Default)]
+#[derive(Copy, Clone, Debug, Default, Serialize, Deserialize)]
 pub enum Data {
     Zero,
     One,
@@ -128,7 +130,7 @@ impl From<Data> for PFDataMode {
     }
 }
 
-#[derive(Copy, Clone, Default)]
+#[derive(Copy, Clone, Debug, Default, Serialize, Deserialize)]
 pub enum PwrAmp {
     Zero,
     One,
@@ -159,7 +161,7 @@ impl From<PwrAmp> for PFPwrAmpMode {
     }
 }
 
-#[derive(Copy, Clone, Default)]
+#[derive(Copy, Clone, Default, Debug, Serialize, Deserialize)]
 pub enum IRQ {
     Zero,
     One,
@@ -182,7 +184,7 @@ impl From<IRQ> for PFIRQMode {
     }
 }
 
-#[derive(Copy, Clone, Default)]
+#[derive(Copy, Clone, Default, Debug, Serialize, Deserialize)]
 pub enum AntSel {
     Zero,
     One,
@@ -215,7 +217,7 @@ impl From<AntSel> for PFAntSelMode {
 // - 0, 1, test are special (no inv/pull)?
 // - configure pullup/invert in a different way?
 // enum{ zero, one, z, test, func(T) }
-#[derive(Copy, Clone, Default)]
+#[derive(Copy, Clone, Default, Debug, Serialize, Deserialize)]
 pub struct Pin<T> {
     pub mode: T,
     pub pullup: bool,
@@ -235,7 +237,7 @@ impl<T> From<Pin<T>> for PFFlags {
     }
 }
 
-#[derive(Default, Copy, Clone)]
+#[derive(Default, Copy, Clone, Debug, Serialize, Deserialize)]
 pub enum XtalPin {
     #[default]
     None,
@@ -247,7 +249,7 @@ pub type Hz = u64;
 #[allow(non_camel_case_types)]
 pub type pF = f64; // TODO: newtype and XtalLoadCap::new(), TryFrom/From, make internal type u8
 
-#[derive(Default, Copy, Clone)]
+#[derive(Default, Copy, Clone, Debug, Serialize, Deserialize)]
 pub enum XtalKind {
     // FIXME rename to Oscillator? ExtOsc?
     XO {
@@ -257,7 +259,7 @@ pub enum XtalKind {
     TCXO,
 }
 
-#[derive(Default, Copy, Clone)]
+#[derive(Default, Copy, Clone, Debug, Serialize, Deserialize)]
 pub struct Xtal {
     pub kind: XtalKind,
     pub freq: Hz,
@@ -275,7 +277,7 @@ impl Xtal {
     }
 }
 
-#[derive(Default, Copy, Clone)]
+#[derive(Default, Copy, Clone, Debug, Serialize, Deserialize)]
 pub enum VCO {
     #[default]
     Internal, // VCO1
@@ -283,7 +285,7 @@ pub enum VCO {
     External, // Bypassed
 }
 
-#[derive(Default, Copy, Clone)]
+#[derive(Default, Copy, Clone, Debug, Serialize, Deserialize)]
 pub enum Filter {
     // TODO: values?
     #[default]
@@ -291,14 +293,14 @@ pub enum Filter {
     External,
 }
 
-#[derive(Default, Copy, Clone)]
+#[derive(Default, Copy, Clone, Debug, Serialize, Deserialize)]
 pub enum Antenna {
     #[default]
     SingleEnded,
     Differential,
 }
 
-#[derive(Default, Copy, Clone)]
+#[derive(Default, Copy, Clone, Debug, Serialize, Deserialize)]
 pub enum DACPin {
     #[default]
     None,
@@ -306,13 +308,13 @@ pub enum DACPin {
     AntSel,
 }
 
-#[derive(Default, Copy, Clone)]
+#[derive(Default, Copy, Clone, Debug, Serialize, Deserialize)]
 pub struct DAC {
     pub pin: DACPin,
     // TODO: initial output?
 }
 
-#[derive(Default, Copy, Clone)]
+#[derive(Default, Copy, Clone, Debug, Serialize, Deserialize)]
 pub enum ADC {
     #[default]
     None,
@@ -321,7 +323,7 @@ pub enum ADC {
     Both,
 }
 
-#[derive(Default, Copy, Clone)]
+#[derive(Default, Copy, Clone, Debug, Serialize, Deserialize)]
 #[rustfmt::skip]
 pub struct Board {
     pub sysclk: Pin<SysClk>, // FIXME: sysclk doesn't have invert
@@ -1168,6 +1170,7 @@ impl RXParameters {
 // the clock live when we need the actual values. This specifically is 1/stuff
 // where stuff is everything that isn't fxtal and fxtaldiv. To get f3dB then
 // fxtal / (fxtaldiv * AGCGAIN_LOOP_SCALE[attack|decay])
+#[rustfmt::skip]
 const AGCGAIN_LOOP_SCALE: [u64; 15] = [
     139,
     245,
@@ -1574,7 +1577,6 @@ impl RXParameterSet {
         } else {
             radio.FREQDEV3().write(0)?;
         }
-
 
         radio.FOURFSK3().write(FourFSK {
             decay: self.decay,

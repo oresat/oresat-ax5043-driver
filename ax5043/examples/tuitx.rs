@@ -230,7 +230,8 @@ fn main() -> Result<()> {
                         count: 44,
                         data: 0x11,
                     };
-                    let packets = [ FIFOChunkTX::REPEATDATA {
+                    let packets = [
+                        FIFOChunkTX::REPEATDATA {
                             flags: FIFODataTXFlags::PKTSTART,
                             count: 128,
                             data: 0x41,

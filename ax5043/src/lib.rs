@@ -1,6 +1,9 @@
 use bitflags::bitflags;
+use serde::{Deserialize, Serialize};
 use spidev::{SpiModeFlags, Spidev, SpidevOptions, SpidevTransfer};
-use std::{collections::VecDeque, convert::TryFrom, fmt::Debug, marker::PhantomData, path::Path, io::Read};
+use std::{
+    collections::VecDeque, convert::TryFrom, fmt::Debug, io::Read, marker::PhantomData, path::Path,
+};
 use thiserror::Error;
 
 use registers::*;
@@ -63,7 +66,7 @@ pub mod tui;
 //
 
 bitflags! {
-    #[derive(Clone, Copy, Debug, PartialEq)]
+    #[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
     pub struct Status: u16 {
         const READY            = 0x8000;
         const PLL_LOCK         = 0x4000;

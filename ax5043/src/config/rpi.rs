@@ -1,9 +1,7 @@
 use crate::config::*;
-
 use anyhow::Result;
 
 fn config(radio: &mut Registers) -> Result<(Board, ChannelParameters)> {
-
     let board = board::RPI.write(radio)?;
     let synth = synth::UHF_436_5.write(radio, &board)?;
     let channel = channel::GMSK_9600_LSB.write(radio, &board)?;
@@ -191,7 +189,6 @@ pub fn configure_radio_rx(radio: &mut Registers) -> Result<(Board, ChannelParame
         packet: RxParamSet::Set3,
     }
     .write(radio)?;
-
 
     radio.PKTMAXLEN().write(0xFF)?;
     radio.PKTLENCFG().write(PktLenCfg { pos: 0, bits: 0xF })?;

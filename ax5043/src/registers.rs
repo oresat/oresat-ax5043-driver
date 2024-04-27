@@ -7,9 +7,15 @@
 //        instead of rustfmt::skip
 use bitflags::bitflags;
 use num_enum::{IntoPrimitive, TryFromPrimitive};
-use std::{fmt, ops::{Index, Range}};
-#[cfg(test)] use proptest::prelude::*;
-#[cfg(test)] use proptest_derive::Arbitrary;
+#[cfg(test)]
+use proptest::prelude::*;
+#[cfg(test)]
+use proptest_derive::Arbitrary;
+use serde::{Deserialize, Serialize};
+use std::{
+    fmt,
+    ops::{Index, Range},
+};
 
 // newtypes to placate the orphan rule
 // registers are big endian
@@ -86,12 +92,7 @@ impl TryFrom<Reg24> for i32 {
     type Error = Reg24;
     fn try_from(item: Reg24) -> Result<Self, Self::Error> {
         // Shift down for sign extension
-        Ok(
-            (Self::from(item[0]) << 24
-                | Self::from(item[1]) << 16
-                | Self::from(item[2]) << 8)
-                >> 8,
-        )
+        Ok((Self::from(item[0]) << 24 | Self::from(item[1]) << 16 | Self::from(item[2]) << 8) >> 8)
     }
 }
 
@@ -200,7 +201,7 @@ proptest! {
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Float<const M: u8> {
     // m width/e width where m + e = 8
     // The ax5043 uses both 5/3 and 4/4 formats
@@ -296,7 +297,7 @@ fn float5_zero() {
     assert_eq!(0u64, Float5::new(0).into());
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, IntoPrimitive, TryFromPrimitive)]
+#[derive(Clone, Copy, Debug, PartialEq, IntoPrimitive, TryFromPrimitive, Serialize, Deserialize)]
 #[cfg_attr(test, derive(Arbitrary))]
 #[repr(u8)]
 #[rustfmt::skip]
@@ -313,7 +314,7 @@ pub enum PwrModes{
 }
 
 bitflags! {
-    #[derive(Clone, Copy, Debug, PartialEq)]
+    #[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
     pub struct PwrFlags: u8 {
         const WDS   = 0x10; // RO
         const REFEN = 0x20;
@@ -322,7 +323,7 @@ bitflags! {
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
 pub struct PwrMode {
     pub mode: PwrModes,
     pub flags: PwrFlags,
@@ -357,7 +358,7 @@ proptest! {
 }
 
 bitflags! {
-    #[derive(Clone, Copy, Debug, PartialEq)]
+    #[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
     pub struct PowStat: u8 {
         const SUM      = 1 << 7;
         const REF      = 1 << 6;
@@ -421,7 +422,7 @@ proptest! {
 }
 
 bitflags! {
-    #[derive(Copy, Clone, Debug, PartialEq)]
+    #[derive(Copy, Clone, Debug, PartialEq, Serialize, Deserialize)]
     pub struct IRQ: u16 {
         const FIFONOTEMPTY = 1 << 0;
         const FIFONOTFULL  = 1 << 1;
@@ -461,7 +462,7 @@ proptest! {
 }
 
 bitflags! {
-    #[derive(Clone, Copy, Debug, PartialEq)]
+    #[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
     pub struct RadioEvent: u16 {
         const DONE          = 1 << 0;
         const SETTLED       = 1 << 1;
@@ -702,7 +703,7 @@ impl TryFrom<Reg8> for FECStatus {
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, TryFromPrimitive)]
+#[derive(Clone, Copy, Debug, PartialEq, TryFromPrimitive, Serialize, Deserialize)]
 #[repr(u8)]
 #[allow(non_camel_case_types)]
 #[rustfmt::skip]
@@ -1074,7 +1075,7 @@ pub enum FIFOChunkHeaderRX {
 }
 
 bitflags! {
-    #[derive(Clone, Copy, Debug, PartialEq)]
+    #[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
     pub struct FIFODataRXFlags: u8 {
         const ABORT    = 1 << 6;
         const SIZEFAIL = 1 << 5;
@@ -1086,7 +1087,7 @@ bitflags! {
     }
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub enum FIFOChunkRX {
     // NOP, ?
     RSSI(i8),
@@ -1289,7 +1290,7 @@ impl From<FIFOChunkTX> for Vec<u8> {
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, IntoPrimitive, TryFromPrimitive)]
+#[derive(Clone, Copy, Debug, PartialEq, IntoPrimitive, TryFromPrimitive, Serialize, Deserialize)]
 #[repr(u8)]
 #[allow(non_camel_case_types)]
 #[rustfmt::skip]
@@ -1301,21 +1302,23 @@ pub enum FLT {
 }
 
 bitflags! {
-    #[derive(Clone, Copy, Debug, PartialEq)]
+    #[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
     pub struct PLLLoopFlags: u8 {
         const FILTEN = 1 << 2;
         const DIRECT = 1 << 3;
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, IntoPrimitive, TryFromPrimitive)]
+#[derive(
+    Clone, Copy, Debug, PartialEq, IntoPrimitive, TryFromPrimitive, Serialize, Deserialize,
+)]
 #[repr(u8)]
 pub enum FreqSel {
     A = 0,
     B = 1 << 7,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
 pub struct PLLLoop {
     pub filter: FLT,
     pub flags: PLLLoopFlags,
@@ -1339,7 +1342,9 @@ impl From<PLLLoop> for Reg8 {
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, IntoPrimitive, TryFromPrimitive)]
+#[derive(
+    Clone, Copy, Debug, PartialEq, IntoPrimitive, TryFromPrimitive, Serialize, Deserialize,
+)]
 #[repr(u8)]
 #[allow(non_camel_case_types)]
 pub enum PLLVCORefDiv {
@@ -1350,7 +1355,7 @@ pub enum PLLVCORefDiv {
 }
 
 bitflags! {
-    #[derive(Clone, Copy, Debug, PartialEq)]
+    #[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
     pub struct PLLVCODivFlags: u8 {
         const RFDIV = 1 << 2;
         const VCOSEL = 1 << 4;
@@ -1358,7 +1363,7 @@ bitflags! {
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
 pub struct PLLVCODiv {
     pub mode: PLLVCORefDiv,
     pub flags: PLLVCODivFlags,
@@ -1381,7 +1386,7 @@ impl From<PLLVCODiv> for Reg8 {
 }
 
 bitflags! {
-    #[derive(Clone, Copy, Debug, PartialEq)]
+    #[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
     pub struct PLLRangingFlags: u8 {
         const RNG_START = 1 << 4;
         const RNGERR = 1 << 5;
@@ -1390,7 +1395,7 @@ bitflags! {
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
 pub struct PLLRanging {
     pub vcor: u8,
     pub flags: PLLRangingFlags,
@@ -1526,6 +1531,7 @@ pub struct RXTracking {
 
 impl TryFrom<Reg<16>> for RXTracking {
     type Error = Reg<16>;
+    #[rustfmt::skip]
     fn try_from(item: Reg<16>) -> Result<Self, Self::Error> {
         let datarate:  [u8; 3] = item[0..3].try_into().unwrap();
         let ampl:      [u8; 2] = item[3..5].try_into().unwrap();
@@ -1570,7 +1576,9 @@ impl From<MaxRFOffset> for Reg24 {
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, IntoPrimitive, TryFromPrimitive)]
+#[derive(
+    Clone, Copy, Debug, PartialEq, IntoPrimitive, TryFromPrimitive, Serialize, Deserialize,
+)]
 #[repr(u8)]
 pub enum RxParamSet {
     Set0 = 0b00,
@@ -1579,7 +1587,7 @@ pub enum RxParamSet {
     Set3 = 0b11,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
 pub struct RxParamSets(
     pub RxParamSet,
     pub RxParamSet,
@@ -1613,7 +1621,7 @@ impl From<RxParamSets> for Reg8 {
 //    BBOffsetAcq,
 //}
 
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
 pub struct RxParamCurSet {
     pub index: u8,
     pub number: RxParamSet,
@@ -2063,7 +2071,7 @@ impl From<PLLRngClk> for Reg8 {
 }
 
 bitflags! {
-    #[derive(Clone, Copy, Debug, PartialEq)]
+    #[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
     pub struct PktAddrCfgFlags: u8 {
         const FEC_SYNC_DIS   = 1 << 5;
         const CRC_SKIP_FIRST = 1 << 6;
@@ -2071,7 +2079,7 @@ bitflags! {
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
 pub struct PktAddrCfg {
     pub addr_pos: u8,
     pub flags: PktAddrCfgFlags,
@@ -2093,7 +2101,7 @@ impl From<PktAddrCfg> for Reg8 {
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
 pub struct PktLenCfg {
     pub pos: u8,
     pub bits: u8,
@@ -2138,7 +2146,7 @@ impl From<MatchLen> for Reg8 {
 }
 
 bitflags! {
-    #[derive(Clone, Copy, Debug, PartialEq)]
+    #[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
     pub struct PktMiscFlags: u8 {
         const RX_RSSI_CLK   = 1 << 0;
         const RX_AGC_CLK    = 1 << 1;
@@ -2161,7 +2169,7 @@ impl From<PktMiscFlags> for Reg8 {
 }
 
 bitflags! {
-    #[derive(Clone, Copy, Debug, PartialEq)]
+    #[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
     pub struct PktStoreFlags: u8 {
         const TIMER    = 1 << 0;
         const FOFFS    = 1 << 1;
@@ -2187,7 +2195,7 @@ impl From<PktStoreFlags> for Reg8 {
 }
 
 bitflags! {
-    #[derive(Clone, Copy, Debug, PartialEq)]
+    #[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
     pub struct PktAcceptFlags: u8 {
         const RESIDUE = 1 << 0;
         const ABRT    = 1 << 1;

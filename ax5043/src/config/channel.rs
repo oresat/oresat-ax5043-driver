@@ -60,4 +60,3 @@ pub const GMSK_9600_MSB: ChannelParameters = ChannelParameters {
     datarate: 9_600,
     bitorder: BitOrder::MSBFirst,
 };
-

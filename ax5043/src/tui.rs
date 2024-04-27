@@ -1,11 +1,89 @@
-use crate::{config, registers::*, Registers, Result, Status, RX};
+use crate::{config, registers::*, Registers, Status, RX};
+use anyhow::Result;
 use bitflags::Flags;
+use ciborium;
 use ratatui::{
     prelude::*,
     style::Style,
     widgets::{Block, Borders, Cell, Row, Table},
 };
+use serde::{Deserialize, Serialize};
+use std::{io::ErrorKind, net::UdpSocket};
 
+#[derive(Debug, Serialize, Deserialize)]
+pub enum CommState {
+    RX(FIFOChunkRX),
+    //ERR(Result<()>),
+    STATUS(Status),
+    STATE(RXState),
+    REGISTERS(StatusRegisters),
+    BOARD(config::Board),
+    CONFIG(Config),
+}
+
+impl CommState {
+    pub fn send(&self, socket: &UdpSocket) -> Result<()> {
+        let mut buf = Vec::<u8>::new();
+        ciborium::ser::into_writer(self, &mut buf)?;
+        if let Err(e) = socket.send(&buf) {
+            match e.kind() {
+                ErrorKind::ConnectionRefused => Ok(()),
+                _ => Err(e)
+            }?
+        }
+        Ok(())
+    }
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct StatusRegisters {
+    pub ranginga: PLLRanging,
+    pub pwrmode: PwrMode,
+    pub powstat: PowStat,
+    pub irq: IRQ,
+    pub radio_event: RadioEvent,
+    pub radio_state: RadioState,
+}
+
+impl StatusRegisters {
+    pub fn new(radio: &mut Registers) -> Result<Self> {
+        Ok(Self {
+            ranginga: radio.PLLRANGINGA().read()?, // sticky lock bit ~ IRQPLLUNLIOCK, gate
+            pwrmode: radio.PWRMODE().read()?,
+            powstat: radio.POWSTAT().read()?,
+            irq: radio.IRQREQUEST().read()?,
+            radio_event: radio.RADIOEVENTREQ().read()?,
+            radio_state: radio.RADIOSTATE().read()?,
+        })
+    }
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct Config {
+    pub rxparams: RXParams,
+    pub set0: RXParameterSet,
+    pub set1: RXParameterSet,
+    pub set2: RXParameterSet,
+    pub set3: RXParameterSet,
+    pub synthesizer: Synthesizer,
+    pub packet_controller: PacketController,
+    pub packet_format: PacketFormat,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct RXState {
+    pub rssi: f64,
+    pub agccounter: f64,
+    pub datarate: f64,
+    pub ampl: f64,
+    pub phase: f64,
+    pub fskdemod: f64,
+    pub rffreq: f64,
+    pub freq: f64,
+    pub paramcurset: RxParamCurSet,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
 pub struct PacketFormat {
     addrcfg: PktAddrCfg,
     lencfg: PktLenCfg,
@@ -86,6 +164,7 @@ impl PacketFormat {
     }
 }
 
+#[derive(Debug, Serialize, Deserialize)]
 pub struct PacketController {
     tmg_tx_boost: Float5,
     tmg_tx_settle: Float5,
@@ -256,6 +335,7 @@ impl PacketController {
     }
 }
 
+#[derive(Debug, Serialize, Deserialize)]
 pub struct Synthesizer {
     freqa: u64,
     freqb: u64,
@@ -364,7 +444,7 @@ impl Synthesizer {
     }
 }
 
-#[derive(Default)]
+#[derive(Debug, Default, Serialize, Deserialize)]
 struct RXParameterAGC {
     attack: u8,
     decay: u8,
@@ -374,13 +454,13 @@ struct RXParameterAGC {
     max: u8,
 }
 
-#[derive(Default)]
+#[derive(Debug, Default, Serialize, Deserialize)]
 struct RXParameterFreq {
     phase: u8,
     freq: u8,
 }
 
-#[derive(Default)]
+#[derive(Debug, Default, Serialize, Deserialize)]
 struct RXParameterGain {
     time: u8,
     rate: u8,
@@ -391,13 +471,13 @@ struct RXParameterGain {
     amplitude: u8,
 }
 
-#[derive(Default)]
+#[derive(Debug, Default, Serialize, Deserialize)]
 struct RXParameterBasebandOffset {
     a: u8,
     b: u8,
 }
 
-#[derive(Default)]
+#[derive(Debug, Default, Serialize, Deserialize)]
 pub struct RXParameterSet {
     agc: RXParameterAGC,
     gain: RXParameterGain,
@@ -642,6 +722,7 @@ impl RXParameterSet {
     }
 }
 
+#[derive(Debug, Serialize, Deserialize)]
 pub struct RXParams {
     iffreq: u64,
     baseband: u64,

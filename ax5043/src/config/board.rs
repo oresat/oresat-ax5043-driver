@@ -58,4 +58,3 @@ pub const RPI: Board = Board {
     },
     adc: ADC::ADC1,
 };
-
