@@ -724,19 +724,19 @@ impl RXParameterSet {
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct RXParams {
-    iffreq: u64,
-    baseband: u64,
-    bitrate: u64,
-    maxdroffset: u64,
-    maxrfoffset: u64,
-    fskdevmax: u64,
-    fskdevmin: i64,
-    afskspace: u16,
-    afskmark: u16,
-    afskctrl: u8,
-    amplfilt: u8,
-    freqleak: u8,
-    rxparamset: RxParamSets,
+    pub iffreq: u64,
+    pub baseband: u64,
+    pub bitrate: u64,
+    pub maxdroffset: u64,
+    pub maxrfoffset: u64,
+    pub fskdevmax: u64,
+    pub fskdevmin: i64,
+    pub afskspace: u16,
+    pub afskmark: u16,
+    pub afskctrl: u8,
+    pub amplfilt: u8,
+    pub freqleak: u8,
+    pub rxparamset: RxParamSets,
 }
 
 impl Default for RXParams {

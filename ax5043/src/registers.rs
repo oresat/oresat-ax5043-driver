@@ -1600,9 +1600,9 @@ impl TryFrom<Reg8> for RxParamSets {
     fn try_from(item: Reg8) -> Result<Self, Self::Error> {
         Ok(Self(
             RxParamSet::try_from(item[0] & 0x3).or(Err(item))?,
-            RxParamSet::try_from(item[0] & ((0x3 << 2) >> 2)).or(Err(item))?,
-            RxParamSet::try_from(item[0] & ((0x3 << 4) >> 4)).or(Err(item))?,
-            RxParamSet::try_from(item[0] & ((0x3 << 6) >> 6)).or(Err(item))?,
+            RxParamSet::try_from((item[0] >> 2) & 0x3).or(Err(item))?,
+            RxParamSet::try_from((item[0] >> 4) & 0x3).or(Err(item))?,
+            RxParamSet::try_from((item[0] >> 6) & 0x3).or(Err(item))?,
         ))
     }
 }

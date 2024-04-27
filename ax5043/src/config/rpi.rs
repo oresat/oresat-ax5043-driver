@@ -59,12 +59,6 @@ pub fn configure_radio_rx(radio: &mut Registers) -> Result<(Board, ChannelParame
 
     radio.PERF_F18().write(0x02)?; // TODO set by radiolab during RX
     radio.PERF_F26().write(0x96)?;
-    radio.PLLLOOP().write(PLLLoop {
-        filter: FLT::INTERNAL_x5,
-        flags: PLLLoopFlags::DIRECT,
-        freqsel: FreqSel::A,
-    })?;
-    radio.PLLCPI().write(0x10)?;
 
     let rxp = RXParameters::MSK {
         //max_dr_offset: 50, // TODO derived from what?

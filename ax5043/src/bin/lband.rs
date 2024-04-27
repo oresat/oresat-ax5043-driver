@@ -20,7 +20,6 @@ fn configure_radio(radio: &mut Registers) -> Result<(Board, ChannelParameters)> 
     Ok((board, channel))
 }
 
-
 /*
 first SYNTHBOOST SYNTHSETTLE
 second IFINIT COARSEAGC AGC RSSI
@@ -44,13 +43,7 @@ pub fn configure_radio_rx(radio: &mut Registers) -> Result<(Board, ChannelParame
     let (board, channel) = configure_radio(radio)?;
 
     radio.PERF_F18().write(0x02)?; // TODO set by radiolab during RX
-    radio.PERF_F26().write(0x96)?;
-    radio.PLLLOOP().write(PLLLoop {
-        filter: FLT::INTERNAL_x5,
-        flags: PLLLoopFlags::DIRECT,
-        freqsel: FreqSel::A,
-    })?;
-    radio.PLLCPI().write(0x10)?;
+    radio.PERF_F26().write(0x98)?;
 
     let rxp = RXParameters::MSK {
         max_dr_offset: 0, // TODO derived from what?
@@ -229,7 +222,6 @@ fn read_packet(radio: &mut Registers, packet: &mut Vec<u8>, uplink: &mut UdpSock
     }
     Ok(())
 }
-
 
 #[derive(Parser, Debug)]
 /// Try it out: `socat UDP-LISTEN:10025 STDOUT`
