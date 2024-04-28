@@ -55,7 +55,8 @@ pub fn configure_radio_rx(radio: &mut Registers) -> Result<(Board, ChannelParame
     .write(radio, &board, &channel)?;
 
     let set0 = RXParameterSet {
-        agc: RXParameterAGC::new(&board, &channel),
+        //agc: RXParameterAGC::new(&board, &channel),
+        agc: RXParameterAGC::radiolab(),
         gain: RXParameterGain {
             time_corr_frac: 4,
             datarate_corr_frac: 255,
@@ -78,7 +79,8 @@ pub fn configure_radio_rx(radio: &mut Registers) -> Result<(Board, ChannelParame
     set0.write0(radio, &board, &channel, &rxp)?;
 
     let set1 = RXParameterSet {
-        agc: RXParameterAGC::new(&board, &channel),
+        //agc: RXParameterAGC::new(&board, &channel),
+        agc: RXParameterAGC::radiolab(),
         gain: RXParameterGain {
             time_corr_frac: 16,
             datarate_corr_frac: 512,
@@ -127,24 +129,25 @@ pub fn configure_radio_rx(radio: &mut Registers) -> Result<(Board, ChannelParame
     RXParameterStages {
         preamble1: Some(Preamble1 {
             pattern: PatternMatch1 {
-                pat: 0x1111,
+                pat: 0x7E7E,
                 len: 15,
                 raw: false,
                 min: 0,
                 max: 15,
             },
-            timeout: Float5 { m: 0x17, e: 5 },
+            //timeout: Float5 { m: 0x17, e: 5 },
+            timeout: Float5 { m: 0, e: 0 },
             set: RxParamSet::Set0,
         }),
         preamble2: Some(Preamble2 {
             pattern: PatternMatch0 {
-                pat: 0x1111_1111,
+                pat: 0x7E7E_7E7E,
                 len: 31,
                 raw: false,
                 min: 0,
                 max: 31,
             },
-            timeout: Float5 { m: 0x17, e: 2 },
+            timeout: Float5 { m: 0x17, e: 5 },
             set: RxParamSet::Set1,
         }),
         preamble3: None,
@@ -187,10 +190,9 @@ fn process_chunk(chunk: FIFOChunkRX, packet: &mut Vec<u8>, uplink: &mut UdpSocke
         if flags.contains(FIFODataRXFlags::PKTSTART) {
             if !packet.is_empty() {
                 println!(
-                    "LBAND PKT RESTART {:?} {:02X?} ...+{}",
-                    flags,
-                    data[0],
-                    data.len(),
+                    "LBAND PKT RESTART rejecting {:02X?} ...+{}",
+                    packet[0],
+                    packet.len(),
                 );
             }
             packet.clear();

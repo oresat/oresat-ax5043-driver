@@ -1124,10 +1124,12 @@ impl RXParameters {
                 // flat bands at 3.6, 7.2, 14.4, 28.2, 43.2, and 57.6. Above 42.3 (so really above
                 // 57.6) it's datarate / 4.9 + 44.25 = bandwidth / 7.35 + 44.25
                 let if_freq = if channel.datarate < 42_300 {
-                    bandwidth * 4 / 5
+                    //bandwidth * 4 / 5
+                    channel.datarate * 5 / 4
                 } else {
                     // bandwidth / 7.35 + 44.25 ~= (bandwidth + 325) * 5 / 37
-                    (bandwidth + 325) * 5 / 37
+                    //(bandwidth + 325) * 5 / 37
+                    (40*channel.datarate + 8673) / 49
                 };
                 radio.IFFREQ().write(
                     div_nearest(if_freq * board.xtal.div() * 2_u64.pow(20), board.xtal.freq)
@@ -1205,8 +1207,8 @@ impl RXParameterAGC {
         //                 TODO: for (G)FSK/(G)MSK only
         // RadioLAB calculates these as at least instead of about
         let mut attack = 0xF;
-        for a in 0..AGCGAIN_LOOP_SCALE.len() {
-            let f3db = board.xtal.freq / (board.xtal.div() * AGCGAIN_LOOP_SCALE[a]);
+        for (a, scale) in AGCGAIN_LOOP_SCALE.iter().enumerate() {
+            let f3db = board.xtal.freq / (board.xtal.div() * scale);
             if f3db < channel.datarate {
                 attack = a;
                 break;
@@ -1214,8 +1216,8 @@ impl RXParameterAGC {
         }
 
         let mut decay = 0xF;
-        for d in 0..AGCGAIN_LOOP_SCALE.len() {
-            let f3db = board.xtal.freq / (board.xtal.div() * AGCGAIN_LOOP_SCALE[d]);
+        for (d, scale) in AGCGAIN_LOOP_SCALE.iter().enumerate() {
+            let f3db = board.xtal.freq / (board.xtal.div() * scale);
             if f3db * 10 < channel.datarate {
                 decay = d;
                 break;
@@ -1237,6 +1239,18 @@ impl RXParameterAGC {
             // attack/decay value F disables AGC
             attack: 0xF,
             decay: 0xF,
+            target: 0x84,
+            ahyst: 0,
+            min: 0,
+            max: 0,
+        }
+    }
+
+    pub fn radiolab() -> Self {
+        Self {
+            // Radiolab always chooses these values
+            attack: 0x93,
+            decay: 0x93,
             target: 0x84,
             ahyst: 0,
             min: 0,
