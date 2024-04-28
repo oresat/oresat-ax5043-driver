@@ -255,8 +255,9 @@ struct Args {
     uplink: u16,
     #[arg(short, long, default_value = "/dev/spidev1.1")]
     spi: String,
-    #[arg(short, long, default_value="10.18.17.6:10035")]
-    telemetry: String
+    /// For example 10.18.17.6:10035
+    #[arg(short, long)]
+    telemetry: Option<String>,
 }
 
 fn main() -> Result<()> {
@@ -271,9 +272,13 @@ fn main() -> Result<()> {
     let mut uplink = UdpSocket::bind(src)?;
     uplink.connect(dest)?;
 
-    let dest: SocketAddr = args.telemetry.parse().unwrap();
-    let telemetry = UdpSocket::bind(src)?;
-    telemetry.connect(dest)?;
+    let mut telemetry: Option<UdpSocket> = None;
+    if let Some(addr) = args.telemetry {
+        let dest: SocketAddr = addr.parse().unwrap();
+        let socket = UdpSocket::bind(src)?;
+        socket.connect(dest)?;
+        telemetry = Some(socket);
+    }
 
     const SIGINT: Token = Token(3);
     let mut signals = Signals::new(Signal::Interrupt.into())?;
@@ -295,13 +300,23 @@ fn main() -> Result<()> {
     )?;
 
     let mut tfd = TimerFd::new().unwrap();
-    tfd.set_state(
-        TimerState::Periodic {
-            current: Duration::new(1, 0),
-            interval: Duration::from_millis(50),
-        },
-        SetTimeFlags::Default,
-    );
+    if telemetry.is_some() {
+        tfd.set_state(
+            TimerState::Periodic {
+                current: Duration::new(1, 0),
+                interval: Duration::from_millis(25),
+            },
+            SetTimeFlags::Default,
+        );
+    } else {
+        tfd.set_state(
+            TimerState::Periodic {
+                current: Duration::new(0, 0),
+                interval: Duration::new(0, 0),
+            },
+            SetTimeFlags::Default,
+        );
+    }
     const TELEMETRY: Token = Token(5);
     registry.register(
         &mut SourceFd(&tfd.as_raw_fd()),
@@ -309,12 +324,13 @@ fn main() -> Result<()> {
         Interest::READABLE,
     )?;
 
-
     let spi0 = ax5043::open(args.spi)?;
     let mut status = ax5043::Status::empty();
     let mut callback = |_: &_, _, s, _: &_| {
         if s != status {
-            tui::CommState::STATUS(s).send(&telemetry).unwrap();
+            if let Some(ref socket) = telemetry {
+                tui::CommState::STATUS(s).send(socket).unwrap();
+            }
             status = s;
         }
     };
@@ -332,20 +348,21 @@ fn main() -> Result<()> {
     let (board, channel) = configure_radio_rx(&mut radio)?;
     pa_enable.set_values([true])?;
 
-    tui::CommState::BOARD(board.clone()).send(&telemetry)?;
-    tui::CommState::REGISTERS(tui::StatusRegisters::new(&mut radio)?).send(&telemetry)?;
-    tui::CommState::CONFIG(tui::Config {
-        rxparams: tui::RXParams::new(&mut radio, &board)?,
-        set0: tui::RXParameterSet::set0(&mut radio)?,
-        set1: tui::RXParameterSet::set1(&mut radio)?,
-        set2: tui::RXParameterSet::set2(&mut radio)?,
-        set3: tui::RXParameterSet::set3(&mut radio)?,
-        synthesizer: tui::Synthesizer::new(&mut radio, &board)?,
-        packet_controller: tui::PacketController::new(&mut radio)?,
-        packet_format: tui::PacketFormat::new(&mut radio)?,
-    })
-    .send(&telemetry)?;
-
+    if let Some(ref socket) = telemetry {
+        tui::CommState::BOARD(board.clone()).send(socket)?;
+        tui::CommState::REGISTERS(tui::StatusRegisters::new(&mut radio)?).send(socket)?;
+        tui::CommState::CONFIG(tui::Config {
+            rxparams: tui::RXParams::new(&mut radio, &board)?,
+            set0: tui::RXParameterSet::set0(&mut radio)?,
+            set1: tui::RXParameterSet::set1(&mut radio)?,
+            set2: tui::RXParameterSet::set2(&mut radio)?,
+            set3: tui::RXParameterSet::set3(&mut radio)?,
+            synthesizer: tui::Synthesizer::new(&mut radio, &board)?,
+            packet_controller: tui::PacketController::new(&mut radio)?,
+            packet_format: tui::PacketFormat::new(&mut radio)?,
+        })
+        .send(socket)?;
+    }
     radio.PWRMODE().write(PwrMode {
         flags: PwrFlags::XOEN | PwrFlags::REFEN,
         mode: PwrModes::RX,
@@ -374,8 +391,12 @@ fn main() -> Result<()> {
             match event.token() {
                 TELEMETRY => {
                     tfd.read();
-                    tui::CommState::STATE(tui::RXState::new(&mut radio, &channel)?).send(&telemetry)?;
-                    tui::CommState::REGISTERS(tui::StatusRegisters::new(&mut radio)?).send(&telemetry)?;
+                    if let Some(ref socket) = telemetry {
+                        tui::CommState::STATE(tui::RXState::new(&mut radio, &channel)?)
+                            .send(socket)?;
+                        tui::CommState::REGISTERS(tui::StatusRegisters::new(&mut radio)?)
+                            .send(socket)?;
+                    }
                 }
                 IRQ => {
                     lband_irq.read_event()?;
