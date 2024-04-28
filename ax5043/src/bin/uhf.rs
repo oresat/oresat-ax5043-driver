@@ -494,7 +494,7 @@ fn main() -> Result<()> {
                         mode: PwrModes::POWEROFF,
                     })?;
 
-                    let mut channel = config::channel::GMSK_9600_LSB.write(&mut radio, &board)?;
+                    let channel = config::channel::GMSK_9600_LSB.write(&mut radio, &board)?;
 
                     TXParameters {
                         antenna: Antenna::SingleEnded,
@@ -520,9 +520,7 @@ fn main() -> Result<()> {
                         }
                     }
 
-                    channel.datarate = 96_000;
-                    channel.bitorder = BitOrder::MSBFirst;
-                    channel.write(&mut radio, &board)?;
+                    config::channel::GMSK_96000.write(&mut radio, &board)?;
 
                     radio.PWRMODE().write(PwrMode {
                         flags: PwrFlags::XOEN | PwrFlags::REFEN,
@@ -551,7 +549,7 @@ fn main() -> Result<()> {
                         mode: PwrModes::POWEROFF,
                     })?;
 
-                    let channel = config::channel::GMSK_9600_MSB.write(&mut radio, &board)?;
+                    let channel = config::channel::GMSK_96000.write(&mut radio, &board)?;
 
                     TXParameters {
                         antenna: Antenna::SingleEnded,
