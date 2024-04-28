@@ -2,7 +2,7 @@
 // and transmits it through the UHF AX5043
 use anyhow::{bail, ensure, Context, Result};
 use ax5043::{config, config::*};
-use ax5043::{registers, registers::*, Registers, RX, TX};
+use ax5043::{registers, registers::*, tui, Registers, RX, TX};
 use clap::Parser;
 use crc::{Crc, CRC_16_GENIBUS}; // TODO: this CRC works but is it correct?
 use gpiod::{Chip, EdgeDetect, Options};
@@ -13,7 +13,9 @@ use std::{
     io::{ErrorKind, Write},
     net::{IpAddr, Ipv4Addr, SocketAddr},
     os::fd::AsRawFd,
+    time::Duration,
 };
+use timerfd::{SetTimeFlags, TimerFd, TimerState};
 
 fn configure_radio(radio: &mut Registers) -> Result<(Board, ChannelParameters)> {
     let board = config::board::C3_UHF.write(radio)?;
@@ -25,25 +27,6 @@ fn configure_radio(radio: &mut Registers) -> Result<(Board, ChannelParameters)> 
     synth.autorange(radio)?;
     Ok((board, channel))
 }
-
-/*
-first SYNTHBOOST SYNTHSETTLE
-second IFINIT COARSEAGC AGC RSSI
-
-preamble1: PS0
-    TMGRXPREAMBLE1 to reset to second?
-
-preamble2: PS1
-    MATCH1
-    TMGRXPREAMBLE2
-
-preamble3: PS2
-    MATCH0
-    TMGRXPREAMBLE3
-
-packet: PS3
-    SFD
-*/
 
 pub fn configure_radio_rx(radio: &mut Registers) -> Result<(Board, ChannelParameters)> {
     let (board, channel) = configure_radio(radio)?;
@@ -386,6 +369,9 @@ struct Args {
     spi: String,
     #[arg(short, long, default_value_t = 0x700)]
     power: u16,
+    /// For example 10.18.17.6:10035
+    #[arg(short, long)]
+    telemetry: Option<String>,
 }
 
 fn main() -> Result<()> {
@@ -410,6 +396,14 @@ fn main() -> Result<()> {
     let mut uplink = UdpSocket::bind(src)?;
     uplink.connect(dest)?;
 
+    let mut telemetry: Option<std::net::UdpSocket> = None;
+    if let Some(addr) = args.telemetry {
+        let dest: SocketAddr = addr.parse().unwrap();
+        let socket = std::net::UdpSocket::bind(src)?;
+        socket.connect(dest)?;
+        telemetry = Some(socket);
+    }
+
     const SIGINT: Token = Token(3);
     let mut signals = Signals::new(Signal::Interrupt.into())?;
     registry.register(&mut signals, SIGINT, Interest::READABLE)?;
@@ -425,16 +419,42 @@ fn main() -> Result<()> {
     const IRQ: Token = Token(4);
     registry.register(&mut SourceFd(&uhf_irq.as_raw_fd()), IRQ, Interest::READABLE)?;
 
+    let mut tfd = TimerFd::new().unwrap();
+    if telemetry.is_some() {
+        tfd.set_state(
+            TimerState::Periodic {
+                current: Duration::new(1, 0),
+                interval: Duration::from_millis(25),
+            },
+            SetTimeFlags::Default,
+        );
+    } else {
+        tfd.set_state(
+            TimerState::Periodic {
+                current: Duration::new(0, 0),
+                interval: Duration::new(0, 0),
+            },
+            SetTimeFlags::Default,
+        );
+    }
+    const TELEMETRY: Token = Token(5);
+    registry.register(
+        &mut SourceFd(&tfd.as_raw_fd()),
+        TELEMETRY,
+        Interest::READABLE,
+    )?;
+
     let spi0 = ax5043::open(args.spi)?;
-    //let mut status = ax5043::Status::empty();
-    //let mut callback = |_: &_, addr, s, data: &_| {
-    //    if s != status {
-    //        println!("TX Status change: {:?}", s);
-    //        status = s;
-    //    }
-    //    println!("{:04X}: {:?}", addr, data);
-    //};
-    let mut callback = |_: &_, _, _, _: &_| {};
+    let mut status = ax5043::Status::empty();
+    let mut callback = |_: &_, addr, s, data: &_| {
+        //println!("{:03X}: {:02X?}", addr, data);
+        if s != status {
+            if let Some(ref socket) = telemetry {
+                tui::CommState::STATUS(s).send(socket).unwrap();
+            }
+            status = s;
+        }
+    };
 
     let mut radio = ax5043::Registers::new(spi0, &mut callback);
     radio.reset()?;
@@ -447,8 +467,24 @@ fn main() -> Result<()> {
         0x51
     );
 
-    let (board, _) = configure_radio_rx(&mut radio)?;
+    let (board, channel) = configure_radio_rx(&mut radio)?;
     pa_enable.set_values([true])?;
+
+    if let Some(ref socket) = telemetry {
+        tui::CommState::BOARD(board.clone()).send(socket)?;
+        tui::CommState::REGISTERS(tui::StatusRegisters::new(&mut radio)?).send(socket)?;
+        tui::CommState::CONFIG(tui::Config {
+            rxparams: tui::RXParams::new(&mut radio, &board)?,
+            set0: tui::RXParameterSet::set0(&mut radio)?,
+            set1: tui::RXParameterSet::set1(&mut radio)?,
+            set2: tui::RXParameterSet::set2(&mut radio)?,
+            set3: tui::RXParameterSet::set3(&mut radio)?,
+            synthesizer: tui::Synthesizer::new(&mut radio, &board)?,
+            packet_controller: tui::PacketController::new(&mut radio)?,
+            packet_format: tui::PacketFormat::new(&mut radio)?,
+        })
+        .send(socket)?;
+    }
 
     radio.PWRMODE().write(PwrMode {
         flags: PwrFlags::XOEN | PwrFlags::REFEN,
@@ -477,6 +513,15 @@ fn main() -> Result<()> {
         poll.poll(&mut events, None)?;
         for event in events.iter() {
             match event.token() {
+                TELEMETRY => {
+                    tfd.read();
+                    if let Some(ref socket) = telemetry {
+                        tui::CommState::STATE(tui::RXState::new(&mut radio, &channel)?)
+                            .send(socket)?;
+                        tui::CommState::REGISTERS(tui::StatusRegisters::new(&mut radio)?)
+                            .send(socket)?;
+                    }
+                }
                 BEACON => {
                     radio.IRQMASK().write(ax5043::registers::IRQ::empty())?;
                     // PM p. 12: The FIFO should be emptied before the PWRMODE is set to POWERDOWN

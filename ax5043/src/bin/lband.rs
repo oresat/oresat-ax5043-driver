@@ -21,25 +21,6 @@ fn configure_radio(radio: &mut Registers) -> Result<(Board, ChannelParameters)> 
     Ok((board, channel))
 }
 
-/*
-first SYNTHBOOST SYNTHSETTLE
-second IFINIT COARSEAGC AGC RSSI
-
-preamble1: PS0
-    TMGRXPREAMBLE1 to reset to second?
-
-preamble2: PS1
-    MATCH1
-    TMGRXPREAMBLE2
-
-preamble3: PS2
-    MATCH0
-    TMGRXPREAMBLE3
-
-packet: PS3
-    SFD
-*/
-
 pub fn configure_radio_rx(radio: &mut Registers) -> Result<(Board, ChannelParameters)> {
     let (board, channel) = configure_radio(radio)?;
 
@@ -326,7 +307,8 @@ fn main() -> Result<()> {
 
     let spi0 = ax5043::open(args.spi)?;
     let mut status = ax5043::Status::empty();
-    let mut callback = |_: &_, _, s, _: &_| {
+    let mut callback = |_: &_, addr, s, val: &[u8]| {
+        //println!("{:03X}: {:02X?}", addr, val);
         if s != status {
             if let Some(ref socket) = telemetry {
                 tui::CommState::STATUS(s).send(socket).unwrap();
