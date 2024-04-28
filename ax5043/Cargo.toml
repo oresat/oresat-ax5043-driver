@@ -1,6 +1,6 @@
 [package]
 name = "ax5043"
-version = "0.2.3"
+version = "0.2.4"
 authors = ["Theo Hill <Theo0x48@gmail.com>"]
 edition = "2021"
 description = "C3 UHF/LBand AX5043 driver"

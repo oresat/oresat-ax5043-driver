@@ -5,21 +5,17 @@ use ax5043::{config, config::*};
 use ax5043::{registers, registers::*, Registers, RX, TX};
 use clap::Parser;
 use crc::{Crc, CRC_16_GENIBUS}; // TODO: this CRC works but is it correct?
-use gpiod::{Chip, Options, EdgeDetect};
+use gpiod::{Chip, EdgeDetect, Options};
 use mio::net::UdpSocket;
 use mio::{unix::SourceFd, Events, Interest, Poll, Token};
 use mio_signals::{Signal, Signals};
 use std::{
-    io::{Write, ErrorKind},
+    io::{ErrorKind, Write},
     net::{IpAddr, Ipv4Addr, SocketAddr},
     os::fd::AsRawFd,
 };
 
-//use std::time::Duration;
-//use timerfd::{SetTimeFlags, TimerFd, TimerState};
-
 fn configure_radio(radio: &mut Registers) -> Result<(Board, ChannelParameters)> {
-
     let board = config::board::C3_UHF.write(radio)?;
     let synth = config::synth::UHF_436_5.write(radio, &board)?;
     let channel = config::channel::GMSK_96000.write(radio, &board)?;
@@ -181,17 +177,32 @@ pub fn configure_radio_rx(radio: &mut Registers) -> Result<(Board, ChannelParame
 }
 
 fn process_chunk(chunk: FIFOChunkRX, packet: &mut Vec<u8>, uplink: &mut UdpSocket) -> Result<()> {
-    if let FIFOChunkRX::DATA{flags, ref data} = chunk {
+    if let FIFOChunkRX::DATA { flags, ref data } = chunk {
         //println!("{:02X?}", chunk);
-        if flags.intersects(FIFODataRXFlags::ABORT | FIFODataRXFlags::SIZEFAIL | FIFODataRXFlags::ADDRFAIL | FIFODataRXFlags::CRCFAIL | FIFODataRXFlags::RESIDUE) {
-            println!("UHF REJECTED {:?} {:02X?} ...+{}", flags, data[0], data.len());
+        if flags.intersects(
+            FIFODataRXFlags::ABORT
+                | FIFODataRXFlags::SIZEFAIL
+                | FIFODataRXFlags::ADDRFAIL
+                | FIFODataRXFlags::CRCFAIL
+                | FIFODataRXFlags::RESIDUE,
+        ) {
+            println!(
+                "UHF REJECTED {:?} {:02X?} ...+{}",
+                flags,
+                data[0],
+                data.len()
+            );
             packet.clear();
             return Ok(());
         }
 
         if flags.contains(FIFODataRXFlags::PKTSTART) {
             if !packet.is_empty() {
-                println!("UHF PKT RESTART {:?} {:02X?} ...+{}", flags, data[0], data.len());
+                println!(
+                    "UHF PKT RESTART rejecting {:02X?} ...+{}",
+                    data[0],
+                    data.len()
+                );
             }
             packet.clear();
         }
@@ -203,7 +214,7 @@ fn process_chunk(chunk: FIFOChunkRX, packet: &mut Vec<u8>, uplink: &mut UdpSocke
 
         packet.write_all(data)?;
         if flags.contains(FIFODataRXFlags::PKTEND) {
-            let bytes = packet.split_off(packet.len()-2);
+            let bytes = packet.split_off(packet.len() - 2);
             let checksum = u16::from_be_bytes([bytes[0], bytes[1]]);
             let ccitt = Crc::<u16>::new(&CRC_16_GENIBUS);
             let mut digest = ccitt.digest();
@@ -214,7 +225,10 @@ fn process_chunk(chunk: FIFOChunkRX, packet: &mut Vec<u8>, uplink: &mut UdpSocke
                 uplink.send(packet)?;
                 println!("UHF RX PACKET: {:02X?}", packet);
             } else {
-                println!("Rejected CRC: received 0x{:x}, calculated 0x{:x}", checksum, calculated);
+                println!(
+                    "Rejected CRC: received 0x{:x}, calculated 0x{:x}",
+                    checksum, calculated
+                );
             }
             packet.clear();
         }
@@ -225,13 +239,15 @@ fn process_chunk(chunk: FIFOChunkRX, packet: &mut Vec<u8>, uplink: &mut UdpSocke
 fn read_packet(radio: &mut Registers, packet: &mut Vec<u8>, uplink: &mut UdpSocket) -> Result<()> {
     let len = radio.FIFOCOUNT().read()?;
     if len == 0 {
-        return Ok(())
+        return Ok(());
     }
 
     match radio.FIFODATARX().read(len.into()) {
-        Ok(chunks) => for chunk in chunks {
-            process_chunk(chunk, packet, uplink)?;
-        },
+        Ok(chunks) => {
+            for chunk in chunks {
+                process_chunk(chunk, packet, uplink)?;
+            }
+        }
         Err(e) => {
             // FIFO Errors are usually just overflow, non-fatal
             println!("{}", e);
@@ -249,6 +265,7 @@ fn transmit(radio: &mut Registers, buf: &[u8], src: SocketAddr) -> Result<()> {
 
     _ = radio.PLLRANGINGA().read()?; // sticky lock bit ~ IRQPLLUNLIOCK, gate
     _ = radio.POWSTICKYSTAT().read()?; // sticky lock bit ~ IRQPLLUNLIOCK, gate
+
     // FIXME: I experienced some crashes that probably occured because FIFOTHRESH returned the
     // wrong value. Once 0, once too big (but not measured). Lets hard code it for now to be safe
     // for flight.
@@ -277,6 +294,7 @@ fn transmit(radio: &mut Registers, buf: &[u8], src: SocketAddr) -> Result<()> {
     // TODO: integrate recv
     // TODO: maybe FIFOChunkTX::to_data -> Vec? It knows how big it should be
     let header_size = 3; // size of FIFOChunkTX::DATA header
+
     // I witnessed thresh read as 0 once, which crashed the driver. Having thresh (FIFOTHRESH)
     // return 0 makes no sense, but lets guard against it anyway.
     let Some(chunksize) = thresh.checked_sub(header_size) else {
@@ -286,10 +304,13 @@ fn transmit(radio: &mut Registers, buf: &[u8], src: SocketAddr) -> Result<()> {
         })?;
         bail!("FIFOTHRESH returned 0. Weird");
     };
-    let mut packet: Vec<FIFOChunkTX> = buf.chunks(chunksize).map(|x| FIFOChunkTX::DATA {
-        flags: FIFODataTXFlags::empty(),
-        data: x.to_vec(),
-    }).collect();
+    let mut packet: Vec<FIFOChunkTX> = buf
+        .chunks(chunksize)
+        .map(|x| FIFOChunkTX::DATA {
+            flags: FIFODataTXFlags::empty(),
+            data: x.to_vec(),
+        })
+        .collect();
     if let Some(FIFOChunkTX::DATA { ref mut flags, .. }) = packet.first_mut() {
         *flags |= FIFODataTXFlags::PKTSTART;
     }
@@ -309,7 +330,8 @@ fn transmit(radio: &mut Registers, buf: &[u8], src: SocketAddr) -> Result<()> {
             mode: FIFOCmds::COMMIT,
             auto_commit: false,
         })?;
-        loop { // FIXME interrupt?
+        // FIXME interrupt?
+        loop {
             let stat = radio.FIFOSTAT().read()?;
             if stat.contains(FIFOStat::OVER) || stat.contains(FIFOStat::UNDER) {
                 println!("chunk: {:?}", stat);
@@ -388,18 +410,6 @@ fn main() -> Result<()> {
     let mut uplink = UdpSocket::bind(src)?;
     uplink.connect(dest)?;
 
-    //let mut tfd = TimerFd::new().unwrap();
-    //tfd.set_state(
-    //    TimerState::Periodic {
-    //        current: Duration::new(1, 0),
-    //        interval: Duration::from_millis(50),
-    //    },
-    //    SetTimeFlags::Default,
-    //);
-    //const TIMER: Token = Token(2);
-    //registry.register(&mut SourceFd(&tfd.as_raw_fd()), TIMER, Interest::READABLE)?;
-
-
     const SIGINT: Token = Token(3);
     let mut signals = Signals::new(Signal::Interrupt.into())?;
     registry.register(&mut signals, SIGINT, Interest::READABLE)?;
@@ -430,7 +440,12 @@ fn main() -> Result<()> {
     radio.reset()?;
 
     let rev = radio.REVISION().read()?;
-    ensure!(rev == 0x51, "Unexpected revision {}, expected {}", rev, 0x51);
+    ensure!(
+        rev == 0x51,
+        "Unexpected revision {}, expected {}",
+        rev,
+        0x51
+    );
 
     let (board, _) = configure_radio_rx(&mut radio)?;
     pa_enable.set_values([true])?;
@@ -452,7 +467,9 @@ fn main() -> Result<()> {
         auto_commit: false,
     })?;
 
-    radio.IRQMASK().write(ax5043::registers::IRQ::FIFONOTEMPTY)?;
+    radio
+        .IRQMASK()
+        .write(ax5043::registers::IRQ::FIFONOTEMPTY)?;
 
     let mut packet = Vec::new();
 
@@ -491,7 +508,8 @@ fn main() -> Result<()> {
                         },
                         plllock_gate: true,
                         brownout_gate: true,
-                    }.write(&mut radio, &board, &channel)?;
+                    }
+                    .write(&mut radio, &board, &channel)?;
 
                     let mut buf = [0; 2048];
                     loop {
@@ -512,7 +530,9 @@ fn main() -> Result<()> {
                     })?;
                     _ = radio.PLLRANGINGA().read()?; // sticky lock bit ~ IRQPLLUNLIOCK, gate
                     _ = radio.POWSTICKYSTAT().read()?; // clear sticky power flags for PWR_GOOD
-                    radio.IRQMASK().write(ax5043::registers::IRQ::FIFONOTEMPTY)?;
+                    radio
+                        .IRQMASK()
+                        .write(ax5043::registers::IRQ::FIFONOTEMPTY)?;
                 }
                 DOWNLINK => {
                     radio.IRQMASK().write(ax5043::registers::IRQ::empty())?;
@@ -544,7 +564,8 @@ fn main() -> Result<()> {
                         },
                         plllock_gate: true,
                         brownout_gate: true,
-                    }.write(&mut radio, &board, &channel)?;
+                    }
+                    .write(&mut radio, &board, &channel)?;
 
                     let mut buf = [0; 2048];
                     loop {
@@ -562,7 +583,9 @@ fn main() -> Result<()> {
                     })?;
                     _ = radio.PLLRANGINGA().read()?; // sticky lock bit ~ IRQPLLUNLIOCK, gate
                     _ = radio.POWSTICKYSTAT().read()?; // clear sticky power flags for PWR_GOOD
-                    radio.IRQMASK().write(ax5043::registers::IRQ::FIFONOTEMPTY)?;
+                    radio
+                        .IRQMASK()
+                        .write(ax5043::registers::IRQ::FIFONOTEMPTY)?;
                 }
                 IRQ => {
                     uhf_irq.read_event()?;
@@ -570,10 +593,6 @@ fn main() -> Result<()> {
                         read_packet(&mut radio, &mut packet, &mut uplink)?;
                     }
                 }
-                //TIMER => {
-                //    tfd.read();
-                //    println!("RSSI: {}", radio.RSSI().read()?);
-                //}
                 SIGINT => break 'outer,
                 _ => unreachable!(),
             }
