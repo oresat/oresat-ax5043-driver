@@ -33,12 +33,6 @@ pub fn configure_radio_rx(radio: &mut Registers) -> Result<(Board, ChannelParame
 
     radio.PERF_F18().write(0x02)?; // TODO set by radiolab during RX
     radio.PERF_F26().write(0x96)?;
-    radio.PLLLOOP().write(PLLLoop {
-        filter: FLT::INTERNAL_x5,
-        flags: PLLLoopFlags::DIRECT,
-        freqsel: FreqSel::A,
-    })?;
-    radio.PLLCPI().write(0x10)?;
 
     let rxp = RXParameters::MSK {
         max_dr_offset: 0,
@@ -122,24 +116,25 @@ pub fn configure_radio_rx(radio: &mut Registers) -> Result<(Board, ChannelParame
     RXParameterStages {
         preamble1: Some(Preamble1 {
             pattern: PatternMatch1 {
-                pat: 0x1111,
+                pat: 0x7E7E,
                 len: 15,
                 raw: false,
                 min: 0,
                 max: 15,
             },
-            timeout: Float5 { m: 0x17, e: 5 },
+            //timeout: Float5 { m: 0x17, e: 5 },
+            timeout: Float5 { m: 0, e: 0 },
             set: RxParamSet::Set0,
         }),
         preamble2: Some(Preamble2 {
             pattern: PatternMatch0 {
-                pat: 0x1111_1111,
+                pat: 0x7E7E_7E7E,
                 len: 31,
                 raw: false,
                 min: 0,
                 max: 31,
             },
-            timeout: Float5 { m: 0x17, e: 2 },
+            timeout: Float5 { m: 0x17, e: 5 },
             set: RxParamSet::Set1,
         }),
         preamble3: None,
