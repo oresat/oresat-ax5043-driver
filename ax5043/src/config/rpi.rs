@@ -1,18 +1,18 @@
 use crate::config::*;
 use anyhow::Result;
 
-fn config(radio: &mut Registers) -> Result<(Board, ChannelParameters)> {
+fn config(radio: &mut Registers) -> Result<(Board, Synthesizer, ChannelParameters)> {
     let board = board::RPI.write(radio)?;
     let synth = synth::UHF_436_5.write(radio, &board)?;
     let channel = channel::GMSK_9600_LSB.write(radio, &board)?;
 
     synth.autorange(radio)?;
 
-    Ok((board, channel))
+    Ok((board, synth, channel))
 }
 
 pub fn configure_radio_tx(radio: &mut Registers) -> Result<config::Board> {
-    let (board, channel) = config(radio)?;
+    let (board, _, channel) = config(radio)?;
 
     TXParameters {
         antenna: Antenna::SingleEnded,
@@ -55,7 +55,7 @@ packet: PS3
 */
 
 pub fn configure_radio_rx(radio: &mut Registers) -> Result<(Board, ChannelParameters)> {
-    let (board, channel) = config(radio)?;
+    let (board, synth, channel) = config(radio)?;
 
     radio.PERF_F18().write(0x02)?; // TODO set by radiolab during RX
     radio.PERF_F26().write(0x96)?;
@@ -67,7 +67,7 @@ pub fn configure_radio_rx(radio: &mut Registers) -> Result<(Board, ChannelParame
         ampl_filter: 0,
         frequency_leak: 0,
     }
-    .write(radio, &board, &channel)?;
+    .write(radio, &board, &synth, &channel)?;
 
     // Set 0
     RXParameterSet {
@@ -186,7 +186,7 @@ pub fn configure_radio_rx(radio: &mut Registers) -> Result<(Board, ChannelParame
 
     radio.PKTMAXLEN().write(0xFF)?;
     radio.PKTLENCFG().write(PktLenCfg { pos: 0, bits: 0xF })?;
-    radio.PKTLENOFFSET().write(0x09)?;
+    radio.PKTLENOFFSET().write(0x00)?;
 
     radio.PKTCHUNKSIZE().write(0x09)?;
     radio.PKTACCEPTFLAGS().write(PktAcceptFlags::LRGP)?;

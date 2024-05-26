@@ -10,7 +10,7 @@ use std::net::{IpAddr, Ipv4Addr, SocketAddr, UdpSocket};
 use std::{io::Write, os::fd::AsRawFd, time::Duration};
 use timerfd::{SetTimeFlags, TimerFd, TimerState};
 
-fn configure_radio(radio: &mut Registers) -> Result<(Board, ChannelParameters)> {
+fn configure_radio(radio: &mut Registers) -> Result<(Board, Synthesizer, ChannelParameters)> {
     let board = config::board::C3_LBAND.write(radio)?;
     let synth = config::synth::LBAND_DC_457.write(radio, &board)?;
     let channel = config::channel::GMSK_60000.write(radio, &board)?;
@@ -18,11 +18,11 @@ fn configure_radio(radio: &mut Registers) -> Result<(Board, ChannelParameters)> 
     radio.FIFOTHRESH().write(128)?; // Half the FIFO size
 
     synth.autorange(radio)?;
-    Ok((board, channel))
+    Ok((board, synth, channel))
 }
 
 pub fn configure_radio_rx(radio: &mut Registers) -> Result<(Board, ChannelParameters)> {
-    let (board, channel) = configure_radio(radio)?;
+    let (board, synth, channel) = configure_radio(radio)?;
 
     radio.PERF_F18().write(0x02)?; // TODO set by radiolab during RX
     radio.PERF_F26().write(0x98)?;
@@ -33,7 +33,7 @@ pub fn configure_radio_rx(radio: &mut Registers) -> Result<(Board, ChannelParame
         ampl_filter: 0,
         frequency_leak: 0,
     }
-    .write(radio, &board, &channel)?;
+    .write(radio, &board, &synth, &channel)?;
 
     let set0 = RXParameterSet {
         //agc: RXParameterAGC::new(&board, &channel),
@@ -138,7 +138,7 @@ pub fn configure_radio_rx(radio: &mut Registers) -> Result<(Board, ChannelParame
 
     radio.PKTMAXLEN().write(0xFF)?;
     radio.PKTLENCFG().write(PktLenCfg { pos: 0, bits: 0xF })?;
-    radio.PKTLENOFFSET().write(0x09)?;
+    radio.PKTLENOFFSET().write(0x00)?;
 
     radio.PKTCHUNKSIZE().write(0x09)?;
     radio.PKTACCEPTFLAGS().write(PktAcceptFlags::LRGP)?;

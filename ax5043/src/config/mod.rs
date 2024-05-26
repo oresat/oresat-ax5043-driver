@@ -1,3 +1,4 @@
+use std::cmp::max;
 use crate::*;
 use serde::{Deserialize, Serialize};
 
@@ -881,7 +882,7 @@ pub struct ChannelParameters {
     pub encoding: Encoding,
     pub framing: Framing,
     pub crc: CRC,
-    pub datarate: u64,
+    pub datarate: u64, // FIXME: Rename to bitrate
     pub bitorder: BitOrder,
 }
 
@@ -1069,19 +1070,27 @@ impl RXParameters {
     pub fn decimation(&self, board: &Board, channel: &ChannelParameters) -> u64 {
         match self {
             Self::MSK { .. } => {
+                // The ADC is sampling at xtal.freq/(xtal.div * 2^4). We then divide that by the
+                // decimation to get f_baseband. Pass f_baseband through the channel filter(?
+                // decimation filter? anti-aliasing filter?) to get the receiver bandwidth.
+                // The minimum bandwidth can be found from the channel datarate and modulaiton
+                // index, so receiver bandwidth must be greater than that.
+                // See also
+                // https://en.wikipedia.org/wiki/Downsampling_(signal_processing)#Downsampling_by_an_integer_factor
                 // modulation index: m = 0.5;
                 // bandwidth = (1+m) * datarate (Carson's rule)
                 // TODO: Radiolab lists bandwidth always as 1.5*datarate, does not compensate for m
                 let bandwidth = 3 * channel.datarate / 2;
                 // FIXME PHASEGAIN::FILTERIDX but translated through table 116. Note that column
                 // names are swapped. Label -3dB BW should be nominal BW.
-                // Radiolab calculates -3dB BW as nominal BW * 1.1, but where does 1.1 come from? TODO
-                // fcoeff = 0.221497
+                // Radiolab calculates -3dB BW as nominal BW * 1.1, but TODO where does 1.1 come from?
+                // FIXME: pull from RxParameter set
+                // fcoeff = 0.221497 (idx 11, nominal BW (mislabeled))
                 // 1/fcoeff = 4.51...  ~=  9/2
                 let fbaseband_min = bandwidth * 9 / 2; // FIXME: this math makes fbaseband_min slightly too small
 
                 //pick decimation such that fbaseband is at least fbaseband_min
-                //integer devision ensures that decimation value will always pick higher fbaseband
+                //integer division ensures that decimation value will always pick higher fbaseband
                 //TODO: we can pick a filter such that this is closer
                 board.xtal.freq / (board.xtal.div() * 2_u64.pow(4) * fbaseband_min)
             }
@@ -1091,6 +1100,7 @@ impl RXParameters {
     pub fn rxdatarate(&self, board: &Board, channel: &ChannelParameters) -> u64 {
         match self {
             Self::MSK { .. } => {
+                // f_baseband * 2^11/bitrate
                 // TODO: see note table 96
                 div_nearest(
                     2u64.pow(7) * board.xtal.freq,
@@ -1104,6 +1114,7 @@ impl RXParameters {
         self,
         radio: &mut Registers,
         board: &Board,
+        synth: &Synthesizer,
         channel: &ChannelParameters,
     ) -> Result<Self> {
         match self {
@@ -1141,15 +1152,17 @@ impl RXParameters {
                     .RXDATARATE()
                     .write(self.rxdatarate(board, channel).try_into().unwrap())?;
 
-                let droff = (2u64.pow(7) * board.xtal.freq * max_dr_offset)
-                    / (board.xtal.div() * channel.datarate.pow(2) * decimation);
+                // RXDATARATE * Δbitrate/bitrate
+                let droff = div_nearest(
+                    2u64.pow(7) * board.xtal.freq * max_dr_offset,
+                    board.xtal.div() * channel.datarate.pow(2) * decimation
+                );
                 radio.MAXDROFFSET().write(droff.try_into().unwrap())?;
                 //radio.MAXDROFFSET().write(0)?;
 
                 // bw/4 Upper bound - difference between tx and rx fcarriers. see note pm table 98
-                let max_rf_offset = bandwidth / 4;
-
-                //let max_rf_offset = 873; // From radiolab
+                // Radiolab calculates this as f_carrier / 500_000
+                let max_rf_offset = max(bandwidth / 4, synth.freq_a/500_000);
                 radio.MAXRFOFFSET().write(MaxRFOffset {
                     offset: div_nearest(max_rf_offset * 2u64.pow(24), board.xtal.freq)
                         .try_into()
