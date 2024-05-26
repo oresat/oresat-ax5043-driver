@@ -1699,18 +1699,18 @@ impl PatternMatch1 {
 }
 
 pub struct Preamble1 {
-    pub pattern: PatternMatch1,
     pub timeout: Float5, // between 0 and 3968 bits
     pub set: RxParamSet,
 }
 
 pub struct Preamble2 {
-    pub pattern: PatternMatch0,
+    pub pattern: PatternMatch1,
     pub timeout: Float5, // between 0 and 3968 bits
     pub set: RxParamSet,
 }
 
 pub struct Preamble3 {
+    pub pattern: PatternMatch0,
     pub timeout: Float5, // between 0 and 3968 bits
     pub set: RxParamSet,
 }
@@ -1730,7 +1730,6 @@ impl RXParameterStages {
     pub fn write(&self, radio: &mut Registers) -> Result<()> {
         match &self.preamble1 {
             Some(p) => {
-                p.pattern.write(radio)?;
                 radio.TMGRXPREAMBLE1().write(p.timeout)?;
             }
             None => radio.TMGRXPREAMBLE1().write(Float5::new(0))?,
@@ -1745,6 +1744,7 @@ impl RXParameterStages {
         }
         match &self.preamble3 {
             Some(p) => {
+                p.pattern.write(radio)?;
                 radio.TMGRXPREAMBLE3().write(p.timeout)?;
             }
             None => radio.TMGRXPREAMBLE3().write(Float5::new(0))?,

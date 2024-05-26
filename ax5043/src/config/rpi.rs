@@ -98,35 +98,6 @@ pub fn configure_radio_rx(radio: &mut Registers) -> Result<(Board, ChannelParame
     }
     .write0(radio, &board, &channel, &rxp)?;
 
-    // Set 1
-    RXParameterSet {
-        agc: RXParameterAGC::new(&board, &channel),
-        gain: RXParameterGain {
-            time_corr_frac: 16,
-            datarate_corr_frac: 512,
-            phase: 0b0011,
-            filter: 0b11,
-            //baseband: None,
-            baseband: Some(RXParameterFreq {
-                phase: 0x0A,
-                freq: 0x0A,
-            }),
-            rf: None,
-            //rf: Some(RXParameterFreq {
-            //    phase: 0x0A,
-            //    freq: 0x0A,
-            //}),
-            amplitude: 0b0110,
-            deviation_update: true,
-            ampl_agc_jump_correction: false,
-            ampl_averaging: false,
-        },
-        freq_dev: Some(0x32),
-        decay: 0b0110,
-        baseband_offset: RXParameterBasebandOffset { a: 0, b: 0 },
-    }
-    .write1(radio, &board, &channel, &rxp)?;
-
     // Set 3
     RXParameterSet {
         agc: RXParameterAGC::new(&board, &channel),
@@ -158,27 +129,10 @@ pub fn configure_radio_rx(radio: &mut Registers) -> Result<(Board, ChannelParame
 
     RXParameterStages {
         preamble1: Some(Preamble1 {
-            pattern: PatternMatch1 {
-                pat: 0x1111,
-                len: 15,
-                raw: false,
-                min: 0,
-                max: 15,
-            },
             timeout: Float5 { m: 0x17, e: 5 },
             set: RxParamSet::Set0,
         }),
-        preamble2: Some(Preamble2 {
-            pattern: PatternMatch0 {
-                pat: 0x1111_1111,
-                len: 31,
-                raw: false,
-                min: 0,
-                max: 31,
-            },
-            timeout: Float5 { m: 0x17, e: 0 },
-            set: RxParamSet::Set1,
-        }),
+        preamble2: None,
         preamble3: None,
         packet: RxParamSet::Set3,
     }

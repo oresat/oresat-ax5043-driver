@@ -115,28 +115,10 @@ pub fn configure_radio_rx(radio: &mut Registers) -> Result<(Board, ChannelParame
     // TODO: set timeout (TMGRXPREAMBLEx) off of expected bitrate + preamble length?
     RXParameterStages {
         preamble1: Some(Preamble1 {
-            pattern: PatternMatch1 {
-                pat: 0x7E7E,
-                len: 15,
-                raw: false,
-                min: 0,
-                max: 15,
-            },
-            //timeout: Float5 { m: 0x17, e: 5 },
-            timeout: Float5 { m: 0, e: 0 },
+            timeout: Float5 { m: 0x17, e: 5 },
             set: RxParamSet::Set0,
         }),
-        preamble2: Some(Preamble2 {
-            pattern: PatternMatch0 {
-                pat: 0x7E7E_7E7E,
-                len: 31,
-                raw: false,
-                min: 0,
-                max: 31,
-            },
-            timeout: Float5 { m: 0x17, e: 5 },
-            set: RxParamSet::Set1,
-        }),
+        preamble2: None,
         preamble3: None,
         packet: RxParamSet::Set3,
     }
