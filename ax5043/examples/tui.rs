@@ -78,8 +78,8 @@ impl UIState {
     where
         T: AsRef<str> + std::fmt::Display,
     {
-        let min = data.iter().copied().fold(f64::NAN, f64::min).round();
-        let max = data.iter().copied().fold(f64::NAN, f64::max).round();
+        let min = data.iter().copied().fold(f64::NAN, f64::min).round() - 1.0;
+        let max = data.iter().copied().fold(f64::NAN, f64::max).round() + 1.0;
         let values = data
             .iter()
             .enumerate()
