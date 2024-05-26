@@ -198,7 +198,7 @@ pub struct PacketController {
     tmg_rx_preamble2: Float5,
     tmg_rx_preamble3: Float5,
     rssi_reference: i8,
-    rssi_abs_thr: u8,
+    rssi_abs_thr: i8,
     bgnd_rssi_gain: u8,
     bgnd_rssi_thr: u8,
     pkt_chunk_size: u8,

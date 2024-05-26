@@ -1056,11 +1056,16 @@ impl TXParameters {
     }
 }
 
+pub enum FreqOffsetCorrection {
+    AtFirstLO,
+    AtSecondLO,
+}
+
 pub enum RXParameters {
     MSK {
         // MODULATION::RX_HALFSPEED
         max_dr_offset: u64,
-        freq_offs_corr: bool,
+        freq_offs_corr: FreqOffsetCorrection,
         ampl_filter: u8,
         frequency_leak: u8,
     },
@@ -1120,7 +1125,7 @@ impl RXParameters {
         match self {
             Self::MSK {
                 max_dr_offset,
-                freq_offs_corr,
+                ref freq_offs_corr,
                 ampl_filter,
                 frequency_leak,
             } => {
@@ -1167,7 +1172,10 @@ impl RXParameters {
                     offset: div_nearest(max_rf_offset * 2u64.pow(24), board.xtal.freq)
                         .try_into()
                         .unwrap(),
-                    correction: freq_offs_corr,
+                    correction: match freq_offs_corr {
+                        FreqOffsetCorrection::AtFirstLO => true,
+                        FreqOffsetCorrection::AtSecondLO => false,
+                    },
                 })?;
 
                 radio.AMPLFILTER().write(ampl_filter)?;

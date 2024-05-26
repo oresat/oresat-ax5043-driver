@@ -567,7 +567,7 @@ registers! {
         TMGRXPREAMBLE2: Float5      [0x22A, 1, ReadWrite], // Receiver Preamble 2 Timeout
         TMGRXPREAMBLE3: Float5      [0x22B, 1, ReadWrite], // Receiver Preamble 3 Timeout
         RSSIREFERENCE:  i8          [0x22C, 1, ReadWrite], // RSSI Offset
-        RSSIABSTHR:     u8          [0x22D, 1, ReadWrite], // RSSI Absolute Threshold
+        RSSIABSTHR:     i8          [0x22D, 1, ReadWrite], // RSSI Absolute Threshold
         BGNDRSSIGAIN:   u8          [0x22E, 1, ReadWrite], // Background RSSI Averaging Time Constant
         BGNDRSSITHR:    u8          [0x22F, 1, ReadWrite], // Background RSSI Relative Threshold
         PKTCHUNKSIZE:   u8          [0x230, 1, ReadWrite], // Packet Chunk Size

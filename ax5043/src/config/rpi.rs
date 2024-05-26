@@ -63,8 +63,8 @@ pub fn configure_radio_rx(radio: &mut Registers) -> Result<(Board, ChannelParame
     let rxp = RXParameters::MSK {
         //max_dr_offset: 50, // TODO derived from what?
         max_dr_offset: 0,
-        freq_offs_corr: true,
         ampl_filter: 0,
+        freq_offs_corr: FreqOffsetCorrection::AtFirstLO,
         frequency_leak: 0,
     }
     .write(radio, &board, &synth, &channel)?;
