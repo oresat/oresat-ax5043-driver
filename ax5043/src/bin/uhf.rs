@@ -395,7 +395,7 @@ struct Args {
     uplink: u16,
     #[arg(short, long, default_value = "/dev/spidev0.0")]
     spi: String,
-    #[arg(short, long, default_value_t = 0x700)]
+    #[arg(short, long, default_value_t = 0xFFF)]
     power: u16,
 }
 
