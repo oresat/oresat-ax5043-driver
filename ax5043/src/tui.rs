@@ -28,7 +28,7 @@ impl CommState {
         if let Err(e) = socket.send(&buf) {
             match e.kind() {
                 ErrorKind::ConnectionRefused => Ok(()),
-                _ => Err(e)
+                _ => Err(e),
             }?
         }
         Ok(())
@@ -101,7 +101,6 @@ impl RXState {
         })
     }
 }
-
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct PacketFormat {

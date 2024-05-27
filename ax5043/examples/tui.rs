@@ -18,7 +18,6 @@ use std::{backtrace::Backtrace, collections::VecDeque, io, os::fd::AsRawFd, pani
 // FIXME: Default isn't really the way to go, maybe ::new()?
 
 struct UIState {
-    spark: Style,
     board: config::Board,
     rx: VecDeque<RXState>,
     packets: VecDeque<(usize, usize, FIFOChunkRX)>,
@@ -30,7 +29,6 @@ struct UIState {
 impl Default for UIState {
     fn default() -> Self {
         Self {
-            spark: Style::default().fg(Color::Red).bg(Color::White),
             board: config::Board::default(),
             rx: VecDeque::<RXState>::default(),
             packets: VecDeque::<(usize, usize, FIFOChunkRX)>::default(),
@@ -64,16 +62,6 @@ impl Default for UIState {
 }
 
 impl UIState {
-    fn rx_params<'a>(&self, data: &'a [u64], last: RxParamCurSet) -> Sparkline<'a> {
-        Sparkline::default()
-            .block(Block::default().borders(Borders::ALL).title(format!(
-                "Current RX Parameters - stage {} ({:?}) special {}",
-                last.index, last.number, last.special
-            )))
-            .data(data)
-            .style(self.spark)
-    }
-
     fn chart<'a, T>(&self, f: &mut Frame, area: Rect, name: T, unit: T, data: &'a [f64])
     where
         T: AsRef<str> + std::fmt::Display,
@@ -263,32 +251,21 @@ fn ui(f: &mut Frame, state: &UIState) {
         &state.rx.iter().map(|r| r.freq).collect::<Vec<f64>>(),
     );
 
-    let def = RXState {
-        rssi: 0.0,
-        agccounter: 0.0,
-        datarate: 0.0,
-        ampl: 0.0,
-        phase: 0.0,
-        fskdemod: 0.0,
-        rffreq: 0.0,
-        freq: 0.0,
-        paramcurset: RxParamCurSet {
-            index: 0,
-            number: RxParamSet::Set0,
-            special: 0,
-        },
-    };
-
-    f.render_widget(
-        state.rx_params(
-            &state
-                .rx
-                .iter()
-                .map(|r| u64::from(r.paramcurset.index))
-                .collect::<Vec<u64>>(),
-            state.rx.back().unwrap_or(&def).paramcurset,
-        ),
+    // TODO: Title like how it used to be
+    //.block(Block::default().borders(Borders::ALL).title(format!(
+    //    "Current RX Parameters - stage {} ({:?}) special {}",
+    //    last.index, last.number, last.special
+    //)))
+    state.chart(
+        f,
         sparks[8],
+        "Current RX Parameters",
+        "",
+        &state
+            .rx
+            .iter()
+            .map(|r| f64::from(r.paramcurset.index))
+            .collect::<Vec<f64>>(),
     );
     f.render_widget(state.status.widget(), chunks[2]);
 }
