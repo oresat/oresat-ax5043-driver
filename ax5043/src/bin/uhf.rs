@@ -36,7 +36,7 @@ pub fn configure_radio_rx(radio: &mut Registers) -> Result<(Board, ChannelParame
 
     let rxp = RXParameters::MSK {
         max_dr_offset: 0,
-        freq_offs_corr: true,
+        freq_offs_corr: FreqOffsetCorrection::AtFirstLO,
         ampl_filter: 0,
         frequency_leak: 0,
     }
@@ -49,11 +49,8 @@ pub fn configure_radio_rx(radio: &mut Registers) -> Result<(Board, ChannelParame
             time_corr_frac: 4,
             datarate_corr_frac: 255,
             phase: 0b0011,
-            filter: 0b10,
-            baseband: Some(RXParameterFreq {
-                phase: 0x05,
-                freq: 0x05,
-            }),
+            filter: 0b11,
+            baseband: None,
             rf: None,
             amplitude: 0b0110,
             deviation_update: true,
@@ -66,40 +63,14 @@ pub fn configure_radio_rx(radio: &mut Registers) -> Result<(Board, ChannelParame
     };
     set0.write0(radio, &board, &channel, &rxp)?;
 
-    let set1 = RXParameterSet {
-        agc: RXParameterAGC::new(&board, &channel),
-        gain: RXParameterGain {
-            time_corr_frac: 16,
-            datarate_corr_frac: 512,
-            phase: 0b0011,
-            filter: 0b10,
-            baseband: Some(RXParameterFreq {
-                phase: 0x05,
-                freq: 0x05,
-            }),
-            rf: None,
-            amplitude: 0b0110,
-            deviation_update: true,
-            ampl_agc_jump_correction: false,
-            ampl_averaging: false,
-        },
-        freq_dev: Some(0x32),
-        decay: 0b0110,
-        baseband_offset: RXParameterBasebandOffset { a: 0, b: 0 },
-    };
-    set1.write1(radio, &board, &channel, &rxp)?;
-
     let set3 = RXParameterSet {
-        agc: RXParameterAGC::off(),
+        agc: RXParameterAGC::new(&board, &channel),
         gain: RXParameterGain {
             time_corr_frac: 32,
             datarate_corr_frac: 1024,
             phase: 0b0011,
-            filter: 0b10,
-            baseband: Some(RXParameterFreq {
-                phase: 0x09,
-                freq: 0x09,
-            }),
+            filter: 0b11,
+            baseband: None,
             rf: None,
             amplitude: 0b0110,
             deviation_update: true,
@@ -126,7 +97,7 @@ pub fn configure_radio_rx(radio: &mut Registers) -> Result<(Board, ChannelParame
 
     radio.PKTMAXLEN().write(0xFF)?;
     radio.PKTLENCFG().write(PktLenCfg { pos: 0, bits: 0xF })?;
-    radio.PKTLENOFFSET().write(0x09)?;
+    radio.PKTLENOFFSET().write(0x00)?;
 
     radio.PKTCHUNKSIZE().write(0x09)?;
     radio.PKTACCEPTFLAGS().write(PktAcceptFlags::LRGP)?;
