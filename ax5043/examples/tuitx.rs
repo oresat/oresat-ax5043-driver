@@ -257,12 +257,15 @@ fn main() -> Result<()> {
 
                     for packet in packets {
                         radio.FIFODATATX().write(packet)?;
-                        radio.FIFOCMD().write(FIFOCmd {
-                            mode: FIFOCmds::COMMIT,
-                            auto_commit: false,
-                        })?;
-                        while !radio.FIFOSTAT().read()?.contains(FIFOStat::FREE_THR) {}
                     }
+                    // FIXME: for packet data that isn't repeat data we'll need a more complicated
+                    // solution of feeding the fifo
+                    radio.FIFOCMD().write(FIFOCmd {
+                        mode: FIFOCmds::COMMIT,
+                        auto_commit: false,
+                    })?;
+                    while !radio.FIFOSTAT().read()?.contains(FIFOStat::FREE_THR) {}
+
                     // FIXME: FIFOSTAT CLEAR?
 
                     loop {
