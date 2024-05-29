@@ -546,7 +546,7 @@ proptest! {
 }
 
 bitflags! {
-    #[derive(Clone, Copy, Debug, PartialEq)]
+    #[derive(Clone, Copy, Debug, Deserialize, PartialEq)]
     pub struct Encoding: u8 {
         const INV    = 1 << 0;
         const DIFF   = 1 << 1;

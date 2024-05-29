@@ -4,7 +4,7 @@ use anyhow::Result;
 fn config(radio: &mut Registers) -> Result<(Board, Synthesizer, ChannelParameters)> {
     let board = board::RPI.write(radio)?;
     let synth = synth::UHF_436_5.write(radio, &board)?;
-    let channel = channel::GMSK_9600_LSB.write(radio, &board)?;
+    let channel = channel::GMSK_60000.write(radio, &board)?;
 
     synth.autorange(radio)?;
 
@@ -63,15 +63,15 @@ pub fn configure_radio_rx(radio: &mut Registers) -> Result<(Board, ChannelParame
     let rxp = RXParameters::MSK {
         //max_dr_offset: 50, // TODO derived from what?
         max_dr_offset: 0,
-        ampl_filter: 0,
         freq_offs_corr: FreqOffsetCorrection::AtFirstLO,
+        ampl_filter: 0,
         frequency_leak: 0,
     }
     .write(radio, &board, &synth, &channel)?;
 
     // Set 0
     RXParameterSet {
-        agc: RXParameterAGC::new(&board, &channel),
+        agc: Control::Automatic,
         gain: RXParameterGain {
             time_corr_frac: 4,
             datarate_corr_frac: 255,
@@ -100,7 +100,7 @@ pub fn configure_radio_rx(radio: &mut Registers) -> Result<(Board, ChannelParame
 
     // Set 3
     RXParameterSet {
-        agc: RXParameterAGC::new(&board, &channel),
+        agc: Control::Automatic,
         gain: RXParameterGain {
             time_corr_frac: 32,
             datarate_corr_frac: 1024,

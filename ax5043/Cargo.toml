@@ -23,6 +23,7 @@ serde = { version = "1.0", features = ["derive"] }
 spidev = "0.6.0"
 thiserror = "1.0.58"
 timerfd = "1.6.0"
+toml = "0.8.13"
 
 [dev-dependencies]
 crossterm = "0.27"

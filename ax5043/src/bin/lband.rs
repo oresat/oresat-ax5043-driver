@@ -36,7 +36,7 @@ pub fn configure_radio_rx(radio: &mut Registers) -> Result<(Board, ChannelParame
     .write(radio, &board, &synth, &channel)?;
 
     let set0 = RXParameterSet {
-        agc: RXParameterAGC::new(&board, &channel),
+        agc: Control::Manual(RXParameterAGC::new(&board, &channel)),
         gain: RXParameterGain {
             time_corr_frac: 4,
             datarate_corr_frac: 255,
@@ -56,7 +56,7 @@ pub fn configure_radio_rx(radio: &mut Registers) -> Result<(Board, ChannelParame
     set0.write0(radio, &board, &channel, &rxp)?;
 
     let set3 = RXParameterSet {
-        agc: RXParameterAGC::new(&board, &channel),
+        agc: Control::Manual(RXParameterAGC::new(&board, &channel)),
         gain: RXParameterGain {
             time_corr_frac: 32,
             datarate_corr_frac: 1024,

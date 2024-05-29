@@ -438,7 +438,7 @@ impl Board {
  * Synthesizer configuration
  */
 
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, Debug, Deserialize)]
 pub enum LoopFilter {
     External,
     Internalx1,
@@ -458,6 +458,7 @@ impl From<LoopFilter> for FLT {
     }
 }
 
+#[derive(Clone, Copy, Debug, Deserialize)]
 pub struct PLL {
     // TODO: Can I time how long it takes to settle?
     pub filter_bandwidth: LoopFilter, //TODO: Hz, Depends on CPI, internal/external filt (PLLLOOP::FLT)
@@ -469,7 +470,7 @@ pub struct PLL {
                                  // what would FILTEN 1, DIRECT 0 do?
 }
 
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, Debug, Deserialize)]
 pub enum LockDetector {
     Delay6ns,
     Delay9ns,
@@ -489,7 +490,7 @@ impl From<LockDetector> for LockDetDly {
     }
 }
 
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, Debug, Deserialize)]
 pub enum RangingClock {
     XtalDiv256,
     XtalDiv512,
@@ -526,7 +527,7 @@ impl From<RangingClock> for PLLRngClk {
  * bandwidth (register PLLLOOP)
  */
 
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, Debug, Deserialize)]
 pub enum FreqReg {
     A,
     B,
@@ -541,11 +542,13 @@ impl From<FreqReg> for FreqSel {
     }
 }
 
+#[derive(Clone, Copy, Debug, Deserialize)]
 pub enum Control<T> {
     Automatic,
     Manual(T),
 }
 
+#[derive(Clone, Copy, Debug, Deserialize)]
 pub struct Synthesizer {
     pub freq_a: Hz,
     pub freq_b: Hz,
@@ -745,6 +748,7 @@ impl Synthesizer {
     }
 }
 
+#[derive(Clone, Copy, Debug, Deserialize)]
 pub enum ADCKind {
     ADC13,
     ADC1,
@@ -752,13 +756,14 @@ pub enum ADCKind {
     ADC3,
 }
 
+#[derive(Clone, Copy, Debug, Deserialize)]
 pub struct ADCcfg {
     pub sext: bool,
     pub offs: bool,
     pub kind: ADCKind,
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, Deserialize)]
 pub enum SlowRamp {
     Bits1,
     Bits2,
@@ -777,7 +782,7 @@ impl From<SlowRamp> for crate::SlowRamp {
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, Deserialize, PartialEq)]
 pub struct BT(pub f32);
 
 impl TryFrom<BT> for ModCfgF {
@@ -791,6 +796,7 @@ impl TryFrom<BT> for ModCfgF {
     }
 }
 
+#[derive(Clone, Copy, Debug, Deserialize)]
 pub enum Modulation {
     ASK,
     ASKCoherent, // FIXME part of ASK, relevent to detection only? has a fifo cmd
@@ -843,10 +849,12 @@ pub enum Modulation {
 // In Raw modes, the choice depends on the legacy
 // system to be implemented
 
+#[derive(Clone, Copy, Debug, Deserialize)]
 pub struct FEC {
     // FIXME: stuff
 }
 
+#[derive(Clone, Copy, Debug, Deserialize)]
 pub enum Framing {
     Raw,
     RawSoft,
@@ -857,6 +865,7 @@ pub enum Framing {
 }
 
 #[rustfmt::skip]
+#[derive(Clone, Copy, Debug, Deserialize)]
 pub enum CRC {
     None,
     CCITT {initial: u16},
@@ -865,12 +874,13 @@ pub enum CRC {
     CRC32 {initial: u32},
 }
 
-#[derive(PartialEq)]
+#[derive(Clone, Copy, Debug, Deserialize, PartialEq)]
 pub enum BitOrder {
     LSBFirst,
     MSBFirst,
 }
 
+#[derive(Clone, Copy, Debug, Deserialize)]
 pub struct ChannelParameters {
     pub modulation: Modulation,
     // If BROWN GATE is set, the transmitter is disabled
@@ -946,6 +956,7 @@ impl ChannelParameters {
     }
 }
 
+#[derive(Clone, Copy, Debug, Deserialize)]
 pub enum AmplitudeShaping {
     None {
         b: u16,
@@ -965,6 +976,7 @@ amplitude shaping is selected, both the raised cosine
 amplitude shaper and the predistortion is bypassed, and α1
 used.
 */
+#[derive(Clone, Copy, Debug, Deserialize)]
 pub struct TXParameters {
     pub antenna: Antenna,
     pub amp: AmplitudeShaping,
@@ -1056,11 +1068,13 @@ impl TXParameters {
     }
 }
 
+#[derive(Clone, Copy, Debug, Deserialize)]
 pub enum FreqOffsetCorrection {
     AtFirstLO,
     AtSecondLO,
 }
 
+#[derive(Clone, Copy, Debug, Deserialize)]
 pub enum RXParameters {
     MSK {
         // MODULATION::RX_HALFSPEED
@@ -1153,6 +1167,7 @@ impl RXParameters {
                         .unwrap(),
                 )?;
 
+                //radio.IFFREQ().write(0x0E78)?;
                 radio
                     .RXDATARATE()
                     .write(self.rxdatarate(board, channel).try_into().unwrap())?;
@@ -1177,6 +1192,10 @@ impl RXParameters {
                         FreqOffsetCorrection::AtSecondLO => false,
                     },
                 })?;
+                //radio.MAXRFOFFSET().write(MaxRFOffset {
+                //    offset: 0x3BE,
+                //    correction: freq_offs_corr,
+                //})?;
 
                 radio.AMPLFILTER().write(ampl_filter)?;
                 radio.FREQUENCYLEAK().write(frequency_leak)?;
@@ -1212,6 +1231,7 @@ const AGCGAIN_LOOP_SCALE: [u64; 15] = [
     1_647_150,
 ];
 
+#[derive(Clone, Copy, Debug, Deserialize)]
 pub struct RXParameterAGC {
     attack: u8,
     decay: u8,
@@ -1280,11 +1300,13 @@ impl RXParameterAGC {
     }
 }
 
+#[derive(Clone, Copy, Debug, Deserialize)]
 pub struct RXParameterFreq {
     pub phase: u8,
     pub freq: u8,
 }
 
+#[derive(Clone, Copy, Debug, Deserialize)]
 pub struct RXParameterGain {
     pub time_corr_frac: u32, // should be at least 4. bit sampling timing, see pm p 16
     pub datarate_corr_frac: u32, // should be at least 64,
@@ -1298,13 +1320,15 @@ pub struct RXParameterGain {
     pub ampl_averaging: bool,
 }
 
+#[derive(Clone, Copy, Debug, Deserialize)]
 pub struct RXParameterBasebandOffset {
     pub a: u8,
     pub b: u8,
 }
 
+#[derive(Clone, Copy, Debug, Deserialize)]
 pub struct RXParameterSet {
-    pub agc: RXParameterAGC,
+    pub agc: Control<RXParameterAGC>,
     pub gain: RXParameterGain,
     pub freq_dev: Option<u16>,
     pub decay: u8,
@@ -1319,17 +1343,21 @@ impl RXParameterSet {
         channel: &ChannelParameters,
         rxp: &RXParameters,
     ) -> Result<()> {
+        let agc = match self.agc {
+            Control::Automatic => RXParameterAGC::new(board, channel),
+            Control::Manual(t) => t
+        };
         radio.AGCGAIN0().write(AGCGain {
-            attack: self.agc.attack,
-            decay: self.agc.decay,
+            attack: agc.attack,
+            decay: agc.decay,
         })?;
-        radio.AGCTARGET0().write(self.agc.target)?;
+        radio.AGCTARGET0().write(agc.target)?;
         radio.AGCAHYST0().write(AGCHyst {
-            hyst: self.agc.ahyst,
+            hyst: agc.ahyst,
         })?;
         radio.AGCMINMAX0().write(AGCMinMax {
-            min: self.agc.min,
-            max: self.agc.max,
+            min: agc.min,
+            max: agc.max,
         })?;
 
         // enusre RXDATARATE - TIMEGAINx ≥ 2^12
@@ -1433,17 +1461,21 @@ impl RXParameterSet {
         channel: &ChannelParameters,
         rxp: &RXParameters,
     ) -> Result<()> {
+        let agc = match self.agc {
+            Control::Automatic => RXParameterAGC::new(board, channel),
+            Control::Manual(t) => t
+        };
         radio.AGCGAIN1().write(AGCGain {
-            attack: self.agc.attack,
-            decay: self.agc.decay,
+            attack: agc.attack,
+            decay: agc.decay,
         })?;
-        radio.AGCTARGET1().write(self.agc.target)?;
+        radio.AGCTARGET1().write(agc.target)?;
         radio.AGCAHYST1().write(AGCHyst {
-            hyst: self.agc.ahyst,
+            hyst: agc.ahyst,
         })?;
         radio.AGCMINMAX1().write(AGCMinMax {
-            min: self.agc.min,
-            max: self.agc.max,
+            min: agc.min,
+            max: agc.max,
         })?;
 
         let rxdatarate = rxp.rxdatarate(board, channel);
@@ -1532,17 +1564,21 @@ impl RXParameterSet {
         channel: &ChannelParameters,
         rxp: &RXParameters,
     ) -> Result<()> {
+        let agc = match self.agc {
+            Control::Automatic => RXParameterAGC::new(board, channel),
+            Control::Manual(t) => t
+        };
         radio.AGCGAIN3().write(AGCGain {
-            attack: self.agc.attack,
-            decay: self.agc.decay,
+            attack: agc.attack,
+            decay: agc.decay,
         })?;
-        radio.AGCTARGET3().write(self.agc.target)?;
+        radio.AGCTARGET3().write(agc.target)?;
         radio.AGCAHYST3().write(AGCHyst {
-            hyst: self.agc.ahyst,
+            hyst: agc.ahyst,
         })?;
         radio.AGCMINMAX3().write(AGCMinMax {
-            min: self.agc.min,
-            max: self.agc.max,
+            min: agc.min,
+            max: agc.max,
         })?;
 
         let rxdatarate = rxp.rxdatarate(board, channel);
@@ -1625,6 +1661,7 @@ impl RXParameterSet {
     }
 }
 
+#[derive(Clone, Copy, Debug, Deserialize)]
 pub struct PatternMatch0 {
     pub pat: u32,
     pub len: u8,
@@ -1669,6 +1706,7 @@ impl PatternMatch0 {
     }
 }
 
+#[derive(Clone, Copy, Debug, Deserialize)]
 pub struct PatternMatch1 {
     pub pat: u16,
     pub len: u8,
@@ -1706,17 +1744,20 @@ impl PatternMatch1 {
     }
 }
 
+#[derive(Clone, Copy, Debug, Deserialize)]
 pub struct Preamble1 {
     pub timeout: Float5, // between 0 and 3968 bits
     pub set: RxParamSet,
 }
 
+#[derive(Clone, Copy, Debug, Deserialize)]
 pub struct Preamble2 {
     pub pattern: PatternMatch1,
     pub timeout: Float5, // between 0 and 3968 bits
     pub set: RxParamSet,
 }
 
+#[derive(Clone, Copy, Debug, Deserialize)]
 pub struct Preamble3 {
     pub pattern: PatternMatch0,
     pub timeout: Float5, // between 0 and 3968 bits
@@ -1726,6 +1767,7 @@ pub struct Preamble3 {
 // see PM pg 19 Figure 13. FIXME: what is TXPREAMBLE1? only mentioned in this diagram. Is it
 // missing -MGR-?
 // TODO: TMGRX{AGC,RSSI} units PKTMISC flag
+#[derive(Clone, Copy, Debug, Deserialize)]
 pub struct RXParameterStages {
     // TODO: Should this just be merged with RXParameters?
     pub preamble1: Option<Preamble1>,
@@ -1736,6 +1778,7 @@ pub struct RXParameterStages {
 
 impl RXParameterStages {
     pub fn write(&self, radio: &mut Registers) -> Result<()> {
+        radio.TMGRXRSSI().write(Float5 { m: 3, e: 0 })?;
         match &self.preamble1 {
             Some(p) => {
                 radio.TMGRXPREAMBLE1().write(p.timeout)?;
@@ -1764,6 +1807,72 @@ impl RXParameterStages {
             self.preamble3.as_ref().map(|x| x.set).unwrap_or(RxParamSet::Set0),
             self.packet,
         ))?;
+        Ok(())
+    }
+}
+
+#[allow(non_snake_case)]
+#[derive(Clone, Copy, Debug, Deserialize)]
+pub struct Raw {
+    pub FREQA: u32,
+}
+
+#[derive(Clone, Copy, Debug, Deserialize)]
+pub struct Config {
+    pub board: Board,
+    pub synth: Synthesizer,
+    pub channel: ChannelParameters,
+    pub tx: Option<TXParameters>,
+    pub rx: Option<RXParameters>,
+    pub set0: Option<RXParameterSet>,
+    pub set1: Option<RXParameterSet>,
+    pub set2: Option<RXParameterSet>,
+    pub set3: Option<RXParameterSet>,
+    pub stages: Option<RXParameterStages>,
+    pub overwrite: Option<Raw>,
+}
+
+impl Config {
+    pub fn write(&self, radio: &mut Registers) -> Result<()> {
+        self.board.write(radio)?;
+        self.synth.write(radio, &self.board)?;
+        self.channel.write(radio, &self.board)?;
+        self.synth.autorange(radio)?;
+
+        if let Some(tx) = self.tx {
+            tx.write(radio, &self.board, &self.channel)?;
+        }
+
+        if let Some(rx) = self.rx {
+            rx.write(radio, &self.board, &self.synth, &self.channel)?;
+            if let Some(set) = self.set0 {
+                set.write0(radio, &self.board, &self.channel, &rx)?;
+            }
+            if let Some(set) = self.set1 {
+                set.write1(radio, &self.board, &self.channel, &rx)?;
+            }
+            if let Some(_set) = self.set2 {
+                //FIXME
+                //set.write2(radio, &self.board, &self.channel, &rx)?;
+            }
+            if let Some(set) = self.set3 {
+                set.write3(radio, &self.board, &self.channel, &rx)?;
+            }
+            if let Some(stages) = self.stages {
+                stages.write(radio)?;
+            }
+            radio.PERF_F18().write(0x02)?; // TODO set by radiolab during RX
+            radio.PERF_F26().write(0x96)?;
+
+            radio.PKTMAXLEN().write(0xFF)?;
+            radio.PKTLENCFG().write(PktLenCfg { pos: 0, bits: 0xF })?;
+            radio.PKTLENOFFSET().write(0x00)?;
+
+            radio.PKTCHUNKSIZE().write(0x09)?;
+            radio.PKTACCEPTFLAGS().write(PktAcceptFlags::LRGP)?;
+
+            radio.RSSIREFERENCE().write(0)?;
+        }
         Ok(())
     }
 }

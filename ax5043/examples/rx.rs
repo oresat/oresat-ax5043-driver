@@ -1,5 +1,4 @@
 use anyhow::{anyhow, Result};
-use ax5043::config::rpi::configure_radio_rx;
 use ax5043::registers::*;
 use ax5043::tui::*;
 use ax5043::*;
@@ -7,8 +6,9 @@ use gpiod::{Chip, EdgeDetect, Options};
 use mio::{unix::SourceFd, Events, Interest, Poll, Token};
 use mio_signals::{Signal, Signals};
 use std::net::{IpAddr, Ipv4Addr, SocketAddr, UdpSocket};
-use std::{os::fd::AsRawFd, time::Duration};
+use std::{fs::read_to_string, os::fd::AsRawFd, time::Duration};
 use timerfd::{SetTimeFlags, TimerFd, TimerState};
+use toml;
 
 pub fn ax5043_listen(radio: &mut Registers) -> Result<()> {
     // pll not locked
@@ -98,10 +98,13 @@ fn main() -> Result<()> {
         Interest::READABLE,
     )?;
 
-    let (board, channel) = configure_radio_rx(&mut radio)?;
+    let file_path = "rpi-uhf-60000.toml";
+    let contents = read_to_string(file_path)?;
+    let config: config::Config = toml::from_str(&contents)?;
+    config.write(&mut radio)?;
     radio.RADIOEVENTMASK().write(RadioEvent::all())?;
 
-    CommState::BOARD(board.clone()).send(&uplink)?;
+    CommState::BOARD(config.board.clone()).send(&uplink)?;
 
     CommState::REGISTERS(StatusRegisters::new(&mut radio)?).send(&uplink)?;
     ax5043_listen(&mut radio)?;
@@ -120,12 +123,12 @@ fn main() -> Result<()> {
     //    | PktAcceptFlags::LRGP
     //)?;
     CommState::CONFIG(Config {
-        rxparams: RXParams::new(&mut radio, &board)?,
+        rxparams: RXParams::new(&mut radio, &config.board)?,
         set0: RXParameterSet::set0(&mut radio)?,
         set1: RXParameterSet::set1(&mut radio)?,
         set2: RXParameterSet::set2(&mut radio)?,
         set3: RXParameterSet::set3(&mut radio)?,
-        synthesizer: Synthesizer::new(&mut radio, &board)?,
+        synthesizer: Synthesizer::new(&mut radio, &config.board)?,
         packet_controller: PacketController::new(&mut radio)?,
         packet_format: PacketFormat::new(&mut radio)?,
     })
@@ -147,7 +150,7 @@ fn main() -> Result<()> {
             match event.token() {
                 TELEMETRY => {
                     tfd.read();
-                    CommState::STATE(RXState::new(&mut radio, &channel)?).send(&uplink)?;
+                    CommState::STATE(RXState::new(&mut radio, &config.channel)?).send(&uplink)?;
                     CommState::REGISTERS(StatusRegisters::new(&mut radio)?).send(&uplink)?;
                 }
                 IRQ => {

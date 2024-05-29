@@ -30,25 +30,6 @@ fn configure_radio(radio: &mut Registers) -> Result<(Board, Synthesizer, Channel
 
 }
 
-/*
-first SYNTHBOOST SYNTHSETTLE
-second IFINIT COARSEAGC AGC RSSI
-
-preamble1: PS0
-    TMGRXPREAMBLE1 to reset to second?
-
-preamble2: PS1
-    MATCH1
-    TMGRXPREAMBLE2
-
-preamble3: PS2
-    MATCH0
-    TMGRXPREAMBLE3
-
-packet: PS3
-    SFD
-*/
-
 pub fn configure_radio_rx(radio: &mut Registers) -> Result<(Board, ChannelParameters)> {
     let (board, synth, channel) = configure_radio(radio)?;
 
@@ -63,7 +44,7 @@ pub fn configure_radio_rx(radio: &mut Registers) -> Result<(Board, ChannelParame
 
     let rxp = RXParameters::MSK {
         max_dr_offset: 0, // TODO derived from what?
-        freq_offs_corr: true,
+        freq_offs_corr: FreqOffsetCorrection::AtFirstLO,
         ampl_filter: 0,
         frequency_leak: 0,
     }.write(radio, &board, &synth, &channel)?;
