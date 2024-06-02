@@ -7,11 +7,13 @@ use crossterm::{
 use mio::{unix::SourceFd, Events, Interest, Poll, Token};
 use mio_signals::{Signal, Signals};
 use ratatui::{backend::CrosstermBackend, prelude::*, Terminal};
-use std::{backtrace::Backtrace, cell, io, os::fd::AsRawFd, panic, time::Duration};
+use std::{
+    backtrace::Backtrace, cell, fs::read_to_string, io, os::fd::AsRawFd, panic, time::Duration,
+};
 use timerfd::{SetTimeFlags, TimerFd, TimerState};
 
-use ax5043::config::rpi::configure_radio_tx;
 use ax5043::{registers::*, tui::*, *};
+use toml;
 
 struct UIState {
     board: config::Board,
@@ -168,10 +170,14 @@ fn main() -> Result<()> {
     const BEACON: Token = Token(2);
     registry.register(&mut SourceFd(&tfd.as_raw_fd()), BEACON, Interest::READABLE)?;
 
-    let board = configure_radio_tx(&mut radio)?;
+    let file_path = "rpi-uhf-60000.toml";
+    let contents = read_to_string(file_path)?;
+    let config: config::Config = toml::from_str(&contents)?;
+    config.write(&mut radio)?;
+
     radio.RADIOEVENTMASK().write(RadioEvent::all())?;
 
-    state.borrow_mut().board = board.clone();
+    state.borrow_mut().board = config.board.clone();
     state.borrow_mut().pwrmode = radio.PWRMODE().read()?;
     state.borrow_mut().powstat = radio.POWSTAT().read()?;
     state.borrow_mut().irq = radio.IRQREQUEST().read()?;
@@ -191,8 +197,8 @@ fn main() -> Result<()> {
         ui(f, &state.borrow());
     });
 
-    state.borrow_mut().synthesizer = Synthesizer::new(&mut radio, &board)?;
-    state.borrow_mut().tx = TXParameters::new(&mut radio, &board)?;
+    state.borrow_mut().synthesizer = Synthesizer::new(&mut radio, &config.board)?;
+    state.borrow_mut().tx = TXParameters::new(&mut radio, &config.board)?;
     state.borrow_mut().chan = ChannelParameters::new(&mut radio)?;
 
     _ = radio.PLLRANGINGA().read()?; // sticky lock bit ~ IRQPLLUNLIOCK, gate

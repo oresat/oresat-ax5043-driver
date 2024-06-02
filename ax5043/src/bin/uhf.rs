@@ -1,8 +1,7 @@
 // Intended to be run on the C3v6, takes data from UDP port 10015
 // and transmits it through the UHF AX5043
 use anyhow::{bail, ensure, Context, Result};
-use ax5043::{config, config::*};
-use ax5043::{registers, registers::*, tui, Registers, RX, TX};
+use ax5043::{config, registers, registers::*, tui, Registers, RX, TX};
 use clap::Parser;
 use crc::{Crc, CRC_16_GENIBUS}; // TODO: this CRC works but is it correct?
 use gpiod::{Chip, EdgeDetect, Options};
@@ -10,102 +9,14 @@ use mio::net::UdpSocket;
 use mio::{unix::SourceFd, Events, Interest, Poll, Token};
 use mio_signals::{Signal, Signals};
 use std::{
+    fs::read_to_string,
     io::{ErrorKind, Write},
     net::{IpAddr, Ipv4Addr, SocketAddr},
     os::fd::AsRawFd,
     time::Duration,
 };
 use timerfd::{SetTimeFlags, TimerFd, TimerState};
-
-fn configure_radio(radio: &mut Registers) -> Result<(Board, Synthesizer, ChannelParameters)> {
-    let board = config::board::C3_UHF.write(radio)?;
-    let synth = config::synth::UHF_436_5.write(radio, &board)?;
-    let channel = config::channel::GMSK_96000.write(radio, &board)?;
-
-    radio.FIFOTHRESH().write(128)?; // Half the FIFO size
-
-    synth.autorange(radio)?;
-    Ok((board, synth, channel))
-}
-
-pub fn configure_radio_rx(radio: &mut Registers) -> Result<(Board, ChannelParameters)> {
-    let (board, synth, channel) = configure_radio(radio)?;
-
-    radio.PERF_F18().write(0x02)?; // TODO set by radiolab during RX
-    radio.PERF_F26().write(0x96)?;
-
-    let rxp = RXParameters::MSK {
-        max_dr_offset: 0,
-        freq_offs_corr: FreqOffsetCorrection::AtFirstLO,
-        ampl_filter: 0,
-        frequency_leak: 0,
-    }
-    .write(radio, &board, &synth, &channel)?;
-
-    // TODO: see note table 96: RXDATARATE - TIMEGAINx ≥ 2^12 should be ensured
-    let set0 = RXParameterSet {
-        agc: Control::Manual(RXParameterAGC::new(&board, &channel)),
-        gain: RXParameterGain {
-            time_corr_frac: 4,
-            datarate_corr_frac: 255,
-            phase: 0b0011,
-            filter: 0b11,
-            baseband: None,
-            rf: None,
-            amplitude: 0b0110,
-            deviation_update: true,
-            ampl_agc_jump_correction: false,
-            ampl_averaging: false,
-        },
-        freq_dev: None,
-        decay: 0b0110,
-        baseband_offset: RXParameterBasebandOffset { a: 0, b: 0 },
-    };
-    set0.write0(radio, &board, &channel, &rxp)?;
-
-    let set3 = RXParameterSet {
-        agc: Control::Manual(RXParameterAGC::new(&board, &channel)),
-        gain: RXParameterGain {
-            time_corr_frac: 32,
-            datarate_corr_frac: 1024,
-            phase: 0b0011,
-            filter: 0b11,
-            baseband: None,
-            rf: None,
-            amplitude: 0b0110,
-            deviation_update: true,
-            ampl_agc_jump_correction: false,
-            ampl_averaging: false,
-        },
-        freq_dev: Some(0x32),
-        decay: 0b0110,
-        baseband_offset: RXParameterBasebandOffset { a: 0, b: 0 },
-    };
-    set3.write3(radio, &board, &channel, &rxp)?;
-
-    // TODO: set timeout (TMGRXPREAMBLEx) off of expected bitrate + preamble length?
-    RXParameterStages {
-        preamble1: Some(Preamble1 {
-            timeout: Float5 { m: 0x17, e: 5 },
-            set: RxParamSet::Set0,
-        }),
-        preamble2: None,
-        preamble3: None,
-        packet: RxParamSet::Set3,
-    }
-    .write(radio)?;
-
-    radio.PKTMAXLEN().write(0xFF)?;
-    radio.PKTLENCFG().write(PktLenCfg { pos: 0, bits: 0xF })?;
-    radio.PKTLENOFFSET().write(0x00)?;
-
-    radio.PKTCHUNKSIZE().write(0x09)?;
-    radio.PKTACCEPTFLAGS().write(PktAcceptFlags::LRGP)?;
-
-    radio.RSSIREFERENCE().write(32)?;
-
-    Ok((board, channel))
-}
+use toml;
 
 fn process_chunk(chunk: FIFOChunkRX, packet: &mut Vec<u8>, uplink: &mut UdpSocket) -> Result<()> {
     if let FIFOChunkRX::DATA { flags, ref data } = chunk {
@@ -315,8 +226,6 @@ struct Args {
     uplink: u16,
     #[arg(short, long, default_value = "/dev/spidev0.0")]
     spi: String,
-    #[arg(short, long, default_value_t = 0x700)]
-    power: u16,
     /// For example 10.18.17.6:10035
     #[arg(short, long)]
     telemetry: Option<String>,
@@ -394,7 +303,7 @@ fn main() -> Result<()> {
 
     let spi0 = ax5043::open(args.spi)?;
     let mut status = ax5043::Status::empty();
-    let mut callback = |_: &_, addr, s, data: &_| {
+    let mut callback = |_: &_, _addr, s, _data: &_| {
         //println!("{:03X}: {:02X?}", addr, data);
         if s != status {
             if let Some(ref socket) = telemetry {
@@ -415,19 +324,45 @@ fn main() -> Result<()> {
         0x51
     );
 
-    let (board, channel) = configure_radio_rx(&mut radio)?;
+    let file_path = "c3-uhf-96000.toml";
+    let contents = read_to_string(file_path)?;
+    let config: config::Config = toml::from_str(&contents)?;
+    config.write(&mut radio)?;
+    let config_tx = config.tx.expect("Section [tx] required");
+    let channel_edl = config
+        .channel
+        .get(0)
+        .expect("Missing first [channel] (edl)");
+    let channel_beacon = config
+        .channel
+        .get(1)
+        .expect("Missing second [channel] (beacon)");
+
+    radio.FIFOTHRESH().write(128)?; // Half the FIFO size
+    radio.PERF_F18().write(0x02)?; // TODO set by radiolab during RX
+    radio.PERF_F26().write(0x96)?;
+
+    radio.PKTMAXLEN().write(0xFF)?;
+    radio.PKTLENCFG().write(PktLenCfg { pos: 0, bits: 0xF })?;
+    radio.PKTLENOFFSET().write(0x00)?;
+
+    radio.PKTCHUNKSIZE().write(0x09)?;
+    radio.PKTACCEPTFLAGS().write(PktAcceptFlags::LRGP)?;
+
+    radio.RSSIREFERENCE().write(32)?;
+
     pa_enable.set_values([true])?;
 
     if let Some(ref socket) = telemetry {
-        tui::CommState::BOARD(board.clone()).send(socket)?;
+        tui::CommState::BOARD(config.board).send(socket)?;
         tui::CommState::REGISTERS(tui::StatusRegisters::new(&mut radio)?).send(socket)?;
         tui::CommState::CONFIG(tui::Config {
-            rxparams: tui::RXParams::new(&mut radio, &board)?,
+            rxparams: tui::RXParams::new(&mut radio, &config.board)?,
             set0: tui::RXParameterSet::set0(&mut radio)?,
             set1: tui::RXParameterSet::set1(&mut radio)?,
             set2: tui::RXParameterSet::set2(&mut radio)?,
             set3: tui::RXParameterSet::set3(&mut radio)?,
-            synthesizer: tui::Synthesizer::new(&mut radio, &board)?,
+            synthesizer: tui::Synthesizer::new(&mut radio, &config.board)?,
             packet_controller: tui::PacketController::new(&mut radio)?,
             packet_format: tui::PacketFormat::new(&mut radio)?,
         })
@@ -464,7 +399,7 @@ fn main() -> Result<()> {
                 TELEMETRY => {
                     tfd.read();
                     if let Some(ref socket) = telemetry {
-                        tui::CommState::STATE(tui::RXState::new(&mut radio, &channel)?)
+                        tui::CommState::STATE(tui::RXState::new(&mut radio, &channel_edl)?)
                             .send(socket)?;
                         tui::CommState::REGISTERS(tui::StatusRegisters::new(&mut radio)?)
                             .send(socket)?;
@@ -487,22 +422,8 @@ fn main() -> Result<()> {
                         mode: PwrModes::POWEROFF,
                     })?;
 
-                    let channel = config::channel::GMSK_9600_LSB.write(&mut radio, &board)?;
-
-                    TXParameters {
-                        antenna: Antenna::SingleEnded,
-                        amp: AmplitudeShaping::RaisedCosine {
-                            a: 0,
-                            b: args.power,
-                            //b: 0xFFF,
-                            c: 0,
-                            d: 0,
-                            e: 0,
-                        },
-                        plllock_gate: true,
-                        brownout_gate: true,
-                    }
-                    .write(&mut radio, &board, &channel)?;
+                    channel_beacon.write(&mut radio, &config.board)?;
+                    config_tx.write(&mut radio, &config.board, &channel_beacon)?;
 
                     let mut buf = [0; 2048];
                     loop {
@@ -513,7 +434,7 @@ fn main() -> Result<()> {
                         }
                     }
 
-                    config::channel::GMSK_96000.write(&mut radio, &board)?;
+                    channel_edl.write(&mut radio, &config.board)?;
 
                     radio.PWRMODE().write(PwrMode {
                         flags: PwrFlags::XOEN | PwrFlags::REFEN,
@@ -542,21 +463,8 @@ fn main() -> Result<()> {
                         mode: PwrModes::POWEROFF,
                     })?;
 
-                    let channel = config::channel::GMSK_96000.write(&mut radio, &board)?;
-
-                    TXParameters {
-                        antenna: Antenna::SingleEnded,
-                        amp: AmplitudeShaping::RaisedCosine {
-                            a: 0,
-                            b: args.power,
-                            c: 0,
-                            d: 0,
-                            e: 0,
-                        },
-                        plllock_gate: true,
-                        brownout_gate: true,
-                    }
-                    .write(&mut radio, &board, &channel)?;
+                    channel_edl.write(&mut radio, &config.board)?;
+                    config_tx.write(&mut radio, &config.board, channel_edl)?;
 
                     let mut buf = [0; 2048];
                     loop {
@@ -567,7 +475,6 @@ fn main() -> Result<()> {
                         }
                     }
 
-                    config::channel::GMSK_96000.write(&mut radio, &board)?;
                     radio.PWRMODE().write(PwrMode {
                         flags: PwrFlags::XOEN | PwrFlags::REFEN,
                         mode: PwrModes::RX,

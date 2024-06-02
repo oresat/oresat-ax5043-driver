@@ -1,22 +1,22 @@
 [board]
-sysclk = { mode = "Z",    pullup = true,  invert = false }
-dclk   = { mode = "Z",    pullup = true,  invert = false }
-data   = { mode = "Z",    pullup = true,  invert = false }
-pwramp = { mode = "TCXO", pullup = false, invert = false }
-irq    = { mode = "IRQ",  pullup = false, invert = false }
-antsel = { mode = "Z",    pullup = true,  invert = false }
-xtal = { kind = "TCXO", freq = 48_000_000, enable = "AntSel" }
+sysclk = { mode = "XtalDiv1", pullup = false, invert = false }
+dclk   = { mode = "Z",        pullup = true,  invert = false }
+data   = { mode = "Z",        pullup = true,  invert = false }
+pwramp = { mode = "PwrAmp",   pullup = false, invert = false }
+irq    = { mode = "IRQ",      pullup = false, invert = false }
+antsel = { mode = "Z",        pullup = true,  invert = false }
+xtal = { kind = "TCXO", freq = 16_000_000, enable = "None" }
 vco = "Internal"
 filter = "Internal"
-dac = { pin = "PwrAmp" }
-adc = "ADC1"
+dac = { pin = "None" }
+adc = "None"
 
 [synth]
-freq_a = 436_500_000
+freq_a = 457_000_000
 freq_b = 0
 active = "A"
 pll = { charge_pump_current = 0x02, filter_bandwidth = "Internalx1" }
-boost = { charge_pump_current = 0xc8, filter_bandwidth = "Internalx5" }
+boost = { charge_pump_current = 0xC8, filter_bandwidth = "Internalx5" }
 vco_current = "Automatic"
 lock_detector_delay = "Automatic"
 ranging_clock = "XtalDiv1024"
@@ -24,16 +24,10 @@ ranging_clock = "XtalDiv1024"
 [[channel]]
 modulation.GMSK = { ramp = "Bits1", bt = 0.5 }
 encoding = "NRZISCR"
-framing.HDLC.fec = {}
-crc.CCITT.initial = 0xFFFF
+framing.HDLC.fec = { }
+crc.CCITT = { initial=0xFFFF }
 datarate = 60_000
 bitorder = "MSBFirst"
-
-[tx]
-antenna = "SingleEnded"
-amp.RaisedCosine = { a = 0, b = 0x700, c = 0, d = 0, e = 0 }
-plllock_gate = true
-brownout_gate = true
 
 [rx.MSK]
 max_dr_offset = 0
@@ -51,7 +45,6 @@ time_corr_frac = 4
 datarate_corr_frac = 255
 phase = 0x03
 filter = 0x03
-baseband = { phase = 0x0A, freq = 0x0A }
 amplitude = 0x06
 deviation_update = true
 ampl_agc_jump_correction = false
@@ -67,7 +60,6 @@ time_corr_frac = 32
 datarate_corr_frac = 1024
 phase = 0x03
 filter = 0x03
-baseband = { phase = 0x0D, freq = 0x0D }
 amplitude = 0x06
 deviation_update = true
 ampl_agc_jump_correction = false

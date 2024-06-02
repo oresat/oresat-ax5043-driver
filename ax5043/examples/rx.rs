@@ -150,7 +150,8 @@ fn main() -> Result<()> {
             match event.token() {
                 TELEMETRY => {
                     tfd.read();
-                    CommState::STATE(RXState::new(&mut radio, &config.channel)?).send(&uplink)?;
+                    CommState::STATE(RXState::new(&mut radio, &config.channel[0])?)
+                        .send(&uplink)?;
                     CommState::REGISTERS(StatusRegisters::new(&mut radio)?).send(&uplink)?;
                 }
                 IRQ => {

@@ -1,6 +1,6 @@
 // Intended to be run on the C3v6, produces just a carrier signal
 use anyhow::Result;
-use ax5043::{config, config::*, Status};
+use ax5043::{config, Status};
 use ax5043::{registers::*, Registers, RX, TX};
 use clap::Parser;
 use gpiod::{Chip, Options};
@@ -8,33 +8,21 @@ use mio::net::UdpSocket;
 use mio::{unix::SourceFd, Events, Interest, Poll, Token};
 use mio_signals::{Signal, Signals};
 use std::{
+    fs::read_to_string,
     net::{IpAddr, Ipv6Addr, SocketAddr},
     os::fd::AsRawFd,
     time::Duration,
 };
 use timerfd::{SetTimeFlags, TimerFd, TimerState};
 
-fn configure_radio(radio: &mut Registers, power: u16) -> Result<()> {
-    let board = config::board::C3_UHF.write(radio)?;
-    let synth = config::synth::UHF_436_5.write(radio, &board)?;
-    let channel = config::channel::ASK_9600.write(radio, &board)?;
-
-    TXParameters {
-        antenna: Antenna::SingleEnded,
-        amp: AmplitudeShaping::RaisedCosine {
-            a: 0,
-            b: power,
-            c: 0,
-            d: 0,
-            e: 0,
-        },
-        plllock_gate: true,
-        brownout_gate: true,
-    }.write(radio, &board, &channel)?;
+fn configure_radio(radio: &mut Registers) -> Result<()> {
+    let file_path = "c3-uhf-carrier.toml";
+    let contents = read_to_string(file_path)?;
+    let config: config::Config = toml::from_str(&contents)?;
+    config.write(radio)?;
 
     radio.FIFOTHRESH().write(128)?; // Half the FIFO size
 
-    synth.autorange(radio)?;
     Ok(())
 }
 
@@ -61,10 +49,10 @@ fn carrier(radio: &mut Registers) -> Result<()> {
     radio.FIFODATATX().write(carrier.clone())?;
     radio.FIFODATATX().write(carrier.clone())?;
     radio.FIFODATATX().write(carrier.clone())?;
-    radio.FIFODATATX().write(carrier.clone())?;
-    radio.FIFODATATX().write(carrier.clone())?;
-    radio.FIFODATATX().write(carrier.clone())?;
-    radio.FIFODATATX().write(carrier.clone())?;
+    //radio.FIFODATATX().write(carrier.clone())?;
+    //radio.FIFODATATX().write(carrier.clone())?;
+    //radio.FIFODATATX().write(carrier.clone())?;
+    //radio.FIFODATATX().write(carrier.clone())?;
     // TODO: figure out exactly how long the tot is/limit carrier copies to tot
     // 800ms tot
     radio.FIFODATATX().write(pa_off)?;
@@ -89,8 +77,6 @@ struct Args {
     beacon: u16,
     #[arg(short, long, default_value = "/dev/spidev0.0")]
     spi: String,
-    #[arg(short, long, default_value_t = 0x700)]
-    power: u16,
 }
 
 fn main() -> Result<()> {
@@ -141,8 +127,9 @@ fn main() -> Result<()> {
         return Ok(());
     }
 
-    configure_radio(&mut radio, args.power)?;
+    configure_radio(&mut radio)?;
     pa_enable.set_values([true])?;
+    // TODO: check TOT
 
     'outer: loop {
         poll.poll(&mut events, None)?;

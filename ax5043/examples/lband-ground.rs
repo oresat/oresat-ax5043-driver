@@ -1,37 +1,15 @@
 use anyhow::Result;
-use ax5043::{config, config::*, Status};
+use ax5043::{config, Status};
 use ax5043::{registers::*, Registers, RX, TX};
 use clap::Parser;
 use mio::net::UdpSocket;
 use mio::{Events, Interest, Poll, Token};
 use mio_signals::{Signal, Signals};
 use std::{
+    fs::read_to_string,
     net::{IpAddr, Ipv6Addr, SocketAddr},
 };
-
-fn configure_radio(radio: &mut Registers) -> Result<Board> {
-    let board = config::board::RPI.write(radio)?;
-    let synth = config::synth::LBAND_DC_505.write(radio, &board)?;
-    let channel = config::channel::GMSK_60000.write(radio, &board)?;
-
-    TXParameters {
-        antenna: Antenna::SingleEnded,
-        amp: AmplitudeShaping::RaisedCosine {
-            a: 0,
-            b: 0x700,
-            c: 0,
-            d: 0,
-            e: 0,
-        },
-        plllock_gate: true,
-        brownout_gate: true,
-    }.write(radio, &board, &channel)?;
-
-    radio.FIFOTHRESH().write(128)?; // Half the FIFO size
-
-    synth.autorange(radio)?;
-    Ok(board)
-}
+use toml;
 
 fn transmit(radio: &mut Registers, buf: &[u8], amt: usize) -> Result<()> {
     radio.PWRMODE().write(PwrMode {
@@ -78,7 +56,6 @@ fn transmit(radio: &mut Registers, buf: &[u8], amt: usize) -> Result<()> {
         })
     }
 
-
     radio.FIFODATATX().write(preamble)?;
 
     println!("sending {} chunks", packet.len());
@@ -117,8 +94,6 @@ struct Args {
     uplink: u16,
     #[arg(short, long, default_value = "/dev/spidev0.0")]
     spi: String,
-    #[arg(short, long, default_value_t = 0x700)]
-    power: u16,
 }
 
 fn main() -> Result<()> {
@@ -154,7 +129,13 @@ fn main() -> Result<()> {
         println!("Unexpected revision {}, expected {}", rev, 0x51);
         return Ok(());
     }
-    _ = configure_radio(&mut radio)?;
+
+    let file_path = "rpi-lband-60000.toml";
+    let contents = read_to_string(file_path)?;
+    let config: config::Config = toml::from_str(&contents)?;
+    config.write(&mut radio)?;
+
+    radio.FIFOTHRESH().write(128)?; // Half the FIFO size
 
     _ = radio.PLLRANGINGA().read()?; // sticky lock bit ~ IRQPLLUNLIOCK, gate
     _ = radio.POWSTICKYSTAT().read()?; // clear sticky power flags for PWR_GOOD

@@ -1817,11 +1817,11 @@ pub struct Raw {
     pub FREQA: u32,
 }
 
-#[derive(Clone, Copy, Debug, Deserialize)]
+#[derive(Debug, Deserialize)]
 pub struct Config {
     pub board: Board,
     pub synth: Synthesizer,
-    pub channel: ChannelParameters,
+    pub channel: Vec<ChannelParameters>,
     pub tx: Option<TXParameters>,
     pub rx: Option<RXParameters>,
     pub set0: Option<RXParameterSet>,
@@ -1836,27 +1836,28 @@ impl Config {
     pub fn write(&self, radio: &mut Registers) -> Result<()> {
         self.board.write(radio)?;
         self.synth.write(radio, &self.board)?;
-        self.channel.write(radio, &self.board)?;
+        let default_channel = &self.channel[0];
+        default_channel.write(radio, &self.board)?;
         self.synth.autorange(radio)?;
 
         if let Some(tx) = self.tx {
-            tx.write(radio, &self.board, &self.channel)?;
+            tx.write(radio, &self.board, default_channel)?;
         }
 
         if let Some(rx) = self.rx {
-            rx.write(radio, &self.board, &self.synth, &self.channel)?;
+            rx.write(radio, &self.board, &self.synth, default_channel)?;
             if let Some(set) = self.set0 {
-                set.write0(radio, &self.board, &self.channel, &rx)?;
+                set.write0(radio, &self.board, default_channel, &rx)?;
             }
             if let Some(set) = self.set1 {
-                set.write1(radio, &self.board, &self.channel, &rx)?;
+                set.write1(radio, &self.board, default_channel, &rx)?;
             }
             if let Some(_set) = self.set2 {
                 //FIXME
-                //set.write2(radio, &self.board, &self.channel, &rx)?;
+                //set.write2(radio, &self.board, default_channel, &rx)?;
             }
             if let Some(set) = self.set3 {
-                set.write3(radio, &self.board, &self.channel, &rx)?;
+                set.write3(radio, &self.board, default_channel, &rx)?;
             }
             if let Some(stages) = self.stages {
                 stages.write(radio)?;

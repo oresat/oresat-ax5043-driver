@@ -7,14 +7,13 @@ use mio::{unix::SourceFd, Events, Interest, Poll, Token, Waker};
 use mio_signals::{Signal, Signals};
 use std::{
     fmt::{Debug, Display},
+    fs::read_to_string,
     os::fd::AsRawFd,
     sync::Arc,
     thread,
     time::Duration,
 };
 use timerfd::{SetTimeFlags, TimerFd, TimerState};
-
-use ax5043::config::rpi::configure_radio_tx;
 
 fn print_diff<S: AsRef<str> + Display, T: Flags + PartialEq + Debug + Copy>(
     name: S,
@@ -207,7 +206,10 @@ fn main() -> Result<()> {
         }
     });
 
-    configure_radio_tx(&mut radio_tx)?;
+    let file_path = "rpi-uhf-60000.toml";
+    let contents = read_to_string(file_path)?;
+    let config: config::Config = toml::from_str(&contents)?;
+    config.write(&mut radio_tx)?;
 
     let mut tfd = TimerFd::new().unwrap();
     tfd.set_state(

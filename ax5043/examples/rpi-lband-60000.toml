@@ -12,7 +12,7 @@ dac = { pin = "PwrAmp" }
 adc = "ADC1"
 
 [synth]
-freq_a = 436_500_000
+freq_a = 505_000_000
 freq_b = 0
 active = "A"
 pll = { charge_pump_current = 0x02, filter_bandwidth = "Internalx1" }
@@ -34,45 +34,3 @@ antenna = "SingleEnded"
 amp.RaisedCosine = { a = 0, b = 0x700, c = 0, d = 0, e = 0 }
 plllock_gate = true
 brownout_gate = true
-
-[rx.MSK]
-max_dr_offset = 0
-freq_offs_corr = "AtFirstLO"
-ampl_filter = 0
-frequency_leak = 0
-
-[set0]
-agc = "Automatic"
-decay = 0x6
-baseband_offset = { a = 0, b = 0 }
-
-[set0.gain]
-time_corr_frac = 4
-datarate_corr_frac = 255
-phase = 0x03
-filter = 0x03
-baseband = { phase = 0x0A, freq = 0x0A }
-amplitude = 0x06
-deviation_update = true
-ampl_agc_jump_correction = false
-ampl_averaging = false
-
-[set3]
-agc = "Automatic"
-decay = 0x6
-baseband_offset = { a = 0, b = 0 }
-
-[set3.gain]
-time_corr_frac = 32
-datarate_corr_frac = 1024
-phase = 0x03
-filter = 0x03
-baseband = { phase = 0x0D, freq = 0x0D }
-amplitude = 0x06
-deviation_update = true
-ampl_agc_jump_correction = false
-ampl_averaging = false
-
-[stages]
-preamble1 = { timeout = { m = 0x17, e = 5 }, set = "Set0" }
-packet = "Set3"
