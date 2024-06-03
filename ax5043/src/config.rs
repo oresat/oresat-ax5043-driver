@@ -1,11 +1,7 @@
-use std::cmp::max;
 use crate::*;
 use serde::{Deserialize, Serialize};
+use std::cmp::max;
 
-pub mod board;
-pub mod channel;
-pub mod rpi;
-pub mod synth;
 #[cfg(test)]
 use proptest::prelude::*;
 
@@ -575,7 +571,9 @@ fn to_freq(carrier: u64, xtal: u64) -> u32 {
     //
     // It is strongly recommended to always set bit 0 to avoid spectral tones.
     // FIXME: does this math math right?
-    (div_nearest(carrier << 24, xtal) | 0x01).try_into().unwrap()
+    (div_nearest(carrier << 24, xtal) | 0x01)
+        .try_into()
+        .unwrap()
 }
 
 impl Synthesizer {
@@ -595,12 +593,8 @@ impl Synthesizer {
 
         // TODO: cross check synth.{pll,boost}.filter_bandwidth with board.filter
 
-        radio
-            .FREQA()
-            .write(to_freq(self.freq_a, board.xtal.freq))?;
-        radio
-            .FREQB()
-            .write(to_freq(self.freq_b, board.xtal.freq))?;
+        radio.FREQA().write(to_freq(self.freq_a, board.xtal.freq))?;
+        radio.FREQB().write(to_freq(self.freq_b, board.xtal.freq))?;
 
         radio.PLLLOOP().write(PLLLoop {
             filter: self.pll.filter_bandwidth.into(),
@@ -906,8 +900,8 @@ impl ChannelParameters {
                 })?;
                 radio.FSKDEV().write(
                     div_nearest(deviation * 2_u64.pow(24), board.xtal.freq)
-                    .try_into()
-                    .unwrap(),
+                        .try_into()
+                        .unwrap(),
                 )?;
             }
             Modulation::GMSK { .. } => {
@@ -947,10 +941,9 @@ impl ChannelParameters {
                 PktAddrCfgFlags::empty()
             };
 
-        radio.PKTADDRCFG().write(PktAddrCfg {
-            addr_pos: 0,
-            flags,
-        })?;
+        radio
+            .PKTADDRCFG()
+            .write(PktAddrCfg { addr_pos: 0, flags })?;
 
         Ok(self)
     }
@@ -1159,7 +1152,7 @@ impl RXParameters {
                 } else {
                     // bandwidth / 7.35 + 44.25 ~= (bandwidth + 325) * 5 / 37
                     //(bandwidth + 325) * 5 / 37
-                    (40*channel.datarate + 8673) / 49
+                    (40 * channel.datarate + 8673) / 49
                 };
                 radio.IFFREQ().write(
                     div_nearest(if_freq * board.xtal.div() * 2_u64.pow(20), board.xtal.freq)
@@ -1175,14 +1168,14 @@ impl RXParameters {
                 // RXDATARATE * Δbitrate/bitrate
                 let droff = div_nearest(
                     2u64.pow(7) * board.xtal.freq * max_dr_offset,
-                    board.xtal.div() * channel.datarate.pow(2) * decimation
+                    board.xtal.div() * channel.datarate.pow(2) * decimation,
                 );
                 radio.MAXDROFFSET().write(droff.try_into().unwrap())?;
                 //radio.MAXDROFFSET().write(0)?;
 
                 // bw/4 Upper bound - difference between tx and rx fcarriers. see note pm table 98
                 // Radiolab calculates this as f_carrier / 500_000
-                let max_rf_offset = max(bandwidth / 4, synth.freq_a/500_000);
+                let max_rf_offset = max(bandwidth / 4, synth.freq_a / 500_000);
                 radio.MAXRFOFFSET().write(MaxRFOffset {
                     offset: div_nearest(max_rf_offset * 2u64.pow(24), board.xtal.freq)
                         .try_into()
@@ -1345,16 +1338,14 @@ impl RXParameterSet {
     ) -> Result<()> {
         let agc = match self.agc {
             Control::Automatic => RXParameterAGC::new(board, channel),
-            Control::Manual(t) => t
+            Control::Manual(t) => t,
         };
         radio.AGCGAIN0().write(AGCGain {
             attack: agc.attack,
             decay: agc.decay,
         })?;
         radio.AGCTARGET0().write(agc.target)?;
-        radio.AGCAHYST0().write(AGCHyst {
-            hyst: agc.ahyst,
-        })?;
+        radio.AGCAHYST0().write(AGCHyst { hyst: agc.ahyst })?;
         radio.AGCMINMAX0().write(AGCMinMax {
             min: agc.min,
             max: agc.max,
@@ -1463,16 +1454,14 @@ impl RXParameterSet {
     ) -> Result<()> {
         let agc = match self.agc {
             Control::Automatic => RXParameterAGC::new(board, channel),
-            Control::Manual(t) => t
+            Control::Manual(t) => t,
         };
         radio.AGCGAIN1().write(AGCGain {
             attack: agc.attack,
             decay: agc.decay,
         })?;
         radio.AGCTARGET1().write(agc.target)?;
-        radio.AGCAHYST1().write(AGCHyst {
-            hyst: agc.ahyst,
-        })?;
+        radio.AGCAHYST1().write(AGCHyst { hyst: agc.ahyst })?;
         radio.AGCMINMAX1().write(AGCMinMax {
             min: agc.min,
             max: agc.max,
@@ -1566,16 +1555,14 @@ impl RXParameterSet {
     ) -> Result<()> {
         let agc = match self.agc {
             Control::Automatic => RXParameterAGC::new(board, channel),
-            Control::Manual(t) => t
+            Control::Manual(t) => t,
         };
         radio.AGCGAIN3().write(AGCGain {
             attack: agc.attack,
             decay: agc.decay,
         })?;
         radio.AGCTARGET3().write(agc.target)?;
-        radio.AGCAHYST3().write(AGCHyst {
-            hyst: agc.ahyst,
-        })?;
+        radio.AGCAHYST3().write(AGCHyst { hyst: agc.ahyst })?;
         radio.AGCMINMAX3().write(AGCMinMax {
             min: agc.min,
             max: agc.max,
@@ -1802,9 +1789,18 @@ impl RXParameterStages {
         }
 
         radio.RXPARAMSETS().write(RxParamSets(
-            self.preamble1.as_ref().map(|x| x.set).unwrap_or(RxParamSet::Set0),
-            self.preamble2.as_ref().map(|x| x.set).unwrap_or(RxParamSet::Set0),
-            self.preamble3.as_ref().map(|x| x.set).unwrap_or(RxParamSet::Set0),
+            self.preamble1
+                .as_ref()
+                .map(|x| x.set)
+                .unwrap_or(RxParamSet::Set0),
+            self.preamble2
+                .as_ref()
+                .map(|x| x.set)
+                .unwrap_or(RxParamSet::Set0),
+            self.preamble3
+                .as_ref()
+                .map(|x| x.set)
+                .unwrap_or(RxParamSet::Set0),
             self.packet,
         ))?;
         Ok(())

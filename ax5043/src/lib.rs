@@ -283,7 +283,12 @@ impl<const S: usize, V: TryFrom<Vec<u8>>> ReadFIFO<'_, S, V> {
             }
             let mut chunk = vec![0; chunksize];
             bytes.read_exact(&mut chunk)?;
-            chunks.push(chunk.clone().try_into().map_err(|_| Error::DecodeBytes(chunk.clone()))?);
+            chunks.push(
+                chunk
+                    .clone()
+                    .try_into()
+                    .map_err(|_| Error::DecodeBytes(chunk.clone()))?,
+            );
         }
         let status = Status::from_bits(u16::from_be_bytes(stat)).ok_or(Error::Status(stat))?;
         self.on_status(u16::from_be_bytes(addr), status, &rx);
