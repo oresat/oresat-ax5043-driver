@@ -13,6 +13,7 @@ use std::{io::ErrorKind, net::UdpSocket};
 #[derive(Debug, Serialize, Deserialize)]
 pub enum CommState {
     RX(FIFOChunkRX),
+    TX(FIFOChunkTX),
     //ERR(Result<()>),
     STATUS(Status),
     STATE(RXState),
@@ -60,6 +61,7 @@ impl StatusRegisters {
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Config {
+    pub txparams: TXParameters,
     pub rxparams: RXParams,
     pub set0: RXParameterSet,
     pub set1: RXParameterSet,
@@ -68,6 +70,7 @@ pub struct Config {
     pub synthesizer: Synthesizer,
     pub packet_controller: PacketController,
     pub packet_format: PacketFormat,
+    pub channel: ChannelParameters,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -1034,6 +1037,7 @@ impl RadioState {
     }
 }
 
+#[derive(Debug, Serialize, Deserialize)]
 pub struct TXParameters {
     pub modcfgf: ModCfgF,
     pub fskdev: u64,
@@ -1105,6 +1109,7 @@ impl Default for TXParameters {
     }
 }
 
+#[derive(Debug, Serialize, Deserialize)]
 pub struct ChannelParameters {
     pub modulation: Modulation,
     pub encoding: Encoding,

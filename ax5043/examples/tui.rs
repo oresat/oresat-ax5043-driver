@@ -48,6 +48,7 @@ impl Default for UIState {
                 radio_state: RadioState::IDLE,
             },
             config: Config {
+                txparams: TXParameters::default(),
                 rxparams: RXParams::default(),
                 set0: RXParameterSet::default(),
                 set1: RXParameterSet::default(),
@@ -56,6 +57,7 @@ impl Default for UIState {
                 synthesizer: Synthesizer::default(),
                 packet_controller: PacketController::default(),
                 packet_format: PacketFormat::default(),
+                channel: ChannelParameters::default(),
             },
         }
     }
@@ -314,6 +316,7 @@ fn run_ui(terminal: &mut Terminal<CrosstermBackend<io::Stdout>>) -> Result<()> {
                                 uistate.packets.truncate(10);
                                 counter += 1;
                             }
+                            CommState::TX(_) => (),
                             //ERR(Result<()>) =>
                             CommState::STATUS(status) => {
                                 uistate.status = status;

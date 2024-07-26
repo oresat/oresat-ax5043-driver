@@ -8,7 +8,6 @@ use mio_signals::{Signal, Signals};
 use std::net::{IpAddr, Ipv4Addr, SocketAddr, UdpSocket};
 use std::{fs::read_to_string, io::Write, os::fd::AsRawFd, time::Duration};
 use timerfd::{SetTimeFlags, TimerFd, TimerState};
-use toml;
 
 fn process_chunk(chunk: FIFOChunkRX, packet: &mut Vec<u8>, uplink: &mut UdpSocket) -> Result<()> {
     if let FIFOChunkRX::DATA { flags, ref data } = chunk {
@@ -213,6 +212,7 @@ fn main() -> Result<()> {
         tui::CommState::BOARD(config.board).send(socket)?;
         tui::CommState::REGISTERS(tui::StatusRegisters::new(&mut radio)?).send(socket)?;
         tui::CommState::CONFIG(tui::Config {
+            txparams: tui::TXParameters::new(&mut radio, &config.board)?,
             rxparams: tui::RXParams::new(&mut radio, &config.board)?,
             set0: tui::RXParameterSet::set0(&mut radio)?,
             set1: tui::RXParameterSet::set1(&mut radio)?,
@@ -221,6 +221,7 @@ fn main() -> Result<()> {
             synthesizer: tui::Synthesizer::new(&mut radio, &config.board)?,
             packet_controller: tui::PacketController::new(&mut radio)?,
             packet_format: tui::PacketFormat::new(&mut radio)?,
+            channel: tui::ChannelParameters::new(&mut radio)?,
         })
         .send(socket)?;
     }

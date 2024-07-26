@@ -57,14 +57,17 @@ fn read_packet(radio: &mut Registers, uplink: &UdpSocket) -> Result<()> {
 
 fn main() -> Result<()> {
     let src = SocketAddr::new(IpAddr::V4(Ipv4Addr::UNSPECIFIED), 0);
-    let dest = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(192, 168, 1, 244)), 10035);
+    let dest = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(192, 168, 1, 252)), 10035);
+    //let dest = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(10, 42, 0, 1)), 10035);
     let uplink = UdpSocket::bind(src)?;
     uplink.connect(dest)?;
 
     let spi0 = ax5043::open("/dev/spidev1.0")?;
 
     let mut status = Status::empty();
-    let mut callback = |_: &_, _, new, _: &_| {
+    let mut callback = |_: &_, _addr, new, _data: &_| {
+        //println!("{:03X}: {:02X?}", addr, data);
+
         if new == status {
             return;
         }
@@ -123,6 +126,7 @@ fn main() -> Result<()> {
     //    | PktAcceptFlags::LRGP
     //)?;
     CommState::CONFIG(Config {
+        txparams: tui::TXParameters::new(&mut radio, &config.board)?,
         rxparams: RXParams::new(&mut radio, &config.board)?,
         set0: RXParameterSet::set0(&mut radio)?,
         set1: RXParameterSet::set1(&mut radio)?,
@@ -131,6 +135,7 @@ fn main() -> Result<()> {
         synthesizer: Synthesizer::new(&mut radio, &config.board)?,
         packet_controller: PacketController::new(&mut radio)?,
         packet_format: PacketFormat::new(&mut radio)?,
+        channel: tui::ChannelParameters::new(&mut radio)?,
     })
     .send(&uplink)?;
 

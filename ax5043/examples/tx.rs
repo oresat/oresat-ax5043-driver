@@ -1,81 +1,17 @@
 extern crate ax5043;
 use anyhow::Result;
-use ax5043::{registers::*, *};
-use bitflags::Flags;
-use gpiod::{Chip, EdgeDetect, Options};
-use mio::{unix::SourceFd, Events, Interest, Poll, Token, Waker};
+use ax5043::{registers::*, tui::*, *};
+use mio::{unix::SourceFd, Events, Interest, Poll, Token};
 use mio_signals::{Signal, Signals};
 use std::{
-    fmt::{Debug, Display},
     fs::read_to_string,
+    net::{IpAddr, Ipv4Addr, SocketAddr, UdpSocket},
     os::fd::AsRawFd,
-    sync::Arc,
-    thread,
     time::Duration,
 };
 use timerfd::{SetTimeFlags, TimerFd, TimerState};
 
-fn print_diff<S: AsRef<str> + Display, T: Flags + PartialEq + Debug + Copy>(
-    name: S,
-    new: T,
-    old: T,
-) -> T {
-    if new != old {
-        print!("{:14}: ", name);
-        let added = new.difference(old);
-        if !added.is_empty() {
-            print!("+{:?} ", added);
-        }
-        let removed = old.difference(new);
-        if !removed.is_empty() {
-            print!("-{:?} ", removed);
-        }
-        if !old.intersection(new).is_empty() {
-            print!("={:?}", old.intersection(new));
-        }
-        println!();
-    }
-    new
-}
-
-struct AXState {
-    irq: IRQ,
-    xtal: XtalStatus,
-    //pllranging: PLLRanging,
-    radioevent: RadioEvent,
-    radiostate: RadioState,
-    powstat: PowStat,
-    powsstat: PowStat,
-}
-
-#[rustfmt::skip]
-fn print_state(radio: &mut Registers, step: &str, state: &mut AXState) -> Result<()> {
-    println!("\nstep: {}", step);
-    state.irq        = print_diff("IRQREQ    ", radio.IRQREQUEST().read()?, state.irq);
-    state.xtal       = print_diff("XTALST    ", radio.XTALSTATUS().read()?, state.xtal);
-
-    println!("{:14}: {:?}", "PLLRANGING", radio.PLLRANGINGA().read()?); // sticky lock bit ~ IRQPLLUNLIOCK, gate
-    //state.pllranging = print_diff("PLLRANGING", radio.PLLRANGINGA.read()?, state.pllranging); // sticky lock bit ~ IRQPLLUNLIOCK, gate
-    state.radioevent = print_diff("RADIOEVENT", radio.RADIOEVENTREQ().read()?, state.radioevent);
-    state.powstat    = print_diff("POWSTAT   ", radio.POWSTAT().read()?, state.powstat);
-    state.powsstat   = print_diff("POWSSTAT  ", radio.POWSTICKYSTAT().read()?, state.powsstat); // affects irq/spi status, gate
-    let new = radio.RADIOSTATE().read()?;
-    if state.radiostate != new {
-        println!("{:14}: {:?}", "RADIOSTATE", new);
-        state.radiostate = new;
-    }
-    println!("FIFO | count | free | thresh | stat");
-    println!(
-        "     | {:5} | {:4} | {:6} | {:?}",
-        radio.FIFOCOUNT().read()?,
-        radio.FIFOFREE().read()?,
-        radio.FIFOTHRESH().read()?,
-        radio.FIFOSTAT().read()?
-    );
-    Ok(())
-}
-
-fn ax5043_transmit(radio: &mut Registers, data: &[u8], state: &mut AXState) -> Result<()> {
+fn transmit(radio: &mut Registers, uplink: &UdpSocket) -> Result<()> {
     // DS Table 25
     // FULLTX:
     // Synthesizer and transmitter are running. Do not switch into this mode before the synthesiz-
@@ -93,83 +29,86 @@ fn ax5043_transmit(radio: &mut Registers, data: &[u8], state: &mut AXState) -> R
     // wait until tx is done
     // pwrmode = POWERDOWN
 
-    //print_state(radio, "pre-synthtx")?;
-    // pll not locked
-    //radio.PWRMODE.write(PwrMode { flags: PwrFlags::XOEN | PwrFlags::REFEN, mode: PwrModes::SYNTHTX })?;
-    //thread::sleep(time::Duration::from_millis(10));
-
-    //print_state(radio, "post-synthtx")?;
-    // I'm getting Radio event frame clock - should I see pll settled here instead?
-    //pll locked
-    //while !radio
-    //    .PLLRANGINGA
-    //    .read()?
-    //    .flags
-    //    .contains(PLLRangingFlags::PLL_LOCK)
-    //{}
-
-    // IMPORTANT: PLL_STICKY_LOCK needs to be set to coutner PLLLOCK_GATE
-    //            Sticky SSBEVMODEM and SSBEVANA needs to be clear to counter BROWNOUT_GATE
-
-    print_state(radio, "pre-fulltx", state)?;
     radio.PWRMODE().write(PwrMode {
         flags: PwrFlags::XOEN | PwrFlags::REFEN,
         mode: PwrModes::TX,
     })?;
-    print_state(radio, "fulltx", state)?;
-    // FIXME: FIFOSTAT CLEAR?
-    //fifo.write(data, fifo::TXDataFlags::UNENC | fifo::TXDataFlags::RESIDUE)?;
-    // Preamble - see PM p16
 
+    _ = radio.PLLRANGINGA().read()?; // sticky lock bit ~ IRQPLLUNLIOCK, gate
+    _ = radio.POWSTICKYSTAT().read()?; // clear sticky power flags for PWR_GOOD
+
+    radio.FIFOCMD().write(FIFOCmd {
+        mode: FIFOCmds::CLEAR_ERROR,
+        auto_commit: false,
+    })?;
+    radio.FIFOCMD().write(FIFOCmd {
+        mode: FIFOCmds::CLEAR_DATA,
+        auto_commit: false,
+    })?;
+
+    radio.FIFOTHRESH().write(128)?;
+    // Preamble - see PM p16
     let preamble = FIFOChunkTX::REPEATDATA {
         flags: FIFODataTXFlags::RAW | FIFODataTXFlags::NOCRC,
-        count: 1,
-        data: 0x11,
+        count: 44,
+        data: 0x7E,
     };
-    let packet = FIFOChunkTX::DATA {
-        flags: FIFODataTXFlags::PKTSTART | FIFODataTXFlags::PKTEND,
-        data: data.to_vec(),
-    };
-    radio.FIFODATATX().write(preamble)?;
-    radio.FIFODATATX().write(packet)?;
+    let packets = [
+        FIFOChunkTX::REPEATDATA {
+            flags: FIFODataTXFlags::PKTSTART,
+            count: 128,
+            data: 0x41,
+        },
+        FIFOChunkTX::REPEATDATA {
+            flags: FIFODataTXFlags::empty(),
+            count: 128,
+            data: 0x43,
+        },
+        FIFOChunkTX::REPEATDATA {
+            flags: FIFODataTXFlags::empty(),
+            count: 128,
+            data: 0x45,
+        },
+        FIFOChunkTX::REPEATDATA {
+            flags: FIFODataTXFlags::PKTEND,
+            count: 128,
+            data: 0x47,
+        },
+    ];
 
+    radio.FIFODATATX().write(preamble)?;
+
+    for packet in packets {
+        radio.FIFODATATX().write(packet)?;
+    }
+    // FIXME: for packet data that isn't repeat data we'll need a more complicated
+    // solution of feeding the fifo
     radio.FIFOCMD().write(FIFOCmd {
         mode: FIFOCmds::COMMIT,
         auto_commit: false,
     })?;
+    while !radio.FIFOSTAT().read()?.contains(FIFOStat::FREE_THR) {}
 
-    print_state(radio, "commit", state)?;
+    // FIXME: FIFOSTAT CLEAR?
 
-    while radio.RADIOSTATE().read()? as u8 != RadioState::IDLE as u8 {} // TODO: Interrupt of some sort
-    print_state(radio, "tx complete", state)?;
-    /*
-        radio.PWRMODE.write(PwrMode {
-            flags: PwrFlags::XOEN | PwrFlags::REFEN,
-            mode: PwrModes::XOEN,
-        })?;
-        print_state(radio, "idle mode", state)?;
-    */
-    Ok(())
-}
+    loop {
+        // TODO: Interrupt of some sort
 
-// TODO: Synth state:
-// - PLLVCOIR
-// - PLLLOCKDET
-// - PLLRANGING{A,B}
+        let stat = CommState::REGISTERS(StatusRegisters::new(radio)?);
+        stat.send(uplink)?;
+        if let CommState::REGISTERS(r) = stat {
+            if r.radio_state == RadioState::IDLE {
+                break;
+            }
+        }
+    }
+    _ = radio.PLLRANGINGA().read()?; // sticky lock bit ~ IRQPLLUNLIOCK, gate
+    _ = radio.POWSTICKYSTAT().read()?; // clear sticky power flags for PWR_GOOD
+    radio.PWRMODE().write(PwrMode {
+        flags: PwrFlags::XOEN | PwrFlags::REFEN,
+        mode: PwrModes::POWEROFF,
+    })?;
 
-// TODO: Channel state:
-// - MODULATION::REVRDONE
-// - FRAMING::FRMRX
-// TODO: Action
-// - FRAMING::FABORT
-
-#[derive(Debug)]
-struct IRQState {
-    irq: IRQ,
-}
-
-fn service_irq(radio: &mut Registers, state: &mut IRQState) -> Result<()> {
-    state.irq = print_diff("GPIO IRQ: ", radio.IRQREQUEST().read()?, state.irq);
     Ok(())
 }
 
@@ -181,56 +120,56 @@ fn main() -> Result<()> {
     let mut signals = Signals::new(Signal::Interrupt.into())?;
     registry.register(&mut signals, CTRLC, Interest::READABLE)?;
 
+    const BEACON: Token = Token(2);
+    let mut tfd = TimerFd::new()?;
+    tfd.set_state(
+        TimerState::Periodic {
+            current: Duration::new(1, 0),
+            interval: Duration::from_millis(1000),
+        },
+        SetTimeFlags::Default,
+    );
+    registry.register(&mut SourceFd(&tfd.as_raw_fd()), BEACON, Interest::READABLE)?;
+
+    let src = SocketAddr::new(IpAddr::V4(Ipv4Addr::UNSPECIFIED), 0);
+    let dest = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(192, 168, 1, 252)), 10035);
+    //let dest = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(10, 42, 0, 1)), 10035);
+    let uplink = UdpSocket::bind(src)?;
+    uplink.connect(dest)?;
+
     let spi0 = ax5043::open("/dev/spidev0.0")?;
     let mut status = Status::empty();
     let mut callback = |_: &_, _, new, _: &_| {
-        status = print_diff("Status change", new, status);
-    };
-    let mut radio_tx = Registers::new(spi0, &mut callback);
-
-    radio_tx.reset()?;
-
-    const IRQ: Token = Token(1);
-    let irq_waker = Arc::new(Waker::new(poll.registry(), IRQ)?);
-    let irq_thread_waker = irq_waker.clone();
-
-    thread::spawn(move || -> Result<()> {
-        let chip = Chip::new("gpiochip0")?;
-        let opts = Options::input([17])
-            .edge(EdgeDetect::Both)
-            .consumer("ax5043");
-        let mut inputs = chip.request_lines(opts)?;
-        loop {
-            let _event = inputs.read_event()?;
-            irq_thread_waker.wake().unwrap();
+        if new == status {
+            return;
         }
-    });
+        status = new;
+        CommState::STATUS(new).send(&uplink).unwrap();
+    };
+    let mut radio = Registers::new(spi0, &mut callback);
+    radio.reset()?;
 
     let file_path = "rpi-uhf-60000.toml";
     let contents = read_to_string(file_path)?;
     let config: config::Config = toml::from_str(&contents)?;
-    config.write(&mut radio_tx)?;
+    config.write(&mut radio)?;
+    radio.RADIOEVENTMASK().write(RadioEvent::all())?;
 
-    let mut tfd = TimerFd::new().unwrap();
-    tfd.set_state(
-        TimerState::Periodic {
-            current: Duration::new(1, 0),
-            interval: Duration::from_millis(100),
-        },
-        SetTimeFlags::Default,
-    );
-    const BEACON: Token = Token(2);
-    registry.register(&mut SourceFd(&tfd.as_raw_fd()), BEACON, Interest::READABLE)?;
-
-    let mut irqstate = IRQState { irq: IRQ::empty() };
-    let mut state = AXState {
-        irq: IRQ::empty(),
-        xtal: XtalStatus::empty(),
-        radioevent: RadioEvent::empty(),
-        radiostate: RadioState::IDLE,
-        powstat: PowStat::empty(),
-        powsstat: PowStat::empty(),
-    };
+    CommState::BOARD(config.board.clone()).send(&uplink)?;
+    CommState::REGISTERS(StatusRegisters::new(&mut radio)?).send(&uplink)?;
+    CommState::CONFIG(Config {
+        txparams: TXParameters::new(&mut radio, &config.board)?,
+        rxparams: RXParams::new(&mut radio, &config.board)?,
+        set0: RXParameterSet::set0(&mut radio)?,
+        set1: RXParameterSet::set1(&mut radio)?,
+        set2: RXParameterSet::set2(&mut radio)?,
+        set3: RXParameterSet::set3(&mut radio)?,
+        synthesizer: Synthesizer::new(&mut radio, &config.board)?,
+        packet_controller: PacketController::new(&mut radio)?,
+        packet_format: PacketFormat::new(&mut radio)?,
+        channel: ChannelParameters::new(&mut radio)?,
+    })
+    .send(&uplink)?;
 
     let mut events = Events::with_capacity(128);
     'outer: loop {
@@ -239,16 +178,14 @@ fn main() -> Result<()> {
             match event.token() {
                 BEACON => {
                     tfd.read();
-                    // Example transmission from PM table 16
-                    ax5043_transmit(&mut radio_tx, &[0xAA, 0xAA, 0x1A], &mut state)?;
+                    transmit(&mut radio, &uplink)?;
                 }
-                IRQ => service_irq(&mut radio_tx, &mut irqstate)?,
                 CTRLC => break 'outer,
                 _ => unreachable!(),
             }
         }
     }
 
-    radio_tx.reset()?;
+    radio.reset()?;
     Ok(())
 }

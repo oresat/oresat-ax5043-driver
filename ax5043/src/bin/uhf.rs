@@ -16,7 +16,6 @@ use std::{
     time::Duration,
 };
 use timerfd::{SetTimeFlags, TimerFd, TimerState};
-use toml;
 
 fn process_chunk(chunk: FIFOChunkRX, packet: &mut Vec<u8>, uplink: &mut UdpSocket) -> Result<()> {
     if let FIFOChunkRX::DATA { flags, ref data } = chunk {
@@ -331,7 +330,7 @@ fn main() -> Result<()> {
     let config_tx = config.tx.expect("Section [tx] required");
     let channel_edl = config
         .channel
-        .get(0)
+        .first()
         .expect("Missing first [channel] (edl)");
     let channel_beacon = config
         .channel
@@ -357,6 +356,7 @@ fn main() -> Result<()> {
         tui::CommState::BOARD(config.board).send(socket)?;
         tui::CommState::REGISTERS(tui::StatusRegisters::new(&mut radio)?).send(socket)?;
         tui::CommState::CONFIG(tui::Config {
+            txparams: tui::TXParameters::new(&mut radio, &config.board)?,
             rxparams: tui::RXParams::new(&mut radio, &config.board)?,
             set0: tui::RXParameterSet::set0(&mut radio)?,
             set1: tui::RXParameterSet::set1(&mut radio)?,
@@ -365,6 +365,7 @@ fn main() -> Result<()> {
             synthesizer: tui::Synthesizer::new(&mut radio, &config.board)?,
             packet_controller: tui::PacketController::new(&mut radio)?,
             packet_format: tui::PacketFormat::new(&mut radio)?,
+            channel: tui::ChannelParameters::new(&mut radio)?,
         })
         .send(socket)?;
     }
@@ -399,7 +400,7 @@ fn main() -> Result<()> {
                 TELEMETRY => {
                     tfd.read();
                     if let Some(ref socket) = telemetry {
-                        tui::CommState::STATE(tui::RXState::new(&mut radio, &channel_edl)?)
+                        tui::CommState::STATE(tui::RXState::new(&mut radio, channel_edl)?)
                             .send(socket)?;
                         tui::CommState::REGISTERS(tui::StatusRegisters::new(&mut radio)?)
                             .send(socket)?;
@@ -423,7 +424,7 @@ fn main() -> Result<()> {
                     })?;
 
                     channel_beacon.write(&mut radio, &config.board)?;
-                    config_tx.write(&mut radio, &config.board, &channel_beacon)?;
+                    config_tx.write(&mut radio, &config.board, channel_beacon)?;
 
                     let mut buf = [0; 2048];
                     loop {

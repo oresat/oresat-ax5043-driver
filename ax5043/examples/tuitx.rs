@@ -4,26 +4,26 @@ use crossterm::{
     execute,
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
 };
-use mio::{unix::SourceFd, Events, Interest, Poll, Token};
+use mio::{net::UdpSocket, unix::SourceFd, Events, Interest, Poll, Token};
 use mio_signals::{Signal, Signals};
 use ratatui::{backend::CrosstermBackend, prelude::*, Terminal};
 use std::{
-    backtrace::Backtrace, cell, fs::read_to_string, io, os::fd::AsRawFd, panic, time::Duration,
+    backtrace::Backtrace,
+    collections::VecDeque,
+    io,
+    net::{IpAddr, Ipv4Addr, SocketAddr},
+    os::fd::AsRawFd,
+    panic,
 };
-use timerfd::{SetTimeFlags, TimerFd, TimerState};
 
 use ax5043::{registers::*, tui::*, *};
-use toml;
 
 struct UIState {
     board: config::Board,
+    packets: VecDeque<(usize, usize, FIFOChunkTX)>,
     status: Status,
-    pwrmode: PwrMode,
-    powstat: PowStat,
-    irq: IRQ,
-    radio_event: RadioEvent,
-    radio_state: RadioState,
-    synthesizer: Synthesizer,
+    reg: StatusRegisters,
+    config: Config,
     tx: TXParameters,
     chan: ChannelParameters,
 }
@@ -32,16 +32,34 @@ impl Default for UIState {
     fn default() -> Self {
         Self {
             board: config::Board::default(),
+            packets: VecDeque::<(usize, usize, FIFOChunkTX)>::default(),
             status: Status::empty(),
-            pwrmode: PwrMode {
-                mode: PwrModes::POWEROFF,
-                flags: PwrFlags::empty(),
+            reg: StatusRegisters {
+                ranginga: PLLRanging {
+                    vcor: 0,
+                    flags: PLLRangingFlags::empty(),
+                },
+                pwrmode: PwrMode {
+                    mode: PwrModes::POWEROFF,
+                    flags: PwrFlags::empty(),
+                },
+                powstat: PowStat::empty(),
+                irq: IRQ::empty(),
+                radio_event: RadioEvent::empty(),
+                radio_state: RadioState::IDLE,
             },
-            powstat: PowStat::empty(),
-            irq: IRQ::empty(),
-            radio_event: RadioEvent::empty(),
-            radio_state: RadioState::IDLE,
-            synthesizer: Synthesizer::default(),
+            config: Config {
+                txparams: TXParameters::default(),
+                rxparams: RXParams::default(),
+                set0: RXParameterSet::default(),
+                set1: RXParameterSet::default(),
+                set2: RXParameterSet::default(),
+                set3: RXParameterSet::default(),
+                synthesizer: Synthesizer::default(),
+                packet_controller: PacketController::default(),
+                packet_format: PacketFormat::default(),
+                channel: ChannelParameters::default(),
+            },
             tx: TXParameters::default(),
             chan: ChannelParameters::default(),
         }
@@ -76,11 +94,11 @@ fn ui(f: &mut Frame, state: &UIState) {
         )
         .split(chunks[0]);
 
-    f.render_widget(state.pwrmode.widget(), power[0]);
-    f.render_widget(state.powstat.widget(), power[1]);
-    f.render_widget(state.irq.widget(), power[2]);
-    f.render_widget(state.radio_event.widget(), power[3]);
-    f.render_widget(state.radio_state.widget(), power[4]);
+    f.render_widget(state.reg.pwrmode.widget(), power[0]);
+    f.render_widget(state.reg.powstat.widget(), power[1]);
+    f.render_widget(state.reg.irq.widget(), power[2]);
+    f.render_widget(state.reg.radio_event.widget(), power[3]);
+    f.render_widget(state.reg.radio_state.widget(), power[4]);
     let parameters = Layout::default()
         .direction(Direction::Vertical)
         .margin(1)
@@ -96,10 +114,94 @@ fn ui(f: &mut Frame, state: &UIState) {
         )
         .split(chunks[1]);
 
-    f.render_widget(state.synthesizer.widget(), parameters[0]);
+    f.render_widget(state.config.synthesizer.widget(), parameters[0]);
     f.render_widget(state.tx.widget(), parameters[1]);
     f.render_widget(state.chan.widget(), parameters[2]);
     f.render_widget(state.status.widget(), chunks[2]);
+}
+
+fn run_ui(terminal: &mut Terminal<CrosstermBackend<io::Stdout>>) -> Result<()> {
+    let mut state = UIState::default();
+    terminal.draw(|f| {
+        ui(f, &state);
+    })?;
+
+    let mut poll = Poll::new()?;
+    let registry = poll.registry();
+
+    const CTRLC: Token = Token(0);
+    let mut signals = Signals::new(Signal::Interrupt.into())?;
+    registry.register(&mut signals, CTRLC, Interest::READABLE)?;
+
+    const STDIN: Token = Token(1);
+    registry.register(
+        &mut SourceFd(&io::stdin().as_raw_fd()),
+        STDIN,
+        Interest::READABLE,
+    )?;
+
+    let src = SocketAddr::new(IpAddr::V4(Ipv4Addr::UNSPECIFIED), 10035);
+    let mut uplink = UdpSocket::bind(src)?;
+    const TELEMETRY: Token = Token(2);
+    registry.register(&mut uplink, TELEMETRY, Interest::READABLE)?;
+
+    let mut counter = 0;
+    let mut events = Events::with_capacity(128);
+
+    'outer: loop {
+        poll.poll(&mut events, None)?;
+        for event in events.iter() {
+            match event.token() {
+                TELEMETRY => {
+                    loop {
+                        let mut buf = [0; 2048];
+                        let Ok(amt) = uplink.recv(&mut buf) else {
+                            break;
+                        };
+                        match ciborium::de::from_reader(&buf[..amt])? {
+                            CommState::TX(chunk) => {
+                                state.packets.push_front((counter, 0 /*len*/, chunk));
+                                state.packets.truncate(10);
+                                counter += 1;
+                            }
+                            //ERR(Result<()>) =>
+                            CommState::STATUS(status) => {
+                                state.status = status;
+                            }
+                            CommState::REGISTERS(reg) => state.reg = reg,
+                            CommState::BOARD(board) => state.board = board,
+                            CommState::CONFIG(conf) => state.config = conf,
+                            CommState::RX(_) => (),
+                            // TODO: does TX have any visible state?
+                            //CommState::STATE(state) => {
+                            //    state.rx.push_front(state);
+                            //    state.rx.truncate(100);
+                            //}
+                            CommState::STATE(_) => (),
+                        }
+                        terminal.draw(|f| {
+                            ui(f, &state);
+                        })?;
+                    }
+                }
+                STDIN => match crossterm::event::read()? {
+                    Event::Key(KeyEvent {
+                        code: KeyCode::Char('c'),
+                        ..
+                    }) => break 'outer,
+                    _ => continue,
+                },
+                CTRLC => break 'outer,
+                _ => unreachable!(),
+            }
+        }
+    }
+
+    disable_raw_mode()?;
+    execute!(terminal.backend_mut(), LeaveAlternateScreen,)?;
+    terminal.show_cursor()?;
+
+    Ok(())
 }
 
 fn main() -> Result<()> {
@@ -117,207 +219,11 @@ fn main() -> Result<()> {
     let backend = CrosstermBackend::new(stdout);
     let mut terminal = Terminal::new(backend)?;
 
-    let mut uistate = UIState::default();
-    terminal.draw(|f| {
-        ui(f, &uistate);
-    })?;
-
-    let spi0 = ax5043::open("/dev/spidev0.0")?;
-    let state = cell::RefCell::new(&mut uistate);
-    let term = cell::RefCell::new(&mut terminal);
-    let mut callback = |_: &_, _, new, _: &_| {
-        if new == state.borrow().status {
-            return;
-        }
-        state.borrow_mut().status = new;
-        let _ = term.borrow_mut().draw(|f| {
-            ui(f, &state.borrow());
-        });
-    };
-    let mut radio = ax5043::Registers::new(spi0, &mut callback);
-
-    radio.reset()?;
-
-    state.borrow_mut().pwrmode = radio.PWRMODE().read()?;
-    state.borrow_mut().powstat = radio.POWSTAT().read()?;
-    state.borrow_mut().irq = radio.IRQREQUEST().read()?;
-    let _ = term.borrow_mut().draw(|f| {
-        ui(f, &state.borrow());
-    });
-
-    let mut poll = Poll::new()?;
-    let registry = poll.registry();
-
-    const CTRLC: Token = Token(0);
-    let mut signals = Signals::new(Signal::Interrupt.into())?;
-    registry.register(&mut signals, CTRLC, Interest::READABLE)?;
-
-    const STDIN: Token = Token(1);
-    registry.register(
-        &mut SourceFd(&io::stdin().as_raw_fd()),
-        STDIN,
-        Interest::READABLE,
-    )?;
-
-    let mut tfd = TimerFd::new_custom(timerfd::ClockId::Monotonic, true, false).unwrap();
-    tfd.set_state(
-        TimerState::Periodic {
-            current: Duration::new(1, 0),
-            interval: Duration::from_millis(2000),
-        },
-        SetTimeFlags::Default,
-    );
-    const BEACON: Token = Token(2);
-    registry.register(&mut SourceFd(&tfd.as_raw_fd()), BEACON, Interest::READABLE)?;
-
-    let file_path = "rpi-uhf-60000.toml";
-    let contents = read_to_string(file_path)?;
-    let config: config::Config = toml::from_str(&contents)?;
-    config.write(&mut radio)?;
-
-    radio.RADIOEVENTMASK().write(RadioEvent::all())?;
-
-    state.borrow_mut().board = config.board.clone();
-    state.borrow_mut().pwrmode = radio.PWRMODE().read()?;
-    state.borrow_mut().powstat = radio.POWSTAT().read()?;
-    state.borrow_mut().irq = radio.IRQREQUEST().read()?;
-    let _ = term.borrow_mut().draw(|f| {
-        ui(f, &state.borrow());
-    });
-
-    radio.PWRMODE().write(PwrMode {
-        flags: PwrFlags::XOEN | PwrFlags::REFEN,
-        mode: PwrModes::TX,
-    })?;
-
-    state.borrow_mut().pwrmode = radio.PWRMODE().read()?;
-    state.borrow_mut().powstat = radio.POWSTAT().read()?;
-    state.borrow_mut().irq = radio.IRQREQUEST().read()?;
-    let _ = term.borrow_mut().draw(|f| {
-        ui(f, &state.borrow());
-    });
-
-    state.borrow_mut().synthesizer = Synthesizer::new(&mut radio, &config.board)?;
-    state.borrow_mut().tx = TXParameters::new(&mut radio, &config.board)?;
-    state.borrow_mut().chan = ChannelParameters::new(&mut radio)?;
-
-    _ = radio.PLLRANGINGA().read()?; // sticky lock bit ~ IRQPLLUNLIOCK, gate
-    _ = radio.POWSTICKYSTAT().read()?; // clear sticky power flags for PWR_GOOD
-
-    let mut events = Events::with_capacity(128);
-    'outer: loop {
-        poll.poll(&mut events, None)?;
-        for event in events.iter() {
-            match event.token() {
-                BEACON => {
-                    tfd.read();
-
-                    radio.PWRMODE().write(PwrMode {
-                        flags: PwrFlags::XOEN | PwrFlags::REFEN,
-                        mode: PwrModes::TX,
-                    })?;
-
-                    _ = radio.PLLRANGINGA().read()?; // sticky lock bit ~ IRQPLLUNLIOCK, gate
-                    _ = radio.POWSTICKYSTAT().read()?; // clear sticky power flags for PWR_GOOD
-
-                    radio.FIFOCMD().write(FIFOCmd {
-                        mode: FIFOCmds::CLEAR_ERROR,
-                        auto_commit: false,
-                    })?;
-                    radio.FIFOCMD().write(FIFOCmd {
-                        mode: FIFOCmds::CLEAR_DATA,
-                        auto_commit: false,
-                    })?;
-
-                    radio.FIFOTHRESH().write(128)?;
-                    // Preamble - see PM p16
-                    let preamble = FIFOChunkTX::REPEATDATA {
-                        flags: FIFODataTXFlags::RAW | FIFODataTXFlags::NOCRC,
-                        count: 44,
-                        data: 0x7E,
-                    };
-                    let packets = [
-                        FIFOChunkTX::REPEATDATA {
-                            flags: FIFODataTXFlags::PKTSTART,
-                            count: 128,
-                            data: 0x41,
-                        },
-                        FIFOChunkTX::REPEATDATA {
-                            flags: FIFODataTXFlags::empty(),
-                            count: 128,
-                            data: 0x43,
-                        },
-                        FIFOChunkTX::REPEATDATA {
-                            flags: FIFODataTXFlags::empty(),
-                            count: 128,
-                            data: 0x45,
-                        },
-                        FIFOChunkTX::REPEATDATA {
-                            flags: FIFODataTXFlags::PKTEND,
-                            count: 128,
-                            data: 0x47,
-                        },
-                    ];
-
-                    radio.FIFODATATX().write(preamble)?;
-
-                    for packet in packets {
-                        radio.FIFODATATX().write(packet)?;
-                    }
-                    // FIXME: for packet data that isn't repeat data we'll need a more complicated
-                    // solution of feeding the fifo
-                    radio.FIFOCMD().write(FIFOCmd {
-                        mode: FIFOCmds::COMMIT,
-                        auto_commit: false,
-                    })?;
-                    while !radio.FIFOSTAT().read()?.contains(FIFOStat::FREE_THR) {}
-
-                    // FIXME: FIFOSTAT CLEAR?
-
-                    loop {
-                        // TODO: Interrupt of some sort
-
-                        _ = radio.PLLRANGINGA().read()?; // sticky lock bit ~ IRQPLLUNLIOCK, gate
-                        state.borrow_mut().pwrmode = radio.PWRMODE().read()?;
-                        state.borrow_mut().powstat = radio.POWSTAT().read()?;
-                        state.borrow_mut().irq = radio.IRQREQUEST().read()?;
-                        state.borrow_mut().radio_event = radio.RADIOEVENTREQ().read()?;
-                        let radiostate = radio.RADIOSTATE().read()?;
-                        state.borrow_mut().radio_state = radiostate;
-                        let _ = term.borrow_mut().draw(|f| {
-                            ui(f, &state.borrow());
-                        });
-
-                        if radiostate == RadioState::IDLE {
-                            break;
-                        }
-                    }
-                    _ = radio.PLLRANGINGA().read()?; // sticky lock bit ~ IRQPLLUNLIOCK, gate
-                    _ = radio.POWSTICKYSTAT().read()?; // clear sticky power flags for PWR_GOOD
-                    radio.PWRMODE().write(PwrMode {
-                        flags: PwrFlags::XOEN | PwrFlags::REFEN,
-                        mode: PwrModes::POWEROFF,
-                    })?;
-                }
-                //IRQ => service_irq(&mut radio_tx, &mut irqstate)?,
-                STDIN => match crossterm::event::read()? {
-                    Event::Key(KeyEvent {
-                        code: KeyCode::Char('c'),
-                        ..
-                    }) => break 'outer,
-                    _ => continue,
-                },
-                CTRLC => break 'outer,
-                _ => unreachable!(),
-            }
-        }
-    }
-
-    radio.reset()?;
+    let err = run_ui(&mut terminal);
 
     disable_raw_mode()?;
     execute!(terminal.backend_mut(), LeaveAlternateScreen,)?;
     terminal.show_cursor()?;
 
-    Ok(())
+    err
 }

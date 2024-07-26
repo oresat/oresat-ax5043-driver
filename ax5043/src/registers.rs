@@ -494,7 +494,7 @@ proptest! {
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, IntoPrimitive, TryFromPrimitive)]
+#[derive(Clone, Copy, Debug, PartialEq, IntoPrimitive, TryFromPrimitive, Serialize, Deserialize)]
 #[cfg_attr(test, derive(Arbitrary))]
 #[repr(u8)]
 #[allow(non_camel_case_types)]
@@ -511,7 +511,7 @@ pub enum ModulationMode {
     FM           = 0b1011,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
 #[cfg_attr(test, derive(Arbitrary))]
 pub struct Modulation {
     pub mode: ModulationMode,
@@ -546,7 +546,7 @@ proptest! {
 }
 
 bitflags! {
-    #[derive(Clone, Copy, Debug, Deserialize, PartialEq)]
+    #[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
     pub struct Encoding: u8 {
         const INV    = 1 << 0;
         const DIFF   = 1 << 1;
@@ -583,7 +583,7 @@ proptest! {
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, IntoPrimitive, TryFromPrimitive)]
+#[derive(Clone, Copy, Debug, PartialEq, IntoPrimitive, TryFromPrimitive, Serialize, Deserialize)]
 #[cfg_attr(test, derive(Arbitrary))]
 #[repr(u8)]
 #[allow(non_camel_case_types)]
@@ -597,7 +597,7 @@ pub enum FrameMode {
     WIRELESS_MBUS_4TO6 = 0b101,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, IntoPrimitive, TryFromPrimitive)]
+#[derive(Clone, Copy, Debug, PartialEq, IntoPrimitive, TryFromPrimitive, Serialize, Deserialize)]
 #[cfg_attr(test, derive(Arbitrary))]
 #[repr(u8)]
 #[allow(non_camel_case_types)]
@@ -611,14 +611,14 @@ pub enum CRCMode {
 }
 
 bitflags! {
-    #[derive(Clone, Copy, Debug, PartialEq)]
+    #[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
     pub struct FramingFlags: u8 {
         const ABORT = 1 << 0;
         const FRMRX = 1 << 7;
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Framing {
     pub frmmode: FrameMode,
     pub crcmode: CRCMode,
@@ -1208,7 +1208,7 @@ pub enum FIFOChunkHeaderTX {
 }
 
 bitflags! {
-    #[derive(Clone, Copy, Debug, PartialEq)]
+    #[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
     pub struct TXCtrl: u8 {
         const SETTX    = 1 << 6;
         const TXSE     = 1 << 5;
@@ -1221,7 +1221,7 @@ bitflags! {
 }
 
 bitflags! {
-    #[derive(Clone, Copy, Debug, PartialEq)]
+    #[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
     pub struct FIFODataTXFlags: u8 {
         const UNENC    = 1 << 5;
         const RAW      = 1 << 4;
@@ -1232,7 +1232,7 @@ bitflags! {
     }
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub enum FIFOChunkTX {
     NOP,
     TXCTRL(TXCtrl),
@@ -1902,7 +1902,7 @@ impl From<BBOffsRes> for Reg8 {
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, IntoPrimitive, TryFromPrimitive)]
+#[derive(Clone, Copy, Debug, PartialEq, IntoPrimitive, TryFromPrimitive, Serialize, Deserialize)]
 #[repr(u8)]
 #[allow(non_camel_case_types)]
 #[rustfmt::skip]
@@ -1925,7 +1925,7 @@ impl From<ModCfgF> for Reg8 {
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, IntoPrimitive, TryFromPrimitive)]
+#[derive(Clone, Copy, Debug, PartialEq, IntoPrimitive, TryFromPrimitive, Serialize, Deserialize)]
 #[repr(u8)]
 #[allow(non_camel_case_types)]
 #[rustfmt::skip]
@@ -1937,7 +1937,7 @@ pub enum SlowRamp {
 }
 
 bitflags! {
-    #[derive(Clone, Copy, Debug, PartialEq)]
+    #[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
     pub struct ModCfgAFlags: u8 {
         const TXDIFF      = 1 << 0;
         const TXSE        = 1 << 1;
@@ -1947,7 +1947,7 @@ bitflags! {
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
 pub struct ModCfgA {
     pub slowramp: SlowRamp,
     pub flags: ModCfgAFlags,
