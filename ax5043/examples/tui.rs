@@ -152,7 +152,7 @@ fn ui(f: &mut Frame, state: &UIState) {
         )
         .split(rx[1]);
 
-    f.render_widget(state.config.synthesizer.widget(), parameters[0]);
+    f.render_widget(state.config.synthesizer, parameters[0]);
     state.config.packet_controller.widget(f, parameters[1]);
     let packets = Paragraph::new(
         state

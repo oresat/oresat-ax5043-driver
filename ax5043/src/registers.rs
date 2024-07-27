@@ -1970,14 +1970,14 @@ impl From<ModCfgA> for Reg8 {
 }
 
 bitflags! {
-    #[derive(Clone, Copy, Debug, PartialEq)]
+    #[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
     pub struct PLLVCOIFlags: u8 {
         const AUTOMATIC = 0;
         const MANUAL = 1 << 7;
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
 pub struct PLLVCOI {
     pub bias: u8,
     pub flags: PLLVCOIFlags,
@@ -1999,7 +1999,7 @@ impl From<PLLVCOI> for Reg8 {
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, IntoPrimitive, TryFromPrimitive)]
+#[derive(Clone, Copy, Debug, PartialEq, IntoPrimitive, TryFromPrimitive, Serialize, Deserialize)]
 #[repr(u8)]
 #[allow(non_camel_case_types)]
 #[rustfmt::skip]
@@ -2011,14 +2011,14 @@ pub enum LockDetDly {
 }
 
 bitflags! {
-    #[derive(Clone, Copy, Debug, PartialEq)]
+    #[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
     pub struct LockDetFlags: u8 {
         const AUTOMATIC = 0;
         const MANUAL = 1 << 2;
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
 pub struct PLLLockDet {
     pub delay: LockDetDly,
     pub flags: LockDetFlags,
@@ -2042,7 +2042,7 @@ impl From<PLLLockDet> for Reg8 {
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, IntoPrimitive, TryFromPrimitive)]
+#[derive(Clone, Copy, Debug, PartialEq, IntoPrimitive, TryFromPrimitive, Serialize, Deserialize)]
 #[repr(u8)]
 #[allow(non_camel_case_types)]
 #[rustfmt::skip]

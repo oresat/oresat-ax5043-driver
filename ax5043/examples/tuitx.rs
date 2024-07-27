@@ -114,7 +114,7 @@ fn ui(f: &mut Frame, state: &UIState) {
         )
         .split(chunks[1]);
 
-    f.render_widget(state.config.synthesizer.widget(), parameters[0]);
+    f.render_widget(state.config.synthesizer, parameters[0]);
     f.render_widget(state.tx.widget(), parameters[1]);
     f.render_widget(state.chan.widget(), parameters[2]);
     f.render_widget(state.status.widget(), chunks[2]);

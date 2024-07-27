@@ -188,10 +188,6 @@ impl PacketFormat {
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct PacketController {
-    tmg_tx_boost: Float5,
-    tmg_tx_settle: Float5,
-    tmg_rx_boost: Float5,
-    tmg_rx_settle: Float5,
     tmg_rx_offsacq: Float5,
     tmg_rx_coarseagc: Float5,
     tmg_rx_agc: Float5,
@@ -212,10 +208,6 @@ pub struct PacketController {
 impl Default for PacketController {
     fn default() -> Self {
         Self {
-            tmg_tx_boost: Float5::new(0),
-            tmg_tx_settle: Float5::new(0),
-            tmg_rx_boost: Float5::new(0),
-            tmg_rx_settle: Float5::new(0),
             tmg_rx_offsacq: Float5::new(0),
             tmg_rx_coarseagc: Float5::new(0),
             tmg_rx_agc: Float5::new(0),
@@ -238,10 +230,6 @@ impl Default for PacketController {
 impl PacketController {
     pub fn new(radio: &mut Registers) -> Result<PacketController> {
         Ok(PacketController {
-            tmg_tx_boost: radio.TMGTXBOOST().read()?,
-            tmg_tx_settle: radio.TMGTXSETTLE().read()?,
-            tmg_rx_boost: radio.TMGRXBOOST().read()?,
-            tmg_rx_settle: radio.TMGRXSETTLE().read()?,
             tmg_rx_offsacq: radio.TMGRXOFFSACQ().read()?,
             tmg_rx_coarseagc: radio.TMGRXCOARSEAGC().read()?,
             tmg_rx_agc: radio.TMGRXAGC().read()?,
@@ -270,10 +258,6 @@ impl PacketController {
         let upper = Table::new(
             vec![
                 Row::new(vec![
-                    Cell::from("TX Boost"),
-                    Cell::from("Settle"),
-                    Cell::from("RX Boost"),
-                    Cell::from("Settle"),
                     Cell::from("ACQ Offs"),
                     Cell::from("Coarse AGC"),
                     Cell::from("AGC"),
@@ -283,10 +267,6 @@ impl PacketController {
                     Cell::from("3"),
                 ]),
                 Row::new(vec![
-                    Cell::from(self.tmg_tx_boost.to_string()),
-                    Cell::from(self.tmg_tx_settle.to_string()),
-                    Cell::from(self.tmg_rx_boost.to_string()),
-                    Cell::from(self.tmg_rx_settle.to_string()),
                     Cell::from(self.tmg_rx_offsacq.to_string()),
                     Cell::from(self.tmg_rx_coarseagc.to_string()),
                     Cell::from(self.tmg_rx_agc.to_string()),
@@ -357,7 +337,7 @@ impl PacketController {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, Serialize, Deserialize)]
 pub struct Synthesizer {
     freqa: u64,
     freqb: u64,
@@ -368,6 +348,15 @@ pub struct Synthesizer {
     vcodiv: PLLVCODiv,
     ranginga: PLLRanging,
     rangingb: PLLRanging,
+    vcoi: PLLVCOI,
+    vcoir: u8,
+    lockdet: PLLLockDet,
+    rngclk: PLLRngClk,
+    txboost: Float5,
+    txsettle: Float5,
+    rxboost: Float5,
+    rxsettle: Float5,
+    clk: u64,
 }
 
 impl Default for Synthesizer {
@@ -399,6 +388,22 @@ impl Default for Synthesizer {
                 vcor: 0,
                 flags: PLLRangingFlags::empty(),
             },
+            vcoi: PLLVCOI {
+                bias: 0,
+                flags: PLLVCOIFlags::empty(),
+            },
+            vcoir: 0,
+            lockdet: PLLLockDet {
+                delay: LockDetDly::d6ns,
+                flags: LockDetFlags::empty(),
+                readback: LockDetDly::d6ns,
+            },
+            rngclk: PLLRngClk::XTAL_DIV_2pow8,
+            txboost: Float5::new(0),
+            txsettle: Float5::new(0),
+            rxboost: Float5::new(0),
+            rxsettle: Float5::new(0),
+            clk: 0,
         }
     }
 }
@@ -413,56 +418,183 @@ impl Synthesizer {
             vcodiv: radio.PLLVCODIV().read()?,
             ranginga: radio.PLLRANGINGA().read()?,
             rangingb: radio.PLLRANGINGB().read()?,
-            freqa: u64::from(radio.FREQA().read()?) * board.xtal.freq / 2_u64.pow(24),
-            freqb: u64::from(radio.FREQB().read()?) * board.xtal.freq / 2_u64.pow(24),
+            freqa: u64::from(radio.FREQA().read()?),
+            freqb: u64::from(radio.FREQB().read()?),
+            vcoi: radio.PLLVCOI().read()?,
+            vcoir: radio.PLLVCOIR().read()?,
+            lockdet: radio.PLLLOCKDET().read()?,
+            rngclk: radio.PLLRNGCLK().read()?,
+            txboost: radio.TMGTXBOOST().read()?,
+            txsettle: radio.TMGTXSETTLE().read()?,
+            rxboost: radio.TMGRXBOOST().read()?,
+            rxsettle: radio.TMGRXSETTLE().read()?,
+            clk: board.xtal.freq,
         })
     }
+}
 
-    pub fn widget<'a>(&self) -> Table<'a> {
+impl Widget for Synthesizer {
+    fn render(self, area: Rect, buf: &mut Buffer) {
         /* pllloop / boost [ b direct filten filt ]
          * pllcpi / boost [ cpi ]
          * pllvcodiv [ VCOI_MAN VCO2INT VCOSEL  RFDIV REFDIV ]
          * pllranging A/B [ sticky lock err start vcor ]
          * freq a/b
+         *
+         *                        PLLCPI  t   PLLLOOP     VCOSEL
+         *     locked rngclk       ______     _______   ____________
+         *        lockdet (pd?)    | cpi |   | flt  |   | int/2/ext |
+         *     refdiv     _____    | cpib|   | fltb |   |  range(?) |  rfdiv
+         * clkin -|- fpd -| pd |---|_____|---|______|---| vcoi      |----|---   frf
+         *              |-|____| ___________            ------------- |
+         *              ---------| A freqa |---------------------------
+         *                       | B freqb | Does a/b go from clkin - frf?
+         *                       -----------
+         *
          */
+        let block = Block::default().borders(Borders::ALL).title("Synthesizer");
+        let vert = Layout::new(
+            Direction::Vertical,
+            [Constraint::Max(5), Constraint::Min(0)],
+        )
+        .split(block.inner(area));
+        block.render(area, buf);
 
-        Table::new(
+        let layout = Layout::new(
+            Direction::Horizontal,
+            [
+                Constraint::Max(20),
+                Constraint::Max(20),
+                Constraint::Max(20),
+                Constraint::Max(20),
+                Constraint::Max(20),
+                Constraint::Max(20),
+                Constraint::Min(0),
+            ],
+        )
+        .split(vert[0]);
+
+        let lower = Layout::new(
+            Direction::Horizontal,
+            [Constraint::Max(40), Constraint::Max(40), Constraint::Min(0)],
+        )
+        .split(vert[1]);
+
+        let clkin = Table::new(
             vec![
                 Row::new(vec![
-                    Cell::from(""),
-                    Cell::from("Freq"),
-                    Cell::from("Ranging"),
+                    Cell::from("xtal"),
+                    Cell::from(format!("{} Hz", self.clk)),
                 ]),
                 Row::new(vec![
-                    Cell::from("A"),
-                    Cell::from(format!("{} Hz", self.freqa)),
-                    Cell::from(format!("{:?}", self.ranginga)),
+                    Cell::from("refdiv"),
+                    Cell::from(format!("{:?}", self.vcodiv.mode)),
                 ]),
                 Row::new(vec![
-                    Cell::from("B"),
-                    Cell::from(format!("{} Hz", self.freqb)),
-                    Cell::from(format!("{:?}", self.rangingb)),
-                ]),
-                Row::new(vec![Cell::from(""), Cell::from("CPI"), Cell::from("Loop")]),
-                Row::new(vec![
-                    Cell::from("PLL"),
-                    Cell::from(format!("{:?}", self.cpi)),
-                    Cell::from(format!("{:?}", self.pllloop)),
-                ]),
-                Row::new(vec![
-                    Cell::from("Boost"),
-                    Cell::from(format!("{:?}", self.cpiboost)),
-                    Cell::from(format!("{:?}", self.pllloopboost)),
-                ]),
-                Row::new(vec![
-                    Cell::from(""),
-                    Cell::from(""),
-                    Cell::from(format!("{:?}", self.vcodiv)),
+                    Cell::from("f_pd"),
+                    Cell::from(format!(
+                        "{} Hz",
+                        self.clk / 2u64.pow(self.vcodiv.mode as u32)
+                    )),
                 ]),
             ],
-            [Constraint::Max(5), Constraint::Max(13), Constraint::Max(80)],
+            [Constraint::Max(4), Constraint::Min(0)],
+        );
+        Widget::render(clkin, layout[0], buf);
+
+        let pd = Table::new(
+            vec![Row::new(vec![
+                Cell::from("Lock"),
+                Cell::from(format!("{:?} ns", self.lockdet.readback)),
+            ])],
+            [Constraint::Max(4), Constraint::Min(0)],
         )
-        .block(Block::default().borders(Borders::ALL).title("Synthesizer"))
+        .block(Block::default().borders(Borders::ALL).title("Phase Det"));
+        Widget::render(pd, layout[1], buf);
+
+        let cpi = Table::new(
+            vec![
+                Row::new(vec![
+                    Cell::from("cpI"),
+                    Cell::from(format!("{} A?", self.cpi)),
+                ]),
+                Row::new(vec![
+                    Cell::from("boost"),
+                    Cell::from(format!("{} A?", self.cpiboost)),
+                ]),
+            ],
+            [Constraint::Max(4), Constraint::Min(0)],
+        )
+        .block(Block::default().borders(Borders::ALL).title("Charge Pump"));
+        Widget::render(cpi, layout[2], buf);
+
+        // FIXME: bandwidth in hz
+        let flt = Table::new(
+            vec![
+                Row::new(vec![
+                    Cell::from("flt"),
+                    Cell::from(format!("{:?}", self.pllloop.filter)),
+                ]),
+                Row::new(vec![
+                    Cell::from("boost"),
+                    Cell::from(format!("{:?}", self.pllloopboost.filter)),
+                ]),
+            ],
+            [Constraint::Max(4), Constraint::Min(0)],
+        )
+        .block(Block::default().borders(Borders::ALL).title("Filter"));
+        Widget::render(flt, layout[3], buf);
+
+        let vco = Table::new(
+            vec![
+                Row::new(vec![Cell::from(format!("{:?}", self.vcodiv.flags))]),
+                Row::new(vec![
+                    Cell::from("vcoi"),
+                    Cell::from(format!("{} A?", self.vcoir)),
+                ]),
+                Row::new(vec![
+                    Cell::from("range"),
+                    Cell::from(format!("{}", self.ranginga.vcor)),
+                ]),
+            ],
+            [Constraint::Max(4), Constraint::Min(0)],
+        )
+        .block(Block::default().borders(Borders::ALL).title("VCO"));
+        Widget::render(vco, layout[4], buf);
+
+        let fvco = self.clk * self.freqa / 2u64.pow(24);
+        let rfdiv = if self.vcodiv.flags.contains(PLLVCODivFlags::RFDIV) {
+            2
+        } else {
+            1
+        };
+        let frf = Table::new(
+            vec![
+                Row::new(vec![Cell::from("fvco"), Cell::from(format!("{} Hz", fvco))]),
+                Row::new(vec![Cell::from("rfdiv"), Cell::from(format!("{}", rfdiv))]),
+                Row::new(vec![
+                    Cell::from("f_rf"),
+                    Cell::from(format!("{} Hz", fvco / rfdiv)),
+                ]),
+            ],
+            [Constraint::Max(4), Constraint::Min(0)],
+        );
+        Widget::render(frf, layout[5], buf);
+
+        let frac = Table::new(
+            vec![
+                Row::new(vec![
+                    Cell::from("freqa"),
+                    Cell::from(format!("{}", self.freqa as f64 / 2f64.powf(24.0))),
+                ]),
+                Row::new(vec![
+                    Cell::from("freqb"),
+                    Cell::from(format!("{}", self.freqb)),
+                ]),
+            ],
+            [Constraint::Max(5), Constraint::Min(0)],
+        );
+        Widget::render(frac, lower[1], buf);
     }
 }
 
