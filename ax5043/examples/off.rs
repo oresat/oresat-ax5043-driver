@@ -5,7 +5,16 @@ use std::path::PathBuf;
 
 #[derive(Parser, Debug)]
 struct Args {
+    #[cfg(card = "c3")]
     #[arg(default_values_os_t=vec![PathBuf::from("/dev/spidev0.0"), PathBuf::from("/dev/spidev1.1")])]
+    path: Vec<PathBuf>,
+
+    #[cfg(card = "rpi")]
+    #[arg(default_values_os_t=vec![PathBuf::from("/dev/spidev0.0"), PathBuf::from("/dev/spidev1.0")])]
+    path: Vec<PathBuf>,
+
+    #[cfg(all(not(card = "rpi"), not(card = "c3")))]
+    #[arg(short, long)]
     path: Vec<PathBuf>,
 }
 

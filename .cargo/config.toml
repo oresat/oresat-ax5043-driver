@@ -1,4 +1,8 @@
 [target.armv7-unknown-linux-gnueabihf]
-linker = "./cross-pi-gcc-10.3.0-2/bin/arm-linux-gnueabihf-gcc"
-#linker = "arm-linux-gnueabihf-gcc"
-runner = "./runner.sh"
+linker = ".cargo/cross-pi-gcc-10.3.0-2/bin/arm-linux-gnueabihf-gcc"
+
+[target.'cfg(card = "c3")']
+runner = ".cargo/runner.sh debian c3.oresat.org ax5043"
+
+[target.'cfg(card = "rpi")']
+runner = ".cargo/runner.sh theo raspberrypi.local ax5043"

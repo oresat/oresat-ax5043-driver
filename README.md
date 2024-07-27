@@ -3,8 +3,6 @@ A Linux/Rust userspace driver for the Onsemi AX5043 transceiver.
 Install Rust:
 https://www.rust-lang.org/tools/install
 
-Minimum Supported Rust Version (MSRV): 1.51? later? Check deps
-
 The expected use case is to be run on an ARM based machine like a Raspberry Pi or Beaglebone so a Rust
 crosscompiler setup will make development more convenient.
 
@@ -27,6 +25,8 @@ Handy commands:
 - `cargo b`
 - `cargo c`
 - Combine the above with `--examples` (plural) flag to apply the action to all the examples
+
+`RUSTFLAGS='--cfg card="rpi"' cargo run --example tx --target armv7-unknown-linux-gnueabihf examples/rpi-uhf-60000.toml`
 
 Fresh Raspbian install
 - https://www.raspberrypi.com/software/
