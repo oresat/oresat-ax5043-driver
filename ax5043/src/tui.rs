@@ -105,7 +105,7 @@ impl RXState {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, Serialize, Deserialize)]
 pub struct PacketFormat {
     addrcfg: PktAddrCfg,
     lencfg: PktLenCfg,
@@ -142,9 +142,11 @@ impl PacketFormat {
             addrmask: radio.PKTADDRMASK().read()?,
         })
     }
+}
 
-    pub fn widget<'a>(&self) -> Table<'a> {
-        Table::new(
+impl Widget for PacketFormat {
+    fn render(self, area: Rect, buf: &mut Buffer) {
+        let pkt = Table::new(
             vec![
                 Row::new(vec![
                     Cell::from("Addr pos"),
@@ -182,11 +184,12 @@ impl PacketFormat {
             Block::default()
                 .borders(Borders::ALL)
                 .title("Packet Format"),
-        )
+        );
+        Widget::render(pkt, area, buf);
     }
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, Serialize, Deserialize)]
 pub struct PacketController {
     tmg_rx_offsacq: Float5,
     tmg_rx_coarseagc: Float5,
@@ -247,8 +250,10 @@ impl PacketController {
             pkt_accept_flags: radio.PKTACCEPTFLAGS().read()?,
         })
     }
+}
 
-    pub fn widget(&self, f: &mut Frame, area: Rect) {
+impl Widget for PacketController {
+    fn render(self, area: Rect, buf: &mut Buffer) {
         let layout = Layout::default()
             .direction(Direction::Vertical)
             .margin(0)
@@ -326,8 +331,8 @@ impl PacketController {
             ],
         );
 
-        f.render_widget(upper, layout[0]);
-        f.render_widget(lower, layout[1]);
+        Widget::render(upper, layout[0], buf);
+        Widget::render(lower, layout[1], buf);
         //FIXME: border?
         // .block(
         //      Block::default()
@@ -800,9 +805,12 @@ impl RXParameterSet {
             },
         })
     }
+}
 
-    pub fn widget<'a>(&self, active: &Style) -> Table<'a> {
-        Table::new(
+impl StatefulWidget for RXParameterSet {
+    type State = Style;
+    fn render(self, area: Rect, buf: &mut Buffer, state: &mut Style) {
+        let set = Table::new(
             vec![
                 Row::new(vec![
                     "AGC", "attack", "decay", "target", "ahyst", "min", "max",
@@ -872,11 +880,12 @@ impl RXParameterSet {
                 .borders(Borders::ALL)
                 .title("RX Parameter Set"),
         )
-        .style(*active)
+        .style(*state);
+        Widget::render(set, area, buf);
     }
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, Serialize, Deserialize)]
 pub struct RXParams {
     pub iffreq: u64,
     pub baseband: u64,
@@ -950,9 +959,11 @@ impl RXParams {
             rxparamset: radio.RXPARAMSETS().read()?,
         })
     }
+}
 
-    pub fn widget<'a>(&self) -> Table<'a> {
-        Table::new(
+impl Widget for RXParams {
+    fn render(self, area: Rect, buf: &mut Buffer) {
+        let params = Table::new(
             vec![
                 Row::new(vec!["IF Freq", "Max Δ", "Baseband", "Bitrate", "Max Δ"]),
                 Row::new(vec![
@@ -1000,7 +1011,9 @@ impl RXParams {
             Block::default()
                 .borders(Borders::ALL)
                 .title("RX Parameters"),
-        )
+        );
+
+        Widget::render(params, area, buf);
     }
 }
 
@@ -1013,10 +1026,10 @@ fn onoff<F: Flags>(field: &F, flag: F) -> Style {
     }
 }
 
-impl PwrMode {
-    #[rustfmt::skip]
-    pub fn widget<'a>(&self) -> Table<'a> {
-        Table::new(vec![
+impl Widget for PwrMode {
+    fn render(self, area: Rect, buf: &mut Buffer) {
+        #[rustfmt::skip]
+        let w = Table::new(vec![
             Row::new(vec![
                 Cell::from(format!("{:?}", self.mode)),
                 Cell::from("REFEN").style(onoff(&self.flags, PwrFlags::REFEN)),
@@ -1028,23 +1041,24 @@ impl PwrMode {
             Constraint::Length(4),
         ])
         .block(Block::default().borders(Borders::ALL).title("PWRMODE"))
-        .style(Style::default().fg(Color::White))
+        .style(Style::default().fg(Color::White));
+        Widget::render(w, area, buf);
     }
 }
 
-impl PowStat {
-    #[rustfmt::skip]
-    pub fn widget<'a>(&self) -> Table<'a> {
-        Table::new(vec![
+impl Widget for PowStat {
+    fn render(self, area: Rect, buf: &mut Buffer) {
+        #[rustfmt::skip]
+        let w = Table::new(vec![
             Row::new(vec![
-                Cell::from("vIO"     ).style(onoff(self, PowStat::VIO)),
-                Cell::from("BEvMODEM").style(onoff(self, PowStat::BEVMODEM)),
-                Cell::from("BEvANA"  ).style(onoff(self, PowStat::BEVANA)),
-                Cell::from("vMODEM"  ).style(onoff(self, PowStat::VMODEM)),
-                Cell::from("vANA"    ).style(onoff(self, PowStat::VANA)),
-                Cell::from("vREF"    ).style(onoff(self, PowStat::VREF)),
-                Cell::from("REF"     ).style(onoff(self, PowStat::REF)),
-                Cell::from("SUM"     ).style(onoff(self, PowStat::SUM))
+                Cell::from("vIO"     ).style(onoff(&self, PowStat::VIO)),
+                Cell::from("BEvMODEM").style(onoff(&self, PowStat::BEVMODEM)),
+                Cell::from("BEvANA"  ).style(onoff(&self, PowStat::BEVANA)),
+                Cell::from("vMODEM"  ).style(onoff(&self, PowStat::VMODEM)),
+                Cell::from("vANA"    ).style(onoff(&self, PowStat::VANA)),
+                Cell::from("vREF"    ).style(onoff(&self, PowStat::VREF)),
+                Cell::from("REF"     ).style(onoff(&self, PowStat::REF)),
+                Cell::from("SUM"     ).style(onoff(&self, PowStat::SUM))
             ]),
         ], [
             Constraint::Max(3),
@@ -1056,30 +1070,31 @@ impl PowStat {
             Constraint::Max(3),
             Constraint::Max(3),
         ])
-        .block(Block::default().borders(Borders::ALL).title("POWSTAT"))
+        .block(Block::default().borders(Borders::ALL).title("POWSTAT"));
+        Widget::render(w, area, buf);
     }
 }
 
-impl IRQ {
-    #[rustfmt::skip]
-    pub fn widget<'a>(&self) -> Table<'a> {
-        Table::new(vec![
+impl Widget for IRQ {
+    fn render(self, area: Rect, buf: &mut Buffer) {
+        #[rustfmt::skip]
+        let w = Table::new(vec![
             Row::new(vec![
-                Cell::from("PLLUNLOCK"  ).style(onoff(self, IRQ::PLLUNLOCK)),
-                Cell::from("RADIOCTRL"  ).style(onoff(self, IRQ::RADIOCTRL)),
-                Cell::from("POWER"      ).style(onoff(self, IRQ::POWER)),
-                Cell::from("XTALREADY"  ).style(onoff(self, IRQ::XTALREADY)),
-                Cell::from("WAKEUPTIMER").style(onoff(self, IRQ::WAKEUPTIMER)),
-                Cell::from("LPOSC"      ).style(onoff(self, IRQ::LPOSC)),
-                Cell::from("GPADC"      ).style(onoff(self, IRQ::GPADC)),
-                Cell::from("PLLRNGDONE" ).style(onoff(self, IRQ::PLLRNGDONE)),
+                Cell::from("PLLUNLOCK"  ).style(onoff(&self, IRQ::PLLUNLOCK)),
+                Cell::from("RADIOCTRL"  ).style(onoff(&self, IRQ::RADIOCTRL)),
+                Cell::from("POWER"      ).style(onoff(&self, IRQ::POWER)),
+                Cell::from("XTALREADY"  ).style(onoff(&self, IRQ::XTALREADY)),
+                Cell::from("WAKEUPTIMER").style(onoff(&self, IRQ::WAKEUPTIMER)),
+                Cell::from("LPOSC"      ).style(onoff(&self, IRQ::LPOSC)),
+                Cell::from("GPADC"      ).style(onoff(&self, IRQ::GPADC)),
+                Cell::from("PLLRNGDONE" ).style(onoff(&self, IRQ::PLLRNGDONE)),
             ]),
             Row::new(vec![
-                Cell::from("FIFONOTEMPTY").style(onoff(self, IRQ::FIFONOTEMPTY)),
-                Cell::from("FIFONOTFULL" ).style(onoff(self, IRQ::FIFONOTFULL)),
-                Cell::from("FIFOTHRCNT"  ).style(onoff(self, IRQ::FIFOTHRCNT)),
-                Cell::from("FIFOTHRFREE" ).style(onoff(self, IRQ::FIFOTHRFREE)),
-                Cell::from("FIFOERROR"   ).style(onoff(self, IRQ::FIFOERROR)),
+                Cell::from("FIFONOTEMPTY").style(onoff(&self, IRQ::FIFONOTEMPTY)),
+                Cell::from("FIFONOTFULL" ).style(onoff(&self, IRQ::FIFONOTFULL)),
+                Cell::from("FIFOTHRCNT"  ).style(onoff(&self, IRQ::FIFOTHRCNT)),
+                Cell::from("FIFOTHRFREE" ).style(onoff(&self, IRQ::FIFOTHRFREE)),
+                Cell::from("FIFOERROR"   ).style(onoff(&self, IRQ::FIFOERROR)),
             ]),
         ], [
             Constraint::Max(12),
@@ -1091,30 +1106,31 @@ impl IRQ {
             Constraint::Max(5),
             Constraint::Max(10),
         ])
-        .block(Block::default().borders(Borders::ALL).title("IRQ"))
+        .block(Block::default().borders(Borders::ALL).title("IRQ"));
+        Widget::render(w, area, buf);
     }
 }
 
-impl Status {
-    #[rustfmt::skip]
-    pub fn widget<'a>(&self) -> Table<'a> {
-        Table::new(vec![
+impl Widget for Status {
+    fn render(self, area: Rect, buf: &mut Buffer) {
+        #[rustfmt::skip]
+        let w = Table::new(vec![
             Row::new(vec![
-                Cell::from("READY"           ).style(onoff(self, Status::READY)),
-                Cell::from("PLL_LOCK"        ).style(onoff(self, Status::PLL_LOCK)),
-                Cell::from("FIFO_OVER"       ).style(onoff(self, Status::FIFO_OVER)),
-                Cell::from("FIFO_UNDER"      ).style(onoff(self, Status::FIFO_UNDER)),
-                Cell::from("THRESHOLD_FREE"  ).style(onoff(self, Status::THRESHOLD_FREE)),
-                Cell::from("THRESHOLD_COUNT" ).style(onoff(self, Status::THRESHOLD_COUNT)),
-                Cell::from("FIFO_FULL"       ).style(onoff(self, Status::FIFO_FULL)),
-                Cell::from("FIFO_EMPTY"      ).style(onoff(self, Status::FIFO_EMPTY)),
-                Cell::from("PWR_GOOD"        ).style(onoff(self, Status::PWR_GOOD)),
-                Cell::from("PWR_INTERRUPT"   ).style(onoff(self, Status::PWR_INTERRUPT)),
-                Cell::from("RADIO_EVENT"     ).style(onoff(self, Status::RADIO_EVENT)),
-                Cell::from("XTAL_OSC_RUNNING").style(onoff(self, Status::XTAL_OSC_RUNNING)),
-                Cell::from("WAKEUP_INTERRUPT").style(onoff(self, Status::WAKEUP_INTERRUPT)),
-                Cell::from("LPOSC_INTERRUPT" ).style(onoff(self, Status::LPOSC_INTERRUPT)),
-                Cell::from("GPADC_INTERRUPT" ).style(onoff(self, Status::GPADC_INTERRUPT)),
+                Cell::from("READY"           ).style(onoff(&self, Status::READY)),
+                Cell::from("PLL_LOCK"        ).style(onoff(&self, Status::PLL_LOCK)),
+                Cell::from("FIFO_OVER"       ).style(onoff(&self, Status::FIFO_OVER)),
+                Cell::from("FIFO_UNDER"      ).style(onoff(&self, Status::FIFO_UNDER)),
+                Cell::from("THRESHOLD_FREE"  ).style(onoff(&self, Status::THRESHOLD_FREE)),
+                Cell::from("THRESHOLD_COUNT" ).style(onoff(&self, Status::THRESHOLD_COUNT)),
+                Cell::from("FIFO_FULL"       ).style(onoff(&self, Status::FIFO_FULL)),
+                Cell::from("FIFO_EMPTY"      ).style(onoff(&self, Status::FIFO_EMPTY)),
+                Cell::from("PWR_GOOD"        ).style(onoff(&self, Status::PWR_GOOD)),
+                Cell::from("PWR_INTERRUPT"   ).style(onoff(&self, Status::PWR_INTERRUPT)),
+                Cell::from("RADIO_EVENT"     ).style(onoff(&self, Status::RADIO_EVENT)),
+                Cell::from("XTAL_OSC_RUNNING").style(onoff(&self, Status::XTAL_OSC_RUNNING)),
+                Cell::from("WAKEUP_INTERRUPT").style(onoff(&self, Status::WAKEUP_INTERRUPT)),
+                Cell::from("LPOSC_INTERRUPT" ).style(onoff(&self, Status::LPOSC_INTERRUPT)),
+                Cell::from("GPADC_INTERRUPT" ).style(onoff(&self, Status::GPADC_INTERRUPT)),
             ]),
         ], [
             Constraint::Max(5),
@@ -1133,20 +1149,21 @@ impl Status {
             Constraint::Max(15),
             Constraint::Max(15),
         ])
-        .block(Block::default().borders(Borders::ALL).title("STATUS"))
+        .block(Block::default().borders(Borders::ALL).title("STATUS"));
+        Widget::render(w, area, buf);
     }
 }
 
-impl RadioEvent {
-    #[rustfmt::skip]
-    pub fn widget<'a>(&self) -> Table<'a> {
-        Table::new(vec![
+impl Widget for RadioEvent {
+    fn render(self, area: Rect, buf: &mut Buffer) {
+        #[rustfmt::skip]
+        let w = Table::new(vec![
             Row::new(vec![
-                Cell::from("DONE"    ).style(onoff(self, RadioEvent::DONE)),
-                Cell::from("SETTLED" ).style(onoff(self, RadioEvent::SETTLED)),
-                Cell::from("STATE"   ).style(onoff(self, RadioEvent::RADIOSTATECHG)),
-                Cell::from("PARAMSET").style(onoff(self, RadioEvent::RXPARAMSETCHG)),
-                Cell::from("FRAMECLK").style(onoff(self, RadioEvent::FRAMECLK)),
+                Cell::from("DONE"    ).style(onoff(&self, RadioEvent::DONE)),
+                Cell::from("SETTLED" ).style(onoff(&self, RadioEvent::SETTLED)),
+                Cell::from("STATE"   ).style(onoff(&self, RadioEvent::RADIOSTATECHG)),
+                Cell::from("PARAMSET").style(onoff(&self, RadioEvent::RXPARAMSETCHG)),
+                Cell::from("FRAMECLK").style(onoff(&self, RadioEvent::FRAMECLK)),
             ]),
         ], [
             Constraint::Max(4),
@@ -1155,21 +1172,23 @@ impl RadioEvent {
             Constraint::Max(8),
             Constraint::Max(8),
         ])
-        .block(Block::default().borders(Borders::ALL).title("Radio Event"))
+        .block(Block::default().borders(Borders::ALL).title("Radio Event"));
+        Widget::render(w, area, buf);
     }
 }
 
-impl RadioState {
-    pub fn widget<'a>(&self) -> Table<'a> {
-        Table::new(
+impl Widget for RadioState {
+    fn render(self, area: Rect, buf: &mut Buffer) {
+        let w = Table::new(
             vec![Row::new([Cell::from(format!("{self:?}"))])],
             [Constraint::Max(13)],
         )
-        .block(Block::default().borders(Borders::ALL).title("Radio State"))
+        .block(Block::default().borders(Borders::ALL).title("Radio State"));
+        Widget::render(w, area, buf);
     }
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, Serialize, Deserialize)]
 pub struct TXParameters {
     pub modcfgf: ModCfgF,
     pub fskdev: u64,
@@ -1196,8 +1215,11 @@ impl TXParameters {
             e: radio.TXPWRCOEFFE().read()?,
         })
     }
-    pub fn widget<'a>(&self) -> Table<'a> {
-        Table::new(
+}
+
+impl Widget for TXParameters {
+    fn render(self, area: Rect, buf: &mut Buffer) {
+        let w = Table::new(
             vec![
                 Row::new([
                     Cell::from(format!("{:?}", self.modcfgf)),
@@ -1218,7 +1240,8 @@ impl TXParameters {
             Block::default()
                 .borders(Borders::ALL)
                 .title("TX Parameters"),
-        )
+        );
+        Widget::render(w, area, buf);
     }
 }
 
@@ -1241,7 +1264,7 @@ impl Default for TXParameters {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, Serialize, Deserialize)]
 pub struct ChannelParameters {
     pub modulation: Modulation,
     pub encoding: Encoding,
@@ -1258,9 +1281,11 @@ impl ChannelParameters {
             crcinit: radio.CRCINIT().read()?,
         })
     }
+}
 
-    pub fn widget<'a>(&self) -> Table<'a> {
-        Table::new(
+impl Widget for ChannelParameters {
+    fn render(self, area: Rect, buf: &mut Buffer) {
+        let w = Table::new(
             vec![
                 Row::new([
                     Cell::from(format!("{:?}", self.modulation)),
@@ -1277,7 +1302,8 @@ impl ChannelParameters {
             Block::default()
                 .borders(Borders::ALL)
                 .title("Channel Parameters"),
-        )
+        );
+        Widget::render(w, area, buf);
     }
 }
 

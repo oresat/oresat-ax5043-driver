@@ -94,11 +94,11 @@ fn ui(f: &mut Frame, state: &UIState) {
         )
         .split(chunks[0]);
 
-    f.render_widget(state.reg.pwrmode.widget(), power[0]);
-    f.render_widget(state.reg.powstat.widget(), power[1]);
-    f.render_widget(state.reg.irq.widget(), power[2]);
-    f.render_widget(state.reg.radio_event.widget(), power[3]);
-    f.render_widget(state.reg.radio_state.widget(), power[4]);
+    f.render_widget(state.reg.pwrmode, power[0]);
+    f.render_widget(state.reg.powstat, power[1]);
+    f.render_widget(state.reg.irq, power[2]);
+    f.render_widget(state.reg.radio_event, power[3]);
+    f.render_widget(state.reg.radio_state, power[4]);
     let parameters = Layout::default()
         .direction(Direction::Vertical)
         .margin(1)
@@ -115,9 +115,9 @@ fn ui(f: &mut Frame, state: &UIState) {
         .split(chunks[1]);
 
     f.render_widget(state.config.synthesizer, parameters[0]);
-    f.render_widget(state.tx.widget(), parameters[1]);
-    f.render_widget(state.chan.widget(), parameters[2]);
-    f.render_widget(state.status.widget(), chunks[2]);
+    f.render_widget(state.tx, parameters[1]);
+    f.render_widget(state.chan, parameters[2]);
+    f.render_widget(state.status, chunks[2]);
 }
 
 fn run_ui(terminal: &mut Terminal<CrosstermBackend<io::Stdout>>) -> Result<()> {

@@ -125,11 +125,11 @@ fn ui(f: &mut Frame, state: &UIState) {
         )
         .split(chunks[0]);
 
-    f.render_widget(state.reg.pwrmode.widget(), power[0]);
-    f.render_widget(state.reg.powstat.widget(), power[1]);
-    f.render_widget(state.reg.irq.widget(), power[2]);
-    f.render_widget(state.reg.radio_event.widget(), power[3]);
-    f.render_widget(state.reg.radio_state.widget(), power[4]);
+    f.render_widget(state.reg.pwrmode, power[0]);
+    f.render_widget(state.reg.powstat, power[1]);
+    f.render_widget(state.reg.irq, power[2]);
+    f.render_widget(state.reg.radio_event, power[3]);
+    f.render_widget(state.reg.radio_state, power[4]);
 
     let rx = Layout::default()
         .direction(Direction::Horizontal)
@@ -153,7 +153,7 @@ fn ui(f: &mut Frame, state: &UIState) {
         .split(rx[1]);
 
     f.render_widget(state.config.synthesizer, parameters[0]);
-    state.config.packet_controller.widget(f, parameters[1]);
+    f.render_widget(state.config.packet_controller, parameters[1]);
     let packets = Paragraph::new(
         state
             .packets
@@ -169,8 +169,8 @@ fn ui(f: &mut Frame, state: &UIState) {
             .border_type(BorderType::Rounded),
     );
     f.render_widget(packets, parameters[2]);
-    f.render_widget(state.config.packet_format.widget(), parameters[3]);
-    f.render_widget(state.config.rxparams.widget(), parameters[4]);
+    f.render_widget(state.config.packet_format, parameters[3]);
+    f.render_widget(state.config.rxparams, parameters[4]);
     /*
         f.render_widget(state.receiver_parameter_set(&state.set0, state.rx.back().unwrap_or(&RXState::default()).paramcurset.number == RxParamSet::Set0), parameters[2]);
         f.render_widget(state.receiver_parameter_set(&state.set1, state.rx.back().unwrap_or(&RXState::default()).paramcurset.number == RxParamSet::Set1), parameters[2]);
@@ -269,7 +269,7 @@ fn ui(f: &mut Frame, state: &UIState) {
             .map(|r| f64::from(r.paramcurset.index))
             .collect::<Vec<f64>>(),
     );
-    f.render_widget(state.status.widget(), chunks[2]);
+    f.render_widget(state.status, chunks[2]);
 }
 
 fn run_ui(terminal: &mut Terminal<CrosstermBackend<io::Stdout>>) -> Result<()> {
