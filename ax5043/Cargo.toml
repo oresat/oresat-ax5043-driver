@@ -40,3 +40,6 @@ systemd-units = [
     { unit-name = "lband" },
     { unit-name = "uhf" },
 ]
+
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(card, values("c3", "rpi"))'] }
