@@ -3,7 +3,7 @@ use ax5043::{config, Status};
 use ax5043::{registers::*, Registers, RX, TX};
 use clap::Parser;
 use crc::{Crc, CRC_16_GENIBUS}; // TODO: this CRC works but is it correct?
-use gpiod::{Chip, EdgeDetect, Options};
+use gpiocdev::{line::EdgeDetection, Request};
 use mio::net::UdpSocket;
 use mio::{unix::SourceFd, Events, Interest, Poll, Token};
 use mio_signals::{Signal, Signals};
@@ -92,9 +92,11 @@ fn main() -> Result<()> {
     let mut signals = Signals::new(Signal::Interrupt.into())?;
     registry.register(&mut signals, SIGINT, Interest::READABLE)?;
 
-    let chip0 = Chip::new("gpiochip0")?;
-    let opts = Options::input([16]).edge(EdgeDetect::Rising);
-    let mut uhf_irq = chip0.request_lines(opts)?;
+    let uhf_irq = Request::builder()
+        .on_chip("/dev/gpiochip0")
+        .with_line(16)
+        .with_edge_detection(EdgeDetection::RisingEdge)
+        .request()?;
 
     const IRQ: Token = Token(4);
     registry.register(&mut SourceFd(&uhf_irq.as_raw_fd()), IRQ, Interest::READABLE)?;
@@ -161,8 +163,8 @@ fn main() -> Result<()> {
         for event in events.iter() {
             match event.token() {
                 IRQ => {
-                    uhf_irq.read_event()?;
-                    while uhf_irq.get_values(0u8)? > 0 {
+                    while uhf_irq.has_edge_event()? {
+                        uhf_irq.read_edge_event()?;
                         read_packet(&mut radio, &mut packet, &mut downlink)?;
                     }
                 }

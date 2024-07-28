@@ -4,7 +4,10 @@ use anyhow::{bail, ensure, Context, Result};
 use ax5043::{config, registers, registers::*, tui, Registers, RX, TX};
 use clap::Parser;
 use crc::{Crc, CRC_16_GENIBUS}; // TODO: this CRC works but is it correct?
-use gpiod::{Chip, EdgeDetect, Options};
+use gpiocdev::{
+    line::{EdgeDetection, Value},
+    Request,
+};
 use mio::net::UdpSocket;
 use mio::{unix::SourceFd, Events, Interest, Poll, Token};
 use mio_signals::{Signal, Signals};
@@ -264,13 +267,17 @@ fn main() -> Result<()> {
     let mut signals = Signals::new(Signal::Interrupt.into())?;
     registry.register(&mut signals, SIGINT, Interest::READABLE)?;
 
-    let chip1 = Chip::new("gpiochip1")?;
-    let opts = Options::output([27]).values([false]);
-    let pa_enable = chip1.request_lines(opts)?;
+    let pa_enable = Request::builder()
+        .on_chip("/dev/gpiochip1")
+        .with_line(27)
+        .as_output(Value::Inactive)
+        .request()?;
 
-    let chip0 = Chip::new("gpiochip0")?;
-    let opts = Options::input([30]).edge(EdgeDetect::Rising);
-    let mut uhf_irq = chip0.request_lines(opts)?;
+    let uhf_irq = Request::builder()
+        .on_chip("/dev/gpiochip0")
+        .with_line(30)
+        .with_edge_detection(EdgeDetection::RisingEdge)
+        .request()?;
 
     const IRQ: Token = Token(4);
     registry.register(&mut SourceFd(&uhf_irq.as_raw_fd()), IRQ, Interest::READABLE)?;
@@ -350,7 +357,7 @@ fn main() -> Result<()> {
 
     radio.RSSIREFERENCE().write(32)?;
 
-    pa_enable.set_values([true])?;
+    pa_enable.set_value(27, Value::Active)?;
 
     if let Some(ref socket) = telemetry {
         tui::CommState::BOARD(config.board).send(socket)?;
@@ -487,8 +494,8 @@ fn main() -> Result<()> {
                         .write(ax5043::registers::IRQ::FIFONOTEMPTY)?;
                 }
                 IRQ => {
-                    uhf_irq.read_event()?;
-                    while uhf_irq.get_values(0u8)? > 0 {
+                    while uhf_irq.has_edge_event()? {
+                        uhf_irq.read_edge_event()?;
                         read_packet(&mut radio, &mut packet, &mut uplink)?;
                     }
                 }
@@ -498,7 +505,7 @@ fn main() -> Result<()> {
         }
     }
 
-    pa_enable.set_values([false])?;
+    pa_enable.set_value(27, Value::Inactive)?;
     radio.reset()?;
     Ok(())
 }

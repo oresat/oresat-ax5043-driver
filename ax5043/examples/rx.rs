@@ -2,7 +2,7 @@ use anyhow::{anyhow, Result};
 use ax5043::registers::*;
 use ax5043::tui::*;
 use ax5043::*;
-use gpiod::{Chip, EdgeDetect, Options};
+use gpiocdev::{line::EdgeDetection, Request};
 use mio::{unix::SourceFd, Events, Interest, Poll, Token};
 use mio_signals::{Signal, Signals};
 use std::net::{IpAddr, Ipv4Addr, SocketAddr, UdpSocket};
@@ -139,9 +139,11 @@ fn main() -> Result<()> {
     })
     .send(&uplink)?;
 
-    let chip = Chip::new("gpiochip0")?;
-    let opts = Options::input([16]).edge(EdgeDetect::Rising);
-    let mut irq = chip.request_lines(opts)?;
+    let irq = Request::builder()
+        .on_chip("/dev/gpiochip0")
+        .with_line(16)
+        .with_edge_detection(EdgeDetection::RisingEdge)
+        .request()?;
 
     const IRQ: Token = Token(3);
     registry.register(&mut SourceFd(&irq.as_raw_fd()), IRQ, Interest::READABLE)?;
@@ -160,8 +162,8 @@ fn main() -> Result<()> {
                     CommState::REGISTERS(StatusRegisters::new(&mut radio)?).send(&uplink)?;
                 }
                 IRQ => {
-                    irq.read_event()?;
-                    while irq.get_values(0u8)? > 0 {
+                    while irq.has_edge_event()? {
+                        irq.read_edge_event()?;
                         let r = read_packet(&mut radio, &uplink);
                         if r.is_err() {
                             println!("{:?}", r);

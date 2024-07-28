@@ -3,7 +3,7 @@ use anyhow::Result;
 use ax5043::{config, Status};
 use ax5043::{registers::*, Registers, RX, TX};
 use clap::Parser;
-use gpiod::{Chip, Options};
+use gpiocdev::{line::Value, Request};
 use mio::net::UdpSocket;
 use mio::{unix::SourceFd, Events, Interest, Poll, Token};
 use mio_signals::{Signal, Signals};
@@ -106,9 +106,11 @@ fn main() -> Result<()> {
     let mut signals = Signals::new(Signal::Interrupt.into())?;
     registry.register(&mut signals, CTRLC, Interest::READABLE)?;
 
-    let chip = Chip::new("gpiochip1")?;
-    let opts = Options::output([27]).values([false]);
-    let pa_enable = chip.request_lines(opts)?;
+    let pa_enable = Request::builder()
+        .on_chip("/dev/gpiochip1")
+        .with_line(27)
+        .as_output(Value::Inactive)
+        .request()?;
 
     let spi0 = ax5043::open(args.spi)?;
     let mut status = Status::empty();
@@ -128,7 +130,7 @@ fn main() -> Result<()> {
     }
 
     configure_radio(&mut radio)?;
-    pa_enable.set_values([true])?;
+    pa_enable.set_value(27, Value::Active)?;
     // TODO: check TOT
 
     'outer: loop {
@@ -145,7 +147,7 @@ fn main() -> Result<()> {
         }
     }
 
-    pa_enable.set_values([false])?;
+    pa_enable.set_value(27, Value::Inactive)?;
     radio.reset()?;
     Ok(())
 }

@@ -2,7 +2,7 @@ use anyhow::{ensure, Result};
 use ax5043::{config, registers::*, tui, Registers, RX, TX};
 use clap::Parser;
 use crc::{Crc, CRC_16_GENIBUS}; // TODO: this CRC works but is it correct?
-use gpiod::{Chip, EdgeDetect, Options};
+use gpiocdev::{line::EdgeDetection, Request};
 use mio::{unix::SourceFd, Events, Interest, Poll, Token};
 use mio_signals::{Signal, Signals};
 use std::net::{IpAddr, Ipv4Addr, SocketAddr, UdpSocket};
@@ -126,13 +126,11 @@ fn main() -> Result<()> {
     let mut signals = Signals::new(Signal::Interrupt.into())?;
     registry.register(&mut signals, SIGINT, Interest::READABLE)?;
 
-    let chip = Chip::new("gpiochip1")?;
-    let opts = Options::output([27]).values([false]);
-    let pa_enable = chip.request_lines(opts)?;
-
-    let chip0 = Chip::new("gpiochip0")?;
-    let opts = Options::input([31]).edge(EdgeDetect::Rising);
-    let mut lband_irq = chip0.request_lines(opts)?;
+    let lband_irq = Request::builder()
+        .on_chip("/dev/gpiochip0")
+        .with_line(30)
+        .with_edge_detection(EdgeDetection::RisingEdge)
+        .request()?;
 
     const IRQ: Token = Token(4);
     registry.register(
@@ -206,8 +204,6 @@ fn main() -> Result<()> {
 
     radio.RSSIREFERENCE().write(32)?;
 
-    pa_enable.set_values([true])?;
-
     if let Some(ref socket) = telemetry {
         tui::CommState::BOARD(config.board).send(socket)?;
         tui::CommState::REGISTERS(tui::StatusRegisters::new(&mut radio)?).send(socket)?;
@@ -261,8 +257,8 @@ fn main() -> Result<()> {
                     }
                 }
                 IRQ => {
-                    lband_irq.read_event()?;
-                    while lband_irq.get_values(0u8)? > 0 {
+                    while lband_irq.has_edge_event()? {
+                        lband_irq.read_edge_event()?;
                         read_packet(&mut radio, &mut packet, &mut uplink)?;
                     }
                 }
@@ -272,7 +268,6 @@ fn main() -> Result<()> {
         }
     }
 
-    pa_enable.set_values([false])?;
     radio.reset()?;
     Ok(())
 }

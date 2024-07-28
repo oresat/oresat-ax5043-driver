@@ -14,7 +14,7 @@ bitflags = { version = "2.5.0", features = ["serde"] }
 ciborium = "0.2.2"
 clap = { version = "4.5.4", features = ["derive"] }
 crc = "3.0.1"
-gpiod = "0.3.0"
+gpiocdev = "0.7.1"
 mio = { version = "0.8.11", features = ["net", "os-poll", "os-ext"] }
 mio-signals = "0.2.0"
 num_enum = "0.7.2"

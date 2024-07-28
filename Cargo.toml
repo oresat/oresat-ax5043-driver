@@ -3,6 +3,3 @@ resolver = "2"
 members = [
     "ax5043",
 ]
-
-[patch.crates-io]
-gpiod = { path = "../gpiod-rs" }
