@@ -2,9 +2,9 @@
 sysclk = { mode = "Z",    pullup = true,  invert = false }
 dclk   = { mode = "Z",    pullup = true,  invert = false }
 data   = { mode = "Z",    pullup = true,  invert = false }
-pwramp = { mode = "TCXO", pullup = false, invert = false }
+pwramp = { mode = "Z",    pullup = true,  invert = false }
 irq    = { mode = "IRQ",  pullup = false, invert = false }
-antsel = { mode = "Z",    pullup = true,  invert = false }
+antsel = { mode = "TCXO", pullup = false, invert = false }
 xtal = { kind = "TCXO", freq = 48_000_000, enable = "AntSel" }
 vco = "Internal"
 filter = "Internal"
