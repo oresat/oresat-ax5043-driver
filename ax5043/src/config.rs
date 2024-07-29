@@ -1810,7 +1810,10 @@ impl RXParameterStages {
 #[allow(non_snake_case)]
 #[derive(Clone, Copy, Debug, Deserialize)]
 pub struct Raw {
-    pub FREQA: u32,
+    pub FREQA: Option<u32>,
+    pub PLLVCODIV: Option<PLLVCODiv>,
+    pub PERF_F35: Option<PerfF35>,
+
 }
 
 #[derive(Debug, Deserialize)]
@@ -1869,6 +1872,20 @@ impl Config {
             radio.PKTACCEPTFLAGS().write(PktAcceptFlags::LRGP)?;
 
             radio.RSSIREFERENCE().write(0)?;
+
+        }
+
+        if let Some(overwrite) = self.overwrite {
+            if let Some(val) = overwrite.FREQA {
+                radio.FREQA().write(val)?;
+            }
+            if let Some(val) = overwrite.PLLVCODIV {
+                radio.PLLVCODIV().write(val)?;
+            }
+            if let Some(val) = overwrite.PERF_F35 {
+                radio.PERF_F35().write(val)?;
+            }
+
         }
         Ok(())
     }

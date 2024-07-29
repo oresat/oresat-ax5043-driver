@@ -446,14 +446,14 @@ impl Widget for Synthesizer {
          * pllranging A/B [ sticky lock err start vcor ]
          * freq a/b
          *
-         *                        PLLCPI  t   PLLLOOP     VCOSEL
-         *     locked rngclk       ______     _______   ____________
-         *        lockdet (pd?)    | cpi |   | flt  |   | int/2/ext |
-         *     refdiv     _____    | cpib|   | fltb |   |  range(?) |  rfdiv
-         * clkin -|- fpd -| pd |---|_____|---|______|---| vcoi      |----|---   frf
-         *              |-|____| ___________            ------------- |
-         *              ---------| A freqa |---------------------------
-         *                       | B freqb | Does a/b go from clkin - frf?
+         *      rngclk?   PD       PLLCPI  t   PLLLOOP     VCOSEL
+         *     refdiv     ______   ______     _______   ____________
+         * clkin--|--fpd-| lock |  | cpi |   | flt  |   | int/2/ext |
+         *               | lkdt |  | cpib|   | fltb |   |  range(?) | rfdiv
+         *            |- |______|--|_____|---|______|---| vcoi      |---|---|---frf
+         *            |          ___________            -------------       |
+         *            |----------| A freqa |--------------------------------|
+         *                       | B freqb |
          *                       -----------
          *
          */

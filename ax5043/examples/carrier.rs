@@ -3,6 +3,7 @@ use anyhow::Result;
 use ax5043::{config, Status};
 use ax5043::{registers::*, Registers, RX, TX};
 use clap::Parser;
+#[cfg(card = "c3")]
 use gpiocdev::{line::Value, Request};
 use mio::net::UdpSocket;
 use mio::{unix::SourceFd, Events, Interest, Poll, Token};
@@ -16,7 +17,13 @@ use std::{
 use timerfd::{SetTimeFlags, TimerFd, TimerState};
 
 fn configure_radio(radio: &mut Registers) -> Result<()> {
-    let file_path = "c3-uhf-carrier.toml";
+    let file_path = if cfg!(card = "rpi") {
+        "rpi-uhf-carrier.toml"
+    } else if cfg!(card = "c3") {
+        "c3-uhf-carrier.toml"
+    } else {
+        "unknown"
+    };
     let contents = read_to_string(file_path)?;
     let config: config::Config = toml::from_str(&contents)?;
     config.write(radio)?;
@@ -106,6 +113,7 @@ fn main() -> Result<()> {
     let mut signals = Signals::new(Signal::Interrupt.into())?;
     registry.register(&mut signals, CTRLC, Interest::READABLE)?;
 
+    #[cfg(card = "c3")]
     let pa_enable = Request::builder()
         .on_chip("/dev/gpiochip1")
         .with_line(27)
@@ -130,6 +138,8 @@ fn main() -> Result<()> {
     }
 
     configure_radio(&mut radio)?;
+
+    #[cfg(card = "c3")]
     pa_enable.set_value(27, Value::Active)?;
     // TODO: check TOT
 
@@ -147,6 +157,7 @@ fn main() -> Result<()> {
         }
     }
 
+    #[cfg(card = "c3")]
     pa_enable.set_value(27, Value::Inactive)?;
     radio.reset()?;
     Ok(())

@@ -1,0 +1,41 @@
+[board]
+sysclk = { mode = "XtalDiv1024",      pullup = true,  invert = false }
+dclk   = { mode = "Z",      pullup = true,  invert = false }
+data   = { mode = "Z",      pullup = true,  invert = false }
+pwramp = { mode = "Z",      pullup = true,  invert = false }
+irq    = { mode = "IRQ",    pullup = false, invert = false }
+antsel = { mode = "TCXO",   pullup = false, invert = false }
+xtal = { kind = "TCXO", freq = 48_000_000, enable = "AntSel" }
+vco = "Internal"
+filter = "Internal"
+dac = { pin = "None" }
+adc = "None"
+
+[synth]
+freq_a = 436_500_000
+freq_b = 0
+active = "A"
+pll = { charge_pump_current = 0x02, filter_bandwidth = "Internalx1" }
+boost = { charge_pump_current = 0xC8, filter_bandwidth = "Internalx5" }
+vco_current = "Automatic"
+lock_detector_delay = "Automatic"
+ranging_clock = "XtalDiv1024"
+
+[[channel]]
+modulation = "ASK"
+encoding = "NRZ"
+framing = "Raw"
+crc = "None"
+datarate = 9_600
+bitorder = "LSBFirst"
+
+[tx]
+antenna = "SingleEnded"
+amp.RaisedCosine = { a = 0, b = 0x300, c = 0, d = 0, e = 0 }
+plllock_gate = true
+brownout_gate = true
+
+#[overwrite]
+#FREQA = 0x0918_0001
+#PLLVCODIV = { mode = "F_XTAL", flags = "RFDIV | VCO2INT" }
+#PERF_F35 = "FreqLT24p8MHz"

@@ -2286,7 +2286,7 @@ impl From<PerfF34> for Reg8 {
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, IntoPrimitive, TryFromPrimitive)]
+#[derive(Clone, Copy, Debug, PartialEq, IntoPrimitive, TryFromPrimitive, Serialize, Deserialize)]
 #[repr(u8)]
 #[rustfmt::skip]
 pub enum PerfF35 {
