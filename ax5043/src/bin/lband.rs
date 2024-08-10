@@ -192,15 +192,6 @@ fn main() -> Result<()> {
     config.write(&mut radio)?;
 
     radio.FIFOTHRESH().write(128)?; // Half the FIFO size
-    radio.PERF_F18().write(0x02)?; // TODO set by radiolab during RX
-    radio.PERF_F26().write(0x96)?;
-
-    radio.PKTMAXLEN().write(0xFF)?;
-    radio.PKTLENCFG().write(PktLenCfg { pos: 0, bits: 0xF })?;
-    radio.PKTLENOFFSET().write(0x00)?;
-
-    radio.PKTCHUNKSIZE().write(0x09)?;
-    radio.PKTACCEPTFLAGS().write(PktAcceptFlags::LRGP)?;
 
     radio.RSSIREFERENCE().write(32)?;
 

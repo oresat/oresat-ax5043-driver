@@ -575,7 +575,7 @@ registers! {
         RSSIABSTHR:     i8          [0x22D, 1, ReadWrite], // RSSI Absolute Threshold
         BGNDRSSIGAIN:   u8          [0x22E, 1, ReadWrite], // Background RSSI Averaging Time Constant
         BGNDRSSITHR:    u8          [0x22F, 1, ReadWrite], // Background RSSI Relative Threshold
-        PKTCHUNKSIZE:   u8          [0x230, 1, ReadWrite], // Packet Chunk Size
+        PKTCHUNKSIZE:   PktChunkSize [0x230, 1, ReadWrite], // Packet Chunk Size
         PKTMISCFLAGS:   PktMiscFlags [0x231, 1, ReadWrite], // Packet Controller Miscellaneous Flags
         PKTSTOREFLAGS:  PktStoreFlags [0x232, 1, ReadWrite], // Packet Controller Store Flags
         PKTACCEPTFLAGS: PktAcceptFlags [0x233, 1, ReadWrite], // Packet Controller Accept Flags
@@ -991,7 +991,7 @@ impl Registers<'_> {
             RSSIABSTHR: 0,
             BGNDRSSIGAIN: 0,
             BGNDRSSITHR: 0,
-            PKTCHUNKSIZE: 0,
+            PKTCHUNKSIZE: PktChunkSize::Reset,
             PKTMISCFLAGS: PktMiscFlags::empty(),
             PKTSTOREFLAGS: PktStoreFlags::empty(),
             PKTACCEPTFLAGS: PktAcceptFlags::empty(),

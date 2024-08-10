@@ -2145,6 +2145,68 @@ impl From<MatchLen> for Reg8 {
     }
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, IntoPrimitive, TryFromPrimitive, Serialize, Deserialize)]
+#[repr(u8)]
+#[rustfmt::skip]
+pub enum PktChunkSize {
+    Reset = 0, // Marked as invalid by Table 183, but is reset value in Table 182
+               // FIXME: Mark as RO value?
+    B1   = 0b0001,
+    B2   = 0b0010,
+    B4   = 0b0011,
+    B8   = 0b0100,
+    B16  = 0b0101,
+    B32  = 0b0110,
+    B64  = 0b0111,
+    B96  = 0b1000,
+    B128 = 0b1001,
+    B160 = 0b1010,
+    B192 = 0b1011,
+    B224 = 0b1100,
+    B240 = 0b1101,
+}
+
+impl TryFrom<Reg8> for PktChunkSize {
+    type Error = Reg8;
+    fn try_from(item: Reg8) -> Result<Self, Self::Error> {
+        Self::try_from(item[0]).or(Err(item))
+    }
+}
+
+impl From<PktChunkSize> for Reg8 {
+    fn from(item: PktChunkSize) -> Self {
+        u8::from(item).into()
+    }
+}
+
+#[cfg(test)]
+fn pkt_chunk_size_strategy() -> impl Strategy<Value = PktChunkSize> {
+    prop_oneof![
+        Just(PktChunkSize::Reset),
+        Just(PktChunkSize::B1),
+        Just(PktChunkSize::B2),
+        Just(PktChunkSize::B4),
+        Just(PktChunkSize::B8),
+        Just(PktChunkSize::B16),
+        Just(PktChunkSize::B32),
+        Just(PktChunkSize::B64),
+        Just(PktChunkSize::B96),
+        Just(PktChunkSize::B128),
+        Just(PktChunkSize::B160),
+        Just(PktChunkSize::B192),
+        Just(PktChunkSize::B224),
+        Just(PktChunkSize::B240),
+    ]
+}
+
+#[cfg(test)]
+proptest! {
+    #[test]
+    fn pkt_chunk_inverse(b in pkt_chunk_size_strategy()) {
+        assert_eq!(b, PktChunkSize::try_from(Reg8::from(b)).unwrap())
+    }
+}
+
 bitflags! {
     #[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
     pub struct PktMiscFlags: u8 {

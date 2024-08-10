@@ -1813,7 +1813,6 @@ pub struct Raw {
     pub FREQA: Option<u32>,
     pub PLLVCODIV: Option<PLLVCODiv>,
     pub PERF_F35: Option<PerfF35>,
-
 }
 
 #[derive(Debug, Deserialize)]
@@ -1868,11 +1867,10 @@ impl Config {
             radio.PKTLENCFG().write(PktLenCfg { pos: 0, bits: 0xF })?;
             radio.PKTLENOFFSET().write(0x00)?;
 
-            radio.PKTCHUNKSIZE().write(0x09)?;
+            radio.PKTCHUNKSIZE().write(PktChunkSize::B128)?;
             radio.PKTACCEPTFLAGS().write(PktAcceptFlags::LRGP)?;
 
             radio.RSSIREFERENCE().write(0)?;
-
         }
 
         if let Some(overwrite) = self.overwrite {
@@ -1885,7 +1883,6 @@ impl Config {
             if let Some(val) = overwrite.PERF_F35 {
                 radio.PERF_F35().write(val)?;
             }
-
         }
         Ok(())
     }
