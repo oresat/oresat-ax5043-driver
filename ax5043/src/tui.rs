@@ -109,7 +109,7 @@ impl RXState {
 pub struct PacketFormat {
     addrcfg: PktAddrCfg,
     lencfg: PktLenCfg,
-    lenoffset: u8,
+    lenoffset: i8,
     maxlen: u8,
     addr: u32,
     addrmask: u32,

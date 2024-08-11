@@ -546,7 +546,7 @@ registers! {
         /* Packet Format */
         PKTADDRCFG:     PktAddrCfg  [0x200, 1, ReadWrite], // Packet Address Config
         PKTLENCFG:      PktLenCfg   [0x201, 1, ReadWrite], // Packet Length Config
-        PKTLENOFFSET:   u8          [0x202, 1, ReadWrite], // Packet Length Offset
+        PKTLENOFFSET:   i8          [0x202, 1, ReadWrite], // Packet Length Offset
         PKTMAXLEN:      u8          [0x203, 1, ReadWrite], // Packet Maximum Length
         PKTADDR:        u32         [0x204, 4, ReadWrite], // Packet Address 3
         PKTADDRMASK:    u32         [0x208, 4, ReadWrite], // Packet Address Mask 3

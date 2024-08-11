@@ -933,18 +933,6 @@ impl ChannelParameters {
         })?;
         radio.CRCINIT().write(0xFFFF_FFFF)?;
 
-        let flags = PktAddrCfgFlags::FEC_SYNC_DIS // FIXME config when FEC is ready
-            | if self.bitorder == BitOrder::MSBFirst {
-                PktAddrCfgFlags::MSB_FIRST
-            } else {
-                // LSB first is unset MSB
-                PktAddrCfgFlags::empty()
-            };
-
-        radio
-            .PKTADDRCFG()
-            .write(PktAddrCfg { addr_pos: 0, flags })?;
-
         Ok(self)
     }
 }
@@ -1807,6 +1795,106 @@ impl RXParameterStages {
     }
 }
 
+#[derive(Clone, Copy, Debug, Deserialize)]
+pub struct PacketAddress {
+    pub pos: u8,
+    pub addr: u32,
+    pub mask: u32,
+}
+
+impl PacketAddress {
+    pub fn write(&self, radio: &mut Registers, channel: &ChannelParameters) -> Result<()> {
+        let flags = PktAddrCfgFlags::FEC_SYNC_DIS // FIXME config when FEC is ready
+            | if channel.bitorder == BitOrder::MSBFirst {
+                PktAddrCfgFlags::MSB_FIRST
+            } else {
+                // LSB first is unset MSB
+                PktAddrCfgFlags::empty()
+            };
+
+        // FIXME: assert pos < 16
+        radio.PKTADDRCFG().write(PktAddrCfg {
+            addr_pos: self.pos,
+            flags,
+        })?;
+        radio.PKTADDR().write(self.addr)?;
+        radio.PKTADDRMASK().write(self.mask)?;
+        Ok(())
+    }
+}
+
+#[derive(Clone, Copy, Debug, Deserialize)]
+pub enum PacketLength {
+    Arbitrary,
+    Dynamic {
+        pos: u8,
+        bits: u8,
+        offset: i8,
+        max: u8,
+    },
+    Fixed {
+        len: i8,
+    },
+}
+
+impl PacketLength {
+    pub fn write(&self, radio: &mut Registers) -> Result<()> {
+        match self {
+            PacketLength::Arbitrary => {
+                // See note under Table 154
+                radio.PKTLENCFG().write(PktLenCfg { pos: 0, bits: 0xF })?;
+                radio.PKTLENOFFSET().write(0)?;
+                radio.PKTMAXLEN().write(0xFF)?;
+                // FIXME: ensure PktAcceptFlags::LRGP
+            }
+            PacketLength::Dynamic {
+                pos,
+                bits,
+                offset,
+                max,
+            } => {
+                radio.PKTLENCFG().write(PktLenCfg {
+                    pos: *pos,
+                    bits: *bits,
+                })?;
+                radio.PKTLENOFFSET().write(*offset)?;
+                // FIXME: Check that max >= offset
+                radio.PKTMAXLEN().write(*max)?;
+            }
+            PacketLength::Fixed { len } => {
+                radio.PKTLENCFG().write(PktLenCfg { pos: 0, bits: 0x0 })?;
+                radio.PKTLENOFFSET().write(*len)?;
+                radio.PKTMAXLEN().write((*len).try_into().unwrap())?;
+            }
+        }
+
+        Ok(())
+    }
+}
+
+#[derive(Clone, Copy, Debug, Deserialize)]
+pub struct PacketConfig {
+    pub address: Option<PacketAddress>,
+    pub length: PacketLength,
+}
+
+impl PacketConfig {
+    pub fn write(&self, radio: &mut Registers, channel: &ChannelParameters) -> Result<()> {
+        if let Some(address) = self.address {
+            address
+        } else {
+            PacketAddress {
+                pos: 0,
+                addr: 0,
+                mask: 0,
+            }
+        }
+        .write(radio, channel)?;
+        self.length.write(radio)?;
+        Ok(())
+    }
+}
+
 #[allow(non_snake_case)]
 #[derive(Clone, Copy, Debug, Deserialize)]
 pub struct Raw {
@@ -1860,12 +1948,15 @@ impl Config {
             if let Some(stages) = self.stages {
                 stages.write(radio)?;
             }
+
+            PacketConfig {
+                address: None,
+                length: PacketLength::Arbitrary,
+            }
+            .write(radio, default_channel)?;
+
             radio.PERF_F18().write(0x02)?; // TODO set by radiolab during RX
             radio.PERF_F26().write(0x96)?;
-
-            radio.PKTMAXLEN().write(0xFF)?;
-            radio.PKTLENCFG().write(PktLenCfg { pos: 0, bits: 0xF })?;
-            radio.PKTLENOFFSET().write(0x00)?;
 
             radio.PKTCHUNKSIZE().write(PktChunkSize::B128)?;
             radio.PKTACCEPTFLAGS().write(PktAcceptFlags::LRGP)?;
