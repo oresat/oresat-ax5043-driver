@@ -90,18 +90,19 @@ fn transmit(radio: &mut Registers, uplink: &UdpSocket) -> Result<()> {
     while !radio.FIFOSTAT().read()?.contains(FIFOStat::FREE_THR) {}
 
     // FIXME: FIFOSTAT CLEAR?
+    let stat = CommState::REGISTERS(StatusRegisters::new(radio)?);
+    stat.send(uplink)?;
 
     loop {
         // TODO: Interrupt of some sort
-
-        let stat = CommState::REGISTERS(StatusRegisters::new(radio)?);
-        stat.send(uplink)?;
-        if let CommState::REGISTERS(r) = stat {
-            if r.radio_state == RadioState::IDLE {
-                break;
-            }
+        if radio.RADIOSTATE().read()? == RadioState::IDLE {
+            break;
         }
     }
+
+    let stat = CommState::REGISTERS(StatusRegisters::new(radio)?);
+    stat.send(uplink)?;
+
     _ = radio.PLLRANGINGA().read()?; // sticky lock bit ~ IRQPLLUNLIOCK, gate
     _ = radio.POWSTICKYSTAT().read()?; // clear sticky power flags for PWR_GOOD
     radio.PWRMODE().write(PwrMode {
@@ -109,6 +110,7 @@ fn transmit(radio: &mut Registers, uplink: &UdpSocket) -> Result<()> {
         mode: PwrModes::POWEROFF,
     })?;
 
+    CommState::REGISTERS(StatusRegisters::new(radio)?).send(&uplink)?;
     Ok(())
 }
 
@@ -132,7 +134,7 @@ fn main() -> Result<()> {
     registry.register(&mut SourceFd(&tfd.as_raw_fd()), BEACON, Interest::READABLE)?;
 
     let src = SocketAddr::new(IpAddr::V4(Ipv4Addr::UNSPECIFIED), 0);
-    let dest = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(192, 168, 1, 252)), 10035);
+    let dest = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(192, 168, 1, 247)), 10036);
     //let dest = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(10, 42, 0, 1)), 10035);
     let uplink = UdpSocket::bind(src)?;
     uplink.connect(dest)?;

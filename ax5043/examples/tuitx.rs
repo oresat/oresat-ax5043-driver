@@ -140,7 +140,7 @@ fn run_ui(terminal: &mut Terminal<CrosstermBackend<io::Stdout>>) -> Result<()> {
         Interest::READABLE,
     )?;
 
-    let src = SocketAddr::new(IpAddr::V4(Ipv4Addr::UNSPECIFIED), 10035);
+    let src = SocketAddr::new(IpAddr::V4(Ipv4Addr::UNSPECIFIED), 10036);
     let mut uplink = UdpSocket::bind(src)?;
     const TELEMETRY: Token = Token(2);
     registry.register(&mut uplink, TELEMETRY, Interest::READABLE)?;

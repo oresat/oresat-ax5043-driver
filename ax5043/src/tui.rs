@@ -468,8 +468,8 @@ impl Widget for Synthesizer {
         let layout = Layout::new(
             Direction::Horizontal,
             [
-                Constraint::Max(20),
-                Constraint::Max(20),
+                Constraint::Max(15),
+                Constraint::Max(15),
                 Constraint::Max(20),
                 Constraint::Max(20),
                 Constraint::Max(20),
@@ -485,21 +485,20 @@ impl Widget for Synthesizer {
         )
         .split(vert[1]);
 
+        let refdiv = 2u32.pow(self.vcodiv.mode as u32);
         let clkin = Table::new(
             vec![
+                Row::new(vec![""]),
                 Row::new(vec![
                     Cell::from("xtal"),
-                    Cell::from(format!("{} Hz", self.clk)),
+                    Cell::from(format!("{:.2} MHz", self.clk as f64 / 1e6)),
                 ]),
-                Row::new(vec![
-                    Cell::from("refdiv"),
-                    Cell::from(format!("{:?}", self.vcodiv.mode)),
-                ]),
+                Row::new(vec![Cell::from("ref"), Cell::from(format!("1/{}", refdiv))]),
                 Row::new(vec![
                     Cell::from("f_pd"),
                     Cell::from(format!(
-                        "{} Hz",
-                        self.clk / 2u64.pow(self.vcodiv.mode as u32)
+                        "{:.2} MHz",
+                        (self.clk as f64 / refdiv as f64) / 1e6
                     )),
                 ]),
             ],
@@ -507,14 +506,25 @@ impl Widget for Synthesizer {
         );
         Widget::render(clkin, layout[0], buf);
 
+        let lock = match self.lockdet.readback {
+            LockDetDly::d6ns => 6,
+            LockDetDly::d9ns => 9,
+            LockDetDly::d12ns => 12,
+            LockDetDly::d14ns => 14,
+        };
+
         let pd = Table::new(
             vec![Row::new(vec![
                 Cell::from("Lock"),
-                Cell::from(format!("{:?} ns", self.lockdet.readback)),
+                Cell::from(format!("{:?} ns", lock)),
             ])],
             [Constraint::Max(4), Constraint::Min(0)],
         )
-        .block(Block::default().borders(Borders::ALL).title("Phase Det"));
+        .block(
+            Block::default()
+                .borders(Borders::ALL & !Borders::RIGHT)
+                .title("Phase Det"),
+        );
         Widget::render(pd, layout[1], buf);
 
         let cpi = Table::new(
@@ -530,7 +540,11 @@ impl Widget for Synthesizer {
             ],
             [Constraint::Max(4), Constraint::Min(0)],
         )
-        .block(Block::default().borders(Borders::ALL).title("Charge Pump"));
+        .block(
+            Block::default()
+                .borders(Borders::ALL & !Borders::RIGHT)
+                .title("Charge Pump"),
+        );
         Widget::render(cpi, layout[2], buf);
 
         // FIXME: bandwidth in hz
@@ -547,12 +561,26 @@ impl Widget for Synthesizer {
             ],
             [Constraint::Max(4), Constraint::Min(0)],
         )
-        .block(Block::default().borders(Borders::ALL).title("Filter"));
+        .block(
+            Block::default()
+                .borders(Borders::ALL & !Borders::RIGHT)
+                .title("Filter"),
+        );
         Widget::render(flt, layout[3], buf);
+
+        let vco = if self.vcodiv.flags.contains(PLLVCODivFlags::VCOSEL) {
+            if self.vcodiv.flags.contains(PLLVCODivFlags::VCO2INT) {
+                "VCO 2"
+            } else {
+                "External"
+            }
+        } else {
+            "VCO 1"
+        };
 
         let vco = Table::new(
             vec![
-                Row::new(vec![Cell::from(format!("{:?}", self.vcodiv.flags))]),
+                Row::new(vec![Cell::from(vco)]),
                 Row::new(vec![
                     Cell::from("vcoi"),
                     Cell::from(format!("{} A?", self.vcoir)),
@@ -562,12 +590,12 @@ impl Widget for Synthesizer {
                     Cell::from(format!("{}", self.ranginga.vcor)),
                 ]),
             ],
-            [Constraint::Max(4), Constraint::Min(0)],
+            [Constraint::Max(10), Constraint::Min(0)],
         )
         .block(Block::default().borders(Borders::ALL).title("VCO"));
         Widget::render(vco, layout[4], buf);
 
-        let fvco = self.clk * self.freqa / 2u64.pow(24);
+        let rf = self.clk * self.freqa / 2u64.pow(24);
         let rfdiv = if self.vcodiv.flags.contains(PLLVCODivFlags::RFDIV) {
             2
         } else {
@@ -575,12 +603,13 @@ impl Widget for Synthesizer {
         };
         let frf = Table::new(
             vec![
-                Row::new(vec![Cell::from("fvco"), Cell::from(format!("{} Hz", fvco))]),
-                Row::new(vec![Cell::from("rfdiv"), Cell::from(format!("{}", rfdiv))]),
+                Row::new(vec![""]),
                 Row::new(vec![
-                    Cell::from("f_rf"),
-                    Cell::from(format!("{} Hz", fvco / rfdiv)),
+                    Cell::from("fvco"),
+                    Cell::from(format!("{} Hz", rf * rfdiv)),
                 ]),
+                Row::new(vec![Cell::from("rf"), Cell::from(format!("1/{}", rfdiv))]),
+                Row::new(vec![Cell::from("f_rf"), Cell::from(format!("{} Hz", rf))]),
             ],
             [Constraint::Max(4), Constraint::Min(0)],
         );
@@ -589,8 +618,8 @@ impl Widget for Synthesizer {
         let frac = Table::new(
             vec![
                 Row::new(vec![
-                    Cell::from("freqa"),
-                    Cell::from(format!("{}", self.freqa as f64 / 2f64.powf(24.0))),
+                    Cell::from("Freq A Divider"),
+                    Cell::from(format!("{:.5}", self.freqa as f64 / 2f64.powf(24.0))),
                 ]),
                 Row::new(vec![
                     Cell::from("freqb"),
