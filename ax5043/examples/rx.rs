@@ -2,6 +2,7 @@ use anyhow::{anyhow, Result};
 use ax5043::registers::*;
 use ax5043::tui::*;
 use ax5043::*;
+use clap::Parser;
 use gpiocdev::{line::EdgeDetection, Request};
 use mio::{unix::SourceFd, Events, Interest, Poll, Token};
 use mio_signals::{Signal, Signals};
@@ -55,10 +56,18 @@ fn read_packet(radio: &mut Registers, uplink: &UdpSocket) -> Result<()> {
     Ok(())
 }
 
+#[derive(Parser, Debug)]
+struct Args {
+    #[arg(short, long, default_value = "rpi-uhf-60000.toml")]
+    config: String,
+    #[arg(short, long, default_value = "192.168.1.247:10036")]
+    telemetry: String,
+}
+
 fn main() -> Result<()> {
+    let args = Args::parse();
     let src = SocketAddr::new(IpAddr::V4(Ipv4Addr::UNSPECIFIED), 0);
-    let dest = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(192, 168, 1, 252)), 10035);
-    //let dest = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(10, 42, 0, 1)), 10035);
+    let dest: SocketAddr = args.telemetry.parse()?;
     let uplink = UdpSocket::bind(src)?;
     uplink.connect(dest)?;
 
@@ -101,8 +110,7 @@ fn main() -> Result<()> {
         Interest::READABLE,
     )?;
 
-    let file_path = "rpi-uhf-60000.toml";
-    let contents = read_to_string(file_path)?;
+    let contents = read_to_string(args.config)?;
     let config: config::Config = toml::from_str(&contents)?;
     config.write(&mut radio)?;
     radio.RADIOEVENTMASK().write(RadioEvent::all())?;
