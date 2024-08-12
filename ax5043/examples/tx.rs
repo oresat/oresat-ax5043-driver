@@ -1,6 +1,7 @@
 extern crate ax5043;
 use anyhow::Result;
 use ax5043::{registers::*, tui::*, *};
+use gpiocdev::{line::EdgeDetection, Request};
 use mio::{unix::SourceFd, Events, Interest, Poll, Token};
 use mio_signals::{Signal, Signals};
 use std::{
@@ -87,30 +88,10 @@ fn transmit(radio: &mut Registers, uplink: &UdpSocket) -> Result<()> {
         mode: FIFOCmds::COMMIT,
         auto_commit: false,
     })?;
+    CommState::REGISTERS(StatusRegisters::new(radio)?).send(uplink)?;
     while !radio.FIFOSTAT().read()?.contains(FIFOStat::FREE_THR) {}
-
     // FIXME: FIFOSTAT CLEAR?
-    let stat = CommState::REGISTERS(StatusRegisters::new(radio)?);
-    stat.send(uplink)?;
-
-    loop {
-        // TODO: Interrupt of some sort
-        if radio.RADIOSTATE().read()? == RadioState::IDLE {
-            break;
-        }
-    }
-
-    let stat = CommState::REGISTERS(StatusRegisters::new(radio)?);
-    stat.send(uplink)?;
-
-    _ = radio.PLLRANGINGA().read()?; // sticky lock bit ~ IRQPLLUNLIOCK, gate
-    _ = radio.POWSTICKYSTAT().read()?; // clear sticky power flags for PWR_GOOD
-    radio.PWRMODE().write(PwrMode {
-        flags: PwrFlags::XOEN | PwrFlags::REFEN,
-        mode: PwrModes::POWEROFF,
-    })?;
-
-    CommState::REGISTERS(StatusRegisters::new(radio)?).send(&uplink)?;
+    CommState::REGISTERS(StatusRegisters::new(radio)?).send(uplink)?;
     Ok(())
 }
 
@@ -133,9 +114,18 @@ fn main() -> Result<()> {
     );
     registry.register(&mut SourceFd(&tfd.as_raw_fd()), BEACON, Interest::READABLE)?;
 
+    let irq = Request::builder()
+        .on_chip("/dev/gpiochip0")
+        .with_line(17)
+        .with_edge_detection(EdgeDetection::RisingEdge)
+        .request()?;
+
+    const IRQ: Token = Token(3);
+    registry.register(&mut SourceFd(&irq.as_raw_fd()), IRQ, Interest::READABLE)?;
+
     let src = SocketAddr::new(IpAddr::V4(Ipv4Addr::UNSPECIFIED), 0);
     let dest = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(192, 168, 1, 247)), 10036);
-    //let dest = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(10, 42, 0, 1)), 10035);
+    //let dest = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(10, 42, 0, 1)), 10036);
     let uplink = UdpSocket::bind(src)?;
     uplink.connect(dest)?;
 
@@ -155,7 +145,7 @@ fn main() -> Result<()> {
     let contents = read_to_string(file_path)?;
     let config: config::Config = toml::from_str(&contents)?;
     config.write(&mut radio)?;
-    radio.RADIOEVENTMASK().write(RadioEvent::all())?;
+    radio.RADIOEVENTMASK().write(RadioEvent::DONE)?;
 
     CommState::BOARD(config.board.clone()).send(&uplink)?;
     CommState::REGISTERS(StatusRegisters::new(&mut radio)?).send(&uplink)?;
@@ -173,6 +163,9 @@ fn main() -> Result<()> {
     })
     .send(&uplink)?;
 
+
+    radio.IRQMASK().write(IRQ::RADIOCTRL)?;
+
     let mut events = Events::with_capacity(128);
     'outer: loop {
         poll.poll(&mut events, None)?;
@@ -181,6 +174,25 @@ fn main() -> Result<()> {
                 BEACON => {
                     tfd.read();
                     transmit(&mut radio, &uplink)?;
+                }
+                IRQ => {
+                    while irq.has_edge_event()? {
+                        irq.read_edge_event()?;
+                        let status = StatusRegisters::new(&mut radio)?;
+                        if status.radio_event.contains(RadioEvent::DONE) {
+                            continue;
+                        }
+                        CommState::REGISTERS(status).send(&uplink)?;
+
+                        _ = radio.PLLRANGINGA().read()?; // sticky lock bit ~ IRQPLLUNLIOCK, gate
+                        _ = radio.POWSTICKYSTAT().read()?; // clear sticky power flags for PWR_GOOD
+                        radio.PWRMODE().write(PwrMode {
+                            flags: PwrFlags::XOEN | PwrFlags::REFEN,
+                            mode: PwrModes::POWEROFF,
+                        })?;
+
+                        CommState::REGISTERS(StatusRegisters::new(&mut radio)?).send(&uplink)?;
+                    }
                 }
                 CTRLC => break 'outer,
                 _ => unreachable!(),
