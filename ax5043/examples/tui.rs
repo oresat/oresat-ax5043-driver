@@ -24,6 +24,7 @@ struct UIState {
     status: Status,
     reg: StatusRegisters,
     config: Config,
+    counter: usize,
 }
 
 impl Default for UIState {
@@ -59,12 +60,13 @@ impl Default for UIState {
                 packet_format: PacketFormat::default(),
                 channel: ChannelParameters::default(),
             },
+            counter: 0,
         }
     }
 }
 
 impl UIState {
-    fn chart<'a, T>(&self, f: &mut Frame, area: Rect, name: T, unit: T, data: &'a [f64])
+    fn chart<'a, T>(&self, area: Rect, buf: &mut Buffer, name: T, unit: T, data: &'a [f64])
     where
         T: AsRef<str> + std::fmt::Display,
     {
@@ -93,189 +95,212 @@ impl UIState {
             .x_axis(x_axis)
             .y_axis(y_axis);
 
-        f.render_widget(chart, area);
+        chart.render(area, buf);
+    }
+
+    fn update(&mut self, buf: &[u8], amt: usize) -> Result<()> {
+        match ciborium::de::from_reader(&buf[..amt])? {
+            CommState::RX(chunk) => {
+                self.packets.push_front((self.counter, 0 /*len*/, chunk));
+                self.packets.truncate(10);
+                self.counter += 1;
+            }
+            CommState::TX(_) => (),
+            //ERR(Result<()>) =>
+            CommState::STATUS(status) => {
+                self.status = status;
+            }
+            CommState::STATE(state) => {
+                self.rx.push_front(state);
+                self.rx.truncate(100);
+            }
+            CommState::REGISTERS(reg) => self.reg = reg,
+            CommState::BOARD(board) => self.board = board,
+            CommState::CONFIG(conf) => self.config = conf,
+        }
+        Ok(())
     }
 }
 
-fn ui(f: &mut Frame, state: &UIState) {
-    let chunks = Layout::default()
-        .direction(Direction::Vertical)
-        .margin(1)
-        .constraints(
-            [
-                Constraint::Percentage(10),
-                Constraint::Percentage(80),
-                Constraint::Percentage(10),
-            ]
-            .as_ref(),
+impl Widget for &UIState {
+    fn render(self, area: Rect, buf: &mut Buffer) {
+        let chunks = Layout::default()
+            .direction(Direction::Vertical)
+            .margin(1)
+            .constraints(
+                [
+                    Constraint::Percentage(10),
+                    Constraint::Percentage(80),
+                    Constraint::Percentage(10),
+                ]
+                .as_ref(),
+            )
+            .split(area);
+
+        let power = Layout::default()
+            .direction(Direction::Horizontal)
+            .constraints(
+                [
+                    Constraint::Min(21),
+                    Constraint::Min(46),
+                    Constraint::Min(85),
+                    Constraint::Min(40),
+                    Constraint::Min(0),
+                ]
+                .as_ref(),
+            )
+            .split(chunks[0]);
+        self.reg.pwrmode.render(power[0], buf);
+        self.reg.powstat.render(power[1], buf);
+        self.reg.irq.render(power[2], buf);
+        self.reg.radio_event.render(power[3], buf);
+        self.reg.radio_state.render(power[4], buf);
+
+        let rx = Layout::default()
+            .direction(Direction::Horizontal)
+            .margin(1)
+            .constraints([Constraint::Percentage(50), Constraint::Percentage(50)].as_ref())
+            .split(chunks[1]);
+
+        let parameters = Layout::default()
+            .direction(Direction::Vertical)
+            .margin(1)
+            .constraints(
+                [
+                    Constraint::Percentage(20),
+                    Constraint::Percentage(20),
+                    Constraint::Percentage(20),
+                    Constraint::Percentage(20),
+                    Constraint::Percentage(20),
+                ]
+                .as_ref(),
+            )
+            .split(rx[1]);
+
+        self.config.synthesizer.render(parameters[0], buf);
+        self.config.packet_controller.render(parameters[1], buf);
+        let packets = Paragraph::new(
+            self.packets
+                .iter()
+                .map(|x| format!("{}: {} {:02X?}", x.0, x.1, x.2))
+                .join("\n"),
         )
-        .split(f.size());
+        .style(Style::default().fg(Color::Yellow))
+        .block(
+            Block::default()
+                .borders(Borders::ALL)
+                .title("Packets received")
+                .border_type(BorderType::Rounded),
+        );
+        packets.render(parameters[2], buf);
+        self.config.packet_format.render(parameters[3], buf);
+        self.config.rxparams.render(parameters[4], buf);
+        /*
+        self.receiver_parameter_set(&state.set0, state.rx.back().unwrap_or(&RXState::default()).paramcurset.number == RxParamSet::Set0).render(parameters[2], buf);
+        self.receiver_parameter_set(&state.set1, state.rx.back().unwrap_or(&RXState::default()).paramcurset.number == RxParamSet::Set1).render(parameters[2], buf);
+        self.receiver_parameter_set(&state.set2, state.rx.back().unwrap_or(&RXState::default()).paramcurset.number == RxParamSet::Set2).render(parameters[3], buf);
+        self.receiver_parameter_set(&state.set3, state.rx.back().unwrap_or(&RXState::default()).paramcurset.number == RxParamSet::Set3).render(parameters[3], buf);
+        */
+        let sparks = Layout::default()
+            .direction(Direction::Vertical)
+            .margin(1)
+            .constraints(
+                [
+                    Constraint::Percentage(10),
+                    Constraint::Percentage(10),
+                    Constraint::Percentage(10),
+                    Constraint::Percentage(10),
+                    Constraint::Percentage(10),
+                    Constraint::Percentage(10),
+                    Constraint::Percentage(10),
+                    Constraint::Percentage(10),
+                    Constraint::Min(0),
+                ]
+                .as_ref(),
+            )
+            .split(rx[0]);
 
-    let power = Layout::default()
-        .direction(Direction::Horizontal)
-        .constraints(
-            [
-                Constraint::Min(21),
-                Constraint::Min(46),
-                Constraint::Min(85),
-                Constraint::Min(40),
-                Constraint::Min(0),
-            ]
-            .as_ref(),
-        )
-        .split(chunks[0]);
+        self.chart(
+            sparks[0],
+            buf,
+            "RSSI",
+            "dB",
+            &self.rx.iter().map(|r| r.rssi).collect::<Vec<f64>>(),
+        );
+        self.chart(
+            sparks[1],
+            buf,
+            "AGC Counter",
+            "dB",
+            &self.rx.iter().map(|r| r.agccounter).collect::<Vec<f64>>(),
+        );
+        self.chart(
+            sparks[2],
+            buf,
+            "Amplitude",
+            "",
+            &self.rx.iter().map(|r| r.ampl).collect::<Vec<f64>>(),
+        );
+        self.chart(
+            sparks[3],
+            buf,
+            "RF Frequency (carrier?)",
+            "Δ Hz",
+            &self.rx.iter().map(|r| r.rffreq).collect::<Vec<f64>>(),
+        );
+        self.chart(
+            sparks[4],
+            buf,
+            "Phase",
+            "",
+            &self.rx.iter().map(|r| r.phase).collect::<Vec<f64>>(),
+        );
+        self.chart(
+            sparks[5],
+            buf,
+            "Data Rate",
+            "Δ bits/s",
+            &self.rx.iter().map(|r| r.datarate).collect::<Vec<f64>>(),
+        );
+        self.chart(
+            sparks[6],
+            buf,
+            "FSK Demodulation",
+            "",
+            &self.rx.iter().map(|r| r.fskdemod).collect::<Vec<f64>>(),
+        );
+        self.chart(
+            sparks[7],
+            buf,
+            "Frequency (intermediate?)",
+            "Δ Hz",
+            &self.rx.iter().map(|r| r.freq).collect::<Vec<f64>>(),
+        );
 
-    f.render_widget(state.reg.pwrmode, power[0]);
-    f.render_widget(state.reg.powstat, power[1]);
-    f.render_widget(state.reg.irq, power[2]);
-    f.render_widget(state.reg.radio_event, power[3]);
-    f.render_widget(state.reg.radio_state, power[4]);
-
-    let rx = Layout::default()
-        .direction(Direction::Horizontal)
-        .margin(1)
-        .constraints([Constraint::Percentage(50), Constraint::Percentage(50)].as_ref())
-        .split(chunks[1]);
-
-    let parameters = Layout::default()
-        .direction(Direction::Vertical)
-        .margin(1)
-        .constraints(
-            [
-                Constraint::Percentage(20),
-                Constraint::Percentage(20),
-                Constraint::Percentage(20),
-                Constraint::Percentage(20),
-                Constraint::Percentage(20),
-            ]
-            .as_ref(),
-        )
-        .split(rx[1]);
-
-    f.render_widget(state.config.synthesizer, parameters[0]);
-    f.render_widget(state.config.packet_controller, parameters[1]);
-    let packets = Paragraph::new(
-        state
-            .packets
-            .iter()
-            .map(|x| format!("{}: {} {:02X?}", x.0, x.1, x.2))
-            .join("\n"),
-    )
-    .style(Style::default().fg(Color::Yellow))
-    .block(
-        Block::default()
-            .borders(Borders::ALL)
-            .title("Packets received")
-            .border_type(BorderType::Rounded),
-    );
-    f.render_widget(packets, parameters[2]);
-    f.render_widget(state.config.packet_format, parameters[3]);
-    f.render_widget(state.config.rxparams, parameters[4]);
-    /*
-        f.render_widget(state.receiver_parameter_set(&state.set0, state.rx.back().unwrap_or(&RXState::default()).paramcurset.number == RxParamSet::Set0), parameters[2]);
-        f.render_widget(state.receiver_parameter_set(&state.set1, state.rx.back().unwrap_or(&RXState::default()).paramcurset.number == RxParamSet::Set1), parameters[2]);
-        f.render_widget(state.receiver_parameter_set(&state.set2, state.rx.back().unwrap_or(&RXState::default()).paramcurset.number == RxParamSet::Set2), parameters[3]);
-        f.render_widget(state.receiver_parameter_set(&state.set3, state.rx.back().unwrap_or(&RXState::default()).paramcurset.number == RxParamSet::Set3), parameters[3]);
-    */
-    let sparks = Layout::default()
-        .direction(Direction::Vertical)
-        .margin(1)
-        .constraints(
-            [
-                Constraint::Percentage(10),
-                Constraint::Percentage(10),
-                Constraint::Percentage(10),
-                Constraint::Percentage(10),
-                Constraint::Percentage(10),
-                Constraint::Percentage(10),
-                Constraint::Percentage(10),
-                Constraint::Percentage(10),
-                Constraint::Min(0),
-            ]
-            .as_ref(),
-        )
-        .split(rx[0]);
-
-    state.chart(
-        f,
-        sparks[0],
-        "RSSI",
-        "dB",
-        &state.rx.iter().map(|r| r.rssi).collect::<Vec<f64>>(),
-    );
-    state.chart(
-        f,
-        sparks[1],
-        "AGC Counter",
-        "dB",
-        &state.rx.iter().map(|r| r.agccounter).collect::<Vec<f64>>(),
-    );
-    state.chart(
-        f,
-        sparks[2],
-        "Amplitude",
-        "",
-        &state.rx.iter().map(|r| r.ampl).collect::<Vec<f64>>(),
-    );
-    state.chart(
-        f,
-        sparks[3],
-        "RF Frequency (carrier?)",
-        "Δ Hz",
-        &state.rx.iter().map(|r| r.rffreq).collect::<Vec<f64>>(),
-    );
-    state.chart(
-        f,
-        sparks[4],
-        "Phase",
-        "",
-        &state.rx.iter().map(|r| r.phase).collect::<Vec<f64>>(),
-    );
-    state.chart(
-        f,
-        sparks[5],
-        "Data Rate",
-        "Δ bits/s",
-        &state.rx.iter().map(|r| r.datarate).collect::<Vec<f64>>(),
-    );
-    state.chart(
-        f,
-        sparks[6],
-        "FSK Demodulation",
-        "",
-        &state.rx.iter().map(|r| r.fskdemod).collect::<Vec<f64>>(),
-    );
-    state.chart(
-        f,
-        sparks[7],
-        "Frequency (intermediate?)",
-        "Δ Hz",
-        &state.rx.iter().map(|r| r.freq).collect::<Vec<f64>>(),
-    );
-
-    // TODO: Title like how it used to be
-    //.block(Block::default().borders(Borders::ALL).title(format!(
-    //    "Current RX Parameters - stage {} ({:?}) special {}",
-    //    last.index, last.number, last.special
-    //)))
-    state.chart(
-        f,
-        sparks[8],
-        "Current RX Parameters",
-        "",
-        &state
-            .rx
-            .iter()
-            .map(|r| f64::from(r.paramcurset.index))
-            .collect::<Vec<f64>>(),
-    );
-    f.render_widget(state.status, chunks[2]);
+        // TODO: Title like how it used to be
+        //.block(Block::default().borders(Borders::ALL).title(format!(
+        //    "Current RX Parameters - stage {} ({:?}) special {}",
+        //    last.index, last.number, last.special
+        //)))
+        self.chart(
+            sparks[8],
+            buf,
+            "Current RX Parameters",
+            "",
+            &self
+                .rx
+                .iter()
+                .map(|r| f64::from(r.paramcurset.index))
+                .collect::<Vec<f64>>(),
+        );
+        self.status.render(chunks[2], buf);
+    }
 }
 
 fn run_ui(terminal: &mut Terminal<CrosstermBackend<io::Stdout>>) -> Result<()> {
     let mut uistate = UIState::default();
     terminal.draw(|f| {
-        ui(f, &uistate);
+        f.render_widget(&uistate, f.size());
     })?;
 
     let mut poll = Poll::new()?;
@@ -292,7 +317,6 @@ fn run_ui(terminal: &mut Terminal<CrosstermBackend<io::Stdout>>) -> Result<()> {
         Interest::READABLE,
     )?;
 
-    let mut counter = 0;
     let mut events = Events::with_capacity(128);
 
     let src = SocketAddr::new(IpAddr::V4(Ipv4Addr::UNSPECIFIED), 10035);
@@ -304,36 +328,16 @@ fn run_ui(terminal: &mut Terminal<CrosstermBackend<io::Stdout>>) -> Result<()> {
         poll.poll(&mut events, None)?;
         for event in events.iter() {
             match event.token() {
-                TELEMETRY => {
-                    loop {
-                        let mut buf = [0; 2048];
-                        let Ok(amt) = uplink.recv(&mut buf) else {
-                            break;
-                        };
-                        match ciborium::de::from_reader(&buf[..amt])? {
-                            CommState::RX(chunk) => {
-                                uistate.packets.push_front((counter, 0 /*len*/, chunk));
-                                uistate.packets.truncate(10);
-                                counter += 1;
-                            }
-                            CommState::TX(_) => (),
-                            //ERR(Result<()>) =>
-                            CommState::STATUS(status) => {
-                                uistate.status = status;
-                            }
-                            CommState::STATE(state) => {
-                                uistate.rx.push_front(state);
-                                uistate.rx.truncate(100);
-                            }
-                            CommState::REGISTERS(reg) => uistate.reg = reg,
-                            CommState::BOARD(board) => uistate.board = board,
-                            CommState::CONFIG(conf) => uistate.config = conf,
-                        }
-                        terminal.draw(|f| {
-                            ui(f, &uistate);
-                        })?;
-                    }
-                }
+                TELEMETRY => loop {
+                    let mut buf = [0; 2048];
+                    let Ok(amt) = uplink.recv(&mut buf) else {
+                        break;
+                    };
+                    uistate.update(&buf, amt)?;
+                    terminal.draw(|f| {
+                        f.render_widget(&uistate, f.size());
+                    })?;
+                },
                 STDIN => match crossterm::event::read()? {
                     Event::Key(KeyEvent {
                         code: KeyCode::Char('c'),

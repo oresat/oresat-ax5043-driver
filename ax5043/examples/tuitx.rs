@@ -26,6 +26,7 @@ struct UIState {
     config: Config,
     tx: TXParameters,
     chan: ChannelParameters,
+    counter: usize,
 }
 
 impl Default for UIState {
@@ -62,68 +63,98 @@ impl Default for UIState {
             },
             tx: TXParameters::default(),
             chan: ChannelParameters::default(),
+            counter: 0,
         }
     }
 }
 
-fn ui(f: &mut Frame, state: &UIState) {
-    let chunks = Layout::default()
-        .direction(Direction::Vertical)
-        .margin(1)
-        .constraints(
-            [
-                Constraint::Percentage(10),
-                Constraint::Percentage(80),
-                Constraint::Percentage(10),
-            ]
-            .as_ref(),
-        )
-        .split(f.size());
+impl Widget for &UIState {
+    fn render(self, area: Rect, buf: &mut Buffer) {
+        let chunks = Layout::default()
+            .direction(Direction::Vertical)
+            .margin(1)
+            .constraints(
+                [
+                    Constraint::Percentage(10),
+                    Constraint::Percentage(80),
+                    Constraint::Percentage(10),
+                ]
+                .as_ref(),
+            )
+            .split(area);
 
-    let power = Layout::default()
-        .direction(Direction::Horizontal)
-        .constraints(
-            [
-                Constraint::Min(21),
-                Constraint::Min(46),
-                Constraint::Min(85),
-                Constraint::Min(40),
-                Constraint::Min(0),
-            ]
-            .as_ref(),
-        )
-        .split(chunks[0]);
+        let power = Layout::default()
+            .direction(Direction::Horizontal)
+            .constraints(
+                [
+                    Constraint::Min(21),
+                    Constraint::Min(46),
+                    Constraint::Min(85),
+                    Constraint::Min(40),
+                    Constraint::Min(0),
+                ]
+                .as_ref(),
+            )
+            .split(chunks[0]);
+        self.reg.pwrmode.render(power[0], buf);
+        self.reg.powstat.render(power[1], buf);
+        self.reg.irq.render(power[2], buf);
+        self.reg.radio_event.render(power[3], buf);
+        self.reg.radio_state.render(power[4], buf);
 
-    f.render_widget(state.reg.pwrmode, power[0]);
-    f.render_widget(state.reg.powstat, power[1]);
-    f.render_widget(state.reg.irq, power[2]);
-    f.render_widget(state.reg.radio_event, power[3]);
-    f.render_widget(state.reg.radio_state, power[4]);
-    let parameters = Layout::default()
-        .direction(Direction::Vertical)
-        .margin(1)
-        .constraints(
-            [
-                Constraint::Percentage(20),
-                Constraint::Percentage(20),
-                Constraint::Percentage(20),
-                Constraint::Percentage(20),
-                Constraint::Percentage(20),
-            ]
-            .as_ref(),
-        )
-        .split(chunks[1]);
+        let parameters = Layout::default()
+            .direction(Direction::Vertical)
+            .margin(1)
+            .constraints(
+                [
+                    Constraint::Percentage(20),
+                    Constraint::Percentage(20),
+                    Constraint::Percentage(20),
+                    Constraint::Percentage(20),
+                    Constraint::Percentage(20),
+                ]
+                .as_ref(),
+            )
+            .split(chunks[1]);
+        self.config.synthesizer.render(parameters[0], buf);
+        self.tx.render(parameters[1], buf);
+        self.chan.render(parameters[2], buf);
 
-    f.render_widget(state.config.synthesizer, parameters[0]);
-    f.render_widget(state.tx, parameters[1]);
-    f.render_widget(state.chan, parameters[2]);
-    f.render_widget(state.status, chunks[2]);
+        self.status.render(chunks[2], buf);
+    }
+}
+
+impl UIState {
+    fn update(&mut self, buf: &[u8], amt: usize) -> Result<()> {
+        match ciborium::de::from_reader(&buf[..amt])? {
+            CommState::TX(chunk) => {
+                self.packets.push_front((self.counter, 0 /*len*/, chunk));
+                self.packets.truncate(10);
+                self.counter += 1;
+            }
+            //ERR(Result<()>) =>
+            CommState::STATUS(status) => {
+                self.status = status;
+            }
+            CommState::REGISTERS(reg) => self.reg = reg,
+            CommState::BOARD(board) => self.board = board,
+            CommState::CONFIG(conf) => self.config = conf,
+            CommState::RX(_) => (),
+            // TODO: does TX have any visible state?
+            //CommState::STATE(state) => {
+            //    self.rx.push_front(state);
+            //    self.rx.truncate(100);
+            //}
+            CommState::STATE(_) => (),
+        }
+        Ok(())
+    }
 }
 
 fn run_ui(terminal: &mut Terminal<CrosstermBackend<io::Stdout>>) -> Result<()> {
     let mut state = UIState::default();
     terminal.draw(|f| {
-        ui(f, &state);
+        f.render_widget(&state, f.size());
     })?;
 
     let mut poll = Poll::new()?;
@@ -141,49 +172,26 @@ fn run_ui(terminal: &mut Terminal<CrosstermBackend<io::Stdout>>) -> Result<()> {
     )?;
 
     let src = SocketAddr::new(IpAddr::V4(Ipv4Addr::UNSPECIFIED), 10036);
-    let mut uplink = UdpSocket::bind(src)?;
+    let mut telemetry = UdpSocket::bind(src)?;
     const TELEMETRY: Token = Token(2);
-    registry.register(&mut uplink, TELEMETRY, Interest::READABLE)?;
+    registry.register(&mut telemetry, TELEMETRY, Interest::READABLE)?;
 
-    let mut counter = 0;
     let mut events = Events::with_capacity(128);
 
     'outer: loop {
         poll.poll(&mut events, None)?;
         for event in events.iter() {
             match event.token() {
-                TELEMETRY => {
-                    loop {
-                        let mut buf = [0; 2048];
-                        let Ok(amt) = uplink.recv(&mut buf) else {
-                            break;
-                        };
-                        match ciborium::de::from_reader(&buf[..amt])? {
-                            CommState::TX(chunk) => {
-                                state.packets.push_front((counter, 0 /*len*/, chunk));
-                                state.packets.truncate(10);
-                                counter += 1;
-                            }
-                            //ERR(Result<()>) =>
-                            CommState::STATUS(status) => {
-                                state.status = status;
-                            }
-                            CommState::REGISTERS(reg) => state.reg = reg,
-                            CommState::BOARD(board) => state.board = board,
-                            CommState::CONFIG(conf) => state.config = conf,
-                            CommState::RX(_) => (),
-                            // TODO: does TX have any visible state?
-                            //CommState::STATE(state) => {
-                            //    state.rx.push_front(state);
-                            //    state.rx.truncate(100);
-                            //}
-                            CommState::STATE(_) => (),
-                        }
-                        terminal.draw(|f| {
-                            ui(f, &state);
-                        })?;
-                    }
-                }
+                TELEMETRY => loop {
+                    let mut buf = [0; 2048];
+                    let Ok(amt) = telemetry.recv(&mut buf) else {
+                        break;
+                    };
+                    state.update(&buf, amt)?;
+                    terminal.draw(|f| {
+                        f.render_widget(&state, f.size());
+                    })?;
+                },
                 STDIN => match crossterm::event::read()? {
                     Event::Key(KeyEvent {
                         code: KeyCode::Char('c'),
@@ -196,11 +204,6 @@ fn run_ui(terminal: &mut Terminal<CrosstermBackend<io::Stdout>>) -> Result<()> {
             }
         }
     }
-
-    disable_raw_mode()?;
-    execute!(terminal.backend_mut(), LeaveAlternateScreen,)?;
-    terminal.show_cursor()?;
-
     Ok(())
 }
 
