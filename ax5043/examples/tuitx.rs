@@ -24,7 +24,6 @@ struct UIState {
     status: Status,
     reg: StatusRegisters,
     config: Config,
-    tx: TXParameters,
     chan: ChannelParameters,
     counter: usize,
 }
@@ -61,7 +60,6 @@ impl Default for UIState {
                 packet_format: PacketFormat::default(),
                 channel: ChannelParameters::default(),
             },
-            tx: TXParameters::default(),
             chan: ChannelParameters::default(),
             counter: 0,
         }
@@ -117,7 +115,7 @@ impl Widget for &UIState {
             )
             .split(chunks[1]);
         self.config.synthesizer.render(parameters[0], buf);
-        self.tx.render(parameters[1], buf);
+        self.config.txparams.render(parameters[1], buf);
         self.chan.render(parameters[2], buf);
 
         self.status.render(chunks[2], buf);

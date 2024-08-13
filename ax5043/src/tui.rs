@@ -531,14 +531,14 @@ impl Widget for Synthesizer {
             vec![
                 Row::new(vec![
                     Cell::from("cpI"),
-                    Cell::from(format!("{} A?", self.cpi)),
+                    Cell::from(format!("{} μA", self.cpi as u32 * 17 / 2)),
                 ]),
                 Row::new(vec![
                     Cell::from("boost"),
-                    Cell::from(format!("{} A?", self.cpiboost)),
+                    Cell::from(format!("{} μA", self.cpiboost as u32 * 17 / 2)),
                 ]),
             ],
-            [Constraint::Max(4), Constraint::Min(0)],
+            [Constraint::Max(5), Constraint::Min(0)],
         )
         .block(
             Block::default()
@@ -551,7 +551,7 @@ impl Widget for Synthesizer {
         let flt = Table::new(
             vec![
                 Row::new(vec![
-                    Cell::from("flt"),
+                    Cell::from("filt"),
                     Cell::from(format!("{:?}", self.pllloop.filter)),
                 ]),
                 Row::new(vec![
@@ -559,7 +559,7 @@ impl Widget for Synthesizer {
                     Cell::from(format!("{:?}", self.pllloopboost.filter)),
                 ]),
             ],
-            [Constraint::Max(4), Constraint::Min(0)],
+            [Constraint::Max(5), Constraint::Min(0)],
         )
         .block(
             Block::default()
@@ -622,11 +622,11 @@ impl Widget for Synthesizer {
                     Cell::from(format!("{:.5}", self.freqa as f64 / 2f64.powf(24.0))),
                 ]),
                 Row::new(vec![
-                    Cell::from("freqb"),
-                    Cell::from(format!("{}", self.freqb)),
+                    Cell::from("Freq B Divvider"),
+                    Cell::from(format!("{}", self.freqb as f64 / 2f64.powf(24.0))),
                 ]),
             ],
-            [Constraint::Max(5), Constraint::Min(0)],
+            [Constraint::Max(15), Constraint::Min(0)],
         );
         Widget::render(frac, lower[1], buf);
     }
@@ -1246,31 +1246,107 @@ impl TXParameters {
     }
 }
 
-impl Widget for TXParameters {
+impl Widget for ModCfgA {
     fn render(self, area: Rect, buf: &mut Buffer) {
+        let ramp = match self.slowramp {
+            SlowRamp::STARTUP_1b => 1,
+            SlowRamp::STARTUP_2b => 2,
+            SlowRamp::STARTUP_4b => 4,
+            SlowRamp::STARTUP_8b => 8,
+        };
+
+        let shape = if self.flags.contains(ModCfgAFlags::AMPLSHAPE) {
+            "Cos"
+        } else {
+            "None"
+        };
+
+        let layout = Layout::default()
+            .direction(Direction::Vertical)
+            .margin(0)
+            .constraints([Constraint::Max(1), Constraint::Max(1)].as_ref())
+            .split(area);
+
+        "  PA  AShape  Ramp    Gate".render(layout[0], buf);
+
         let w = Table::new(
-            vec![
-                Row::new([
-                    Cell::from(format!("{:?}", self.modcfgf)),
-                    Cell::from(format!("Deviation {:?} Hz", self.fskdev)),
-                ]),
-                Row::new([
-                    Cell::from(format!("{:?}", self.modcfga)),
-                    Cell::from(format!("{:?} bits/s", self.txrate)),
-                ]),
-                Row::new([
-                    Cell::from("tx power coef b:"),
-                    Cell::from(format!("{:X?}", self.b)),
-                ]),
+            vec![Row::new(vec![
+                Cell::from("SE").style(onoff(&self.flags, ModCfgAFlags::TXSE)),
+                Cell::from("DIFF").style(onoff(&self.flags, ModCfgAFlags::TXDIFF)),
+                Cell::from(shape),
+                Cell::from(format!("{} bits", ramp)),
+                Cell::from("PLL").style(onoff(&self.flags, ModCfgAFlags::PLLLCK_GATE)),
+                Cell::from("BRN").style(onoff(&self.flags, ModCfgAFlags::BROWN_GATE)),
+            ])],
+            [
+                Constraint::Max(2),
+                Constraint::Max(4),
+                Constraint::Max(4),
+                Constraint::Max(7),
+                Constraint::Max(3),
+                Constraint::Max(3),
             ],
-            [Constraint::Max(100), Constraint::Max(60)],
-        )
-        .block(
-            Block::default()
-                .borders(Borders::ALL)
-                .title("TX Parameters"),
+        );
+        Widget::render(w, layout[1], buf);
+    }
+}
+
+impl Widget for ModCfgF {
+    fn render(self, area: Rect, buf: &mut Buffer) {
+        let shape = match self {
+            ModCfgF::UNSHAPED => "None",
+            ModCfgF::GAUSSIAN_BT_0p3 => "BT 0.3",
+            ModCfgF::GAUSSIAN_BT_0p5 => "BT 0.5",
+        };
+
+        let w = Table::new(
+            vec![Row::new(["FShape"]), Row::new([shape])],
+            [Constraint::Max(10)],
         );
         Widget::render(w, area, buf);
+    }
+}
+
+impl Widget for TXParameters {
+    fn render(self, area: Rect, buf: &mut Buffer) {
+        let block = Block::default()
+            .borders(Borders::ALL)
+            .title("TX Parameters");
+        let layout = Layout::default()
+            .direction(Direction::Vertical)
+            .margin(0)
+            .constraints(
+                [
+                    Constraint::Max(2),
+                    Constraint::Max(1),
+                    Constraint::Max(1),
+                    Constraint::Max(1),
+                    Constraint::Min(0),
+                ]
+                .as_ref(),
+            )
+            .split(block.inner(area));
+        block.render(area, buf);
+
+        let upper = Layout::default()
+            .direction(Direction::Horizontal)
+            .margin(0)
+            .constraints([Constraint::Max(29), Constraint::Max(10), Constraint::Min(0)].as_ref())
+            .split(layout[0]);
+
+        self.modcfga.render(upper[0], buf);
+        self.modcfgf.render(upper[1], buf);
+        format!(
+            "Deviation: {} Hz    Bitrate: {} b/s",
+            self.fskdev, self.txrate
+        )
+        .render(layout[1], buf);
+        "    TX Power Coefficients".render(layout[2], buf);
+        format!(
+            "a: 0x{:x} b: 0x{:x} c: 0x{:x} d: 0x{:x} e: 0x{:x}",
+            self.a, self.b, self.c, self.d, self.e
+        )
+        .render(layout[3], buf);
     }
 }
 

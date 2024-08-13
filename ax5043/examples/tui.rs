@@ -298,9 +298,9 @@ impl Widget for &UIState {
 }
 
 fn run_ui(terminal: &mut Terminal<CrosstermBackend<io::Stdout>>) -> Result<()> {
-    let mut uistate = UIState::default();
+    let mut state = UIState::default();
     terminal.draw(|f| {
-        f.render_widget(&uistate, f.size());
+        f.render_widget(&state, f.size());
     })?;
 
     let mut poll = Poll::new()?;
@@ -317,12 +317,12 @@ fn run_ui(terminal: &mut Terminal<CrosstermBackend<io::Stdout>>) -> Result<()> {
         Interest::READABLE,
     )?;
 
-    let mut events = Events::with_capacity(128);
-
     let src = SocketAddr::new(IpAddr::V4(Ipv4Addr::UNSPECIFIED), 10035);
-    let mut uplink = UdpSocket::bind(src)?;
+    let mut telemetry = UdpSocket::bind(src)?;
     const TELEMETRY: Token = Token(2);
-    registry.register(&mut uplink, TELEMETRY, Interest::READABLE)?;
+    registry.register(&mut telemetry, TELEMETRY, Interest::READABLE)?;
+
+    let mut events = Events::with_capacity(128);
 
     'outer: loop {
         poll.poll(&mut events, None)?;
@@ -330,12 +330,12 @@ fn run_ui(terminal: &mut Terminal<CrosstermBackend<io::Stdout>>) -> Result<()> {
             match event.token() {
                 TELEMETRY => loop {
                     let mut buf = [0; 2048];
-                    let Ok(amt) = uplink.recv(&mut buf) else {
+                    let Ok(amt) = telemetry.recv(&mut buf) else {
                         break;
                     };
-                    uistate.update(&buf, amt)?;
+                    state.update(&buf, amt)?;
                     terminal.draw(|f| {
-                        f.render_widget(&uistate, f.size());
+                        f.render_widget(&state, f.size());
                     })?;
                 },
                 STDIN => match crossterm::event::read()? {
